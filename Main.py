@@ -1,77 +1,180 @@
-import time
-import Calculations
-import multiprocessing
+from lib import Calculations
+from lib import Multiprocessor
+
+current_board = [["0", "0", "0", "0", "0", "0"],
+                 ["0", "0", "0", "0", "0", "0"],
+                 ["0", "0", "0", "0", "0", "0"],
+                 ["0", "0", "0", "0", "0", "0"],
+                 ["0", "0", "0", "0", "0", "0"],
+                 ["2", "1", "3", "3", "1", "2"],
+                 "0", "0"]
 
 
-def start_minimax(board, depth, position, process_index, processes_complete, total_processes, final_data, start_time):
+def print_board(board, player=1):
+    new_board = [[" ", " ", " ", " ", " ", " "],
+                 [" ", " ", " ", " ", " ", " "],
+                 [" ", " ", " ", " ", " ", " "],
+                 [" ", " ", " ", " ", " ", " "],
+                 [" ", " ", " ", " ", " ", " "],
+                 [" ", " ", " ", " ", " ", " "],
+                 " ", " "]
+    for y in range(6):
+        for x in range(6):
+            if board[y][x] == "0":
+                new_board[y][x] = " "
+            else:
+                new_board[y][x] = board[y][x]
+    if board[6] == "!":
+        new_board[6] = "!"
+    if board[7] == "!":
+        new_board[7] = "!"
+
+    if player == 1:
+        print(f"")
+        print(f"                              PLAYER 2")
+        print(f"                            + ------- +")
+        print(f"                            |         |")
+        print(f"                            |    {new_board[7]}    |")
+        print(f"                            |         |")
+        print(f"                            + ------- +")
+        print(f"")
+    else:
+        print(f"")
+        print(f"                              PLAYER 1")
+        print(f"                            + ------- +")
+        print(f"                            |         |")
+        print(f"                            |    {new_board[6]}    |")
+        print(f"                            |         |")
+        print(f"                            + ------- +")
+        print(f"")
+
+    print(f"        0         1         2         3         4         5     ")
+    print(f"   + ------- + ------- + ------- + ------- + ------- + ------- +")
+
+    if player == 1:
+        for y in range(5, -1, -1):
+            print(f"   |         |         |         |         |         |         |")
+            print(f"{y}  |    {new_board[y][0]}    |    {new_board[y][1]}    |    {new_board[y][2]}    |    {new_board[y][3]}    |    {new_board[y][4]}    |    {new_board[y][5]}    |  {y}")
+            print(f"   |         |         |         |         |         |         |")
+            print(f"   + ------- + ------- + ------- + ------- + ------- + ------- +")
+    else:
+        for y in range(6):
+            print(f"   |         |         |         |         |         |         |")
+            print(f"{y}  |    {new_board[y][0]}    |    {new_board[y][1]}    |    {new_board[y][2]}    |    {new_board[y][3]}    |    {new_board[y][4]}    |    {new_board[y][5]}    |  {y}")
+            print(f"   |         |         |         |         |         |         |")
+            print(f"   + ------- + ------- + ------- + ------- + ------- + ------- +")
+
+    print(f"        0         1         2         3         4         5     ")
+
+    if player == 1:
+        print(f"")
+        print(f"                            + ------- +")
+        print(f"                            |         |")
+        print(f"                            |    {new_board[6]}    |")
+        print(f"                            |         |")
+        print(f"                            + ------- +")
+        print(f"                              PLAYER 1")
+        print(f"")
+    else:
+        print(f"")
+        print(f"                            + ------- +")
+        print(f"                            |         |")
+        print(f"                            |    {new_board[7]}    |")
+        print(f"                            |         |")
+        print(f"                            + ------- +")
+        print(f"                              PLAYER 2")
+        print(f"")
+
+
+def player_turn():
+    action = input("Bounce or Replace:")
+
+    if action == "B":
+        starting_xy_input = input("Starting Cords: ")
+        starting_xy = (int(starting_xy_input[0]), int(starting_xy_input[1]))
+        starting_piece = current_board[starting_xy[1]][starting_xy[0]]
+
+        final_xy_input = input("Final Cords: ")
+        if final_xy_input == "GOAL":
+            current_board[7] = "!"
+        else:
+            final_xy = (int(final_xy_input[0]), int(final_xy_input[1]))
+            current_board[final_xy[1]][final_xy[0]] = starting_piece
+            current_board[starting_xy[1]][starting_xy[0]] = "0"
+    else:
+        starting_xy_input = input("Starting Cords: ")
+        starting_xy = (int(starting_xy_input[0]), int(starting_xy_input[1]))
+        starting_piece = current_board[starting_xy[1]][starting_xy[0]]
+
+        replacement_xy_input = input("Replacement Cords: ")
+        replacement_xy = (int(replacement_xy_input[0]), int(replacement_xy_input[1]))
+        replacement_piece = current_board[replacement_xy[1]][replacement_xy[0]]
+
+        drop_xy_input = input("Drop Cords: ")
+        drop_xy = (int(drop_xy_input[0]), int(drop_xy_input[1]))
+
+        current_board[replacement_xy[1]][replacement_xy[0]] = starting_piece
+        current_board[drop_xy[1]][drop_xy[0]] = replacement_piece
+        current_board[starting_xy[1]][starting_xy[0]] = "0"
+
+
+def computer_turn():
+    print("Waiting on computer...")
+    best_move, best_score = Multiprocessor.get_best_move(current_board, 1)
+
     changed_pieces = []
-
-    for i in range(len(position)):
-        change = position[i]
+    for i in range(len(best_move)):
+        change = best_move[i]
 
         if change[1] == "G1":
-            board[6] = "!"
+            current_board[6] = "!"
             changed_pieces.append("G1")
         elif change[1] == "G2":
-            board[7] = "!"
+            current_board[7] = "!"
             changed_pieces.append("G2")
         else:
-            changed_pieces.append(board[change[1][1]][change[1][0]])
+            changed_pieces.append(current_board[change[1][1]][change[1][0]])
 
             change_x = change[1][0]
             change_y = change[1][1]
             change_piece = change[0]
-            board[change_y][change_x] = change_piece
-
-    score = Calculations.mini_max(depth, False, board)
-    final_data.append([score, process_index])
-
-    for i in range(len(changed_pieces)):
-        if changed_pieces[i] == "G1":
-            board[6] = "0"
-        elif changed_pieces[i] == "G2":
-            board[7] = "0"
-        else:
-            change = position[i]
-            change_x = change[1][0]
-            change_y = change[1][1]
-
-            board[change_y][change_x] = changed_pieces[i]
-
-    processes_complete.append(process_index)
-    print(f"{len(processes_complete)} / {total_processes} completed in {round(time.time() - start_time, 3)} seconds.")
+            current_board[change_y][change_x] = change_piece
 
 
-def get_best_move(board, depth):
-    start_time = time.time()
+if __name__ == '__main__':
+    player_starting = input("Do you want to start: ")
+    player_starting_line = input("Enter your starting line: ")
 
-    processes = []
-    final_scores = multiprocessing.Manager().list()
-    processes_complete = multiprocessing.Manager().list()
+    for x in range(len(player_starting_line)):
+        current_board[0][x] = str(player_starting_line[x])
 
-    player_2_moves = Calculations.get_all_moves(board, 2)
-    for i in range(len(player_2_moves)):
-        position = player_2_moves[i]
+    if player_starting == "y":
+        while True:
+            print_board(current_board)
+            player_turn()
+            if Calculations.game_over(current_board):
+                print_board(current_board)
+                print("PLAYER WINS")
+                break
 
-        process = multiprocessing.Process(target=start_minimax, args=(board, depth, position, i, processes_complete, len(player_2_moves), final_scores, start_time))
-        processes.append(process)
+            print_board(current_board)
+            computer_turn()
+            if Calculations.game_over(current_board):
+                print_board(current_board)
+                print("COMPUTER WINS")
+                break
+    else:
+        while True:
+            print_board(current_board)
+            computer_turn()
+            if Calculations.game_over(current_board):
+                print_board(current_board)
+                print("COMPUTER WINS")
+                break
 
-    for p in processes:
-        p.start()
-
-    for p in processes:
-        p.join()
-
-    end_time = time.time()
-    print(f"Finished depth of {depth} calculation in {round(end_time - start_time, 3)} seconds")
-
-    best_score = float("-inf")
-    best_move = None
-    for item in final_scores:
-        score = int(item[0])
-        move_index = int(item[1])
-        if score > best_score:
-            best_score = score
-            best_move = player_2_moves[move_index]
-
-    return best_move, best_score
+            print_board(current_board)
+            player_turn()
+            if Calculations.game_over(current_board):
+                print_board(current_board)
+                print("PLAYER WINS")
+                break
