@@ -183,8 +183,7 @@ def static_evaluation(board):
     # ---------- Move Counts ----------
 
     player_1_moves = get_all_moves(board, 1)
-    player_2_moves = get_all_moves(board, 2)
-    evaluation += len(player_2_moves) - len(player_1_moves)
+    evaluation -= len(player_1_moves) * 200
 
     # ---------- Heat Maps ----------
 
@@ -192,7 +191,7 @@ def static_evaluation(board):
         for y in range(6):
             if board[y][x] != "0":
                 heat_map = piece_heat_maps[board[y][x]]
-                evaluation += (int(heat_map[y][x]) * 100)
+                evaluation += (int(heat_map[y][x]) * 25)
 
     # --------------------
 

@@ -3,10 +3,10 @@ from lib import Multiprocessor
 
 current_board = [["0", "0", "0", "0", "0", "0"],
                  ["0", "0", "0", "0", "0", "0"],
-                 ["0", "0", "0", "0", "0", "0"],
-                 ["0", "0", "0", "0", "0", "0"],
-                 ["0", "0", "0", "0", "0", "0"],
-                 ["2", "1", "3", "3", "1", "2"],
+                 ["1", "0", "1", "1", "0", "2"],
+                 ["2", "3", "3", "3", "2", "0"],
+                 ["0", "0", "1", "0", "0", "2"],
+                 ["0", "3", "0", "0", "0", "0"],
                  "0", "0"]
 
 
@@ -121,6 +121,7 @@ def player_turn():
 def computer_turn():
     print("Waiting on computer...")
     best_move, best_score = Multiprocessor.get_best_move(current_board, 1)
+    print(best_move, best_score)
 
     changed_pieces = []
     for i in range(len(best_move)):
@@ -148,7 +149,7 @@ if __name__ == '__main__':
     for x in range(len(player_starting_line)):
         current_board[0][x] = str(player_starting_line[x])
 
-    if player_starting == "y":
+    if player_starting == "Y":
         while True:
             print_board(current_board)
             player_turn()
