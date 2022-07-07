@@ -8,32 +8,12 @@ piece_movements = {"1": [[(-1, 0)], [(0, -1)], [(1, 0)], [(0, 1)]],
                    "3": [[(-1, 0), (-1, 0), (-1, 0)], [(0, -1), (0, -1), (0, -1)], [(1, 0), (1, 0), (1, 0)], [(0, 1), (0, 1), (0, 1)], [(-1, 0), (-1, 0), (0, -1)], [(-1, 0), (0, -1), (-1, 0)], [(0, -1), (-1, 0), (-1, 0)], [(-1, 0), (0, -1), (0, -1)], [(0, -1), (-1, 0), (0, -1)], [(0, -1), (0, -1), (-1, 0)], [(0, -1), (0, -1), (1, 0)], [(0, -1), (1, 0), (0, -1)], [(1, 0), (0, -1), (0, -1)],
                          [(0, -1), (1, 0), (1, 0)], [(1, 0), (0, -1), (1, 0)], [(1, 0), (1, 0), (0, -1)], [(1, 0), (1, 0), (0, 1)], [(1, 0), (0, 1), (1, 0)], [(0, 1), (1, 0), (1, 0)], [(1, 0), (0, 1), (0, 1)], [(0, 1), (1, 0), (0, 1)], [(0, 1), (0, 1), (1, 0)], [(0, 1), (0, 1), (-1, 0)], [(0, 1), (-1, 0), (0, 1)], [(-1, 0), (0, 1), (0, 1)], [(0, 1), (-1, 0), (-1, 0)], [(-1, 0), (0, 1), (-1, 0)],
                          [(-1, 0), (-1, 0), (0, 1)], [(0, 1), (-1, 0), (0, -1)], [(0, -1), (-1, 0), (0, 1)], [(-1, 0), (0, -1), (1, 0)], [(1, 0), (0, -1), (-1, 0)], [(0, -1), (1, 0), (0, 1)], [(0, 1), (1, 0), (0, -1)], [(1, 0), (0, 1), (-1, 0)], [(-1, 0), (0, 1), (1, 0)]]}
-piece_heat_maps = {"1": [["0", "0", "0", "0", "0", "0"],
-                         ["0", "0", "0", "0", "0", "0"],
-                         ["0", "0", "1", "1", "0", "0"],
-                         ["0", "1", "2", "2", "1", "0"],
-                         ["1", "2", "3", "3", "2", "1"],
-                         ["0", "1", "2", "2", "1", "0"]],
-
-                   "2": [["0", "0", "1", "1", "0", "0"],
-                         ["0", "1", "2", "2", "1", "0"],
-                         ["1", "2", "3", "3", "2", "1"],
-                         ["0", "1", "2", "2", "1", "0"],
-                         ["0", "0", "1", "1", "0", "0"],
-                         ["0", "0", "0", "0", "0", "0"]],
-
-                   "3": [["0", "0", "0", "0", "0", "0"],
-                         ["0", "0", "1", "1", "0", "0"],
-                         ["0", "1", "2", "2", "1", "0"],
-                         ["1", "2", "3", "3", "2", "1"],
-                         ["0", "1", "2", "2", "1", "0"],
-                         ["0", "0", "1", "1", "0", "0"]]}
 
 
 @cython.cfunc
 def get_piece_moves(current_piece, starting_piece, previous_path, previous_banned_bounces, player, current_player_drops, board):
     piece = board[current_piece[1]][current_piece[0]]
-    try:
+    if piece == "1" or piece == "2" or piece == "3":
         for path_index, path in enumerate(piece_movements[piece]):
             current_x = current_piece[0]
             current_y = current_piece[1]
@@ -50,30 +30,32 @@ def get_piece_moves(current_piece, starting_piece, previous_path, previous_banne
                 current_x += step[0]
                 current_y += step[1]
 
-                if 0 <= current_x <= 5:
-                    if ((len(path) - 1) - step_index) == 0:
-                        if current_y == -1:
-                            if player == 2:
-                                piece_moves.append([[board[starting_piece[1]][starting_piece[0]], "G1"], ["0", starting_piece]])
-                                break
-                        if current_y == 6:
-                            if player == 1:
-                                piece_moves.append([[board[starting_piece[1]][starting_piece[0]], "G2"], ["0", starting_piece]])
-                                break
-
-                if not 0 <= current_x <= 5 or not 0 <= current_y <= 5:
+                if not 0 <= current_x <= 5:
                     break
 
-                if board[current_y][current_x] != "0":
-                    if step_index != len(path) - 1:
+                if step_index == len(path) - 1:
+                    if current_y == -1:
+                        if player == 2:
+                            piece_moves.append([[board[starting_piece[1]][starting_piece[0]], "G1"], ["0", starting_piece]])
+                            break
+                    if current_y == 6:
+                        if player == 1:
+                            piece_moves.append([[board[starting_piece[1]][starting_piece[0]], "G2"], ["0", starting_piece]])
+                            break
+
+                    if board[current_y][current_x] != "0":
                         break
+
+                if not 0 <= current_y <= 5:
+                    break
 
                 current_path.append((current_x, current_y))
 
                 if step_index == len(path) - 1:
                     if board[current_y][current_x] != "0":
                         total_path = previous_path + current_path
-                        total_banned_bounces = previous_banned_bounces
+                        total_banned_bounces = []
+                        total_banned_bounces.extend(previous_banned_bounces)
 
                         if not (current_x, current_y) in total_banned_bounces:
                             total_banned_bounces.append((current_x, current_y))
@@ -89,8 +71,6 @@ def get_piece_moves(current_piece, starting_piece, previous_path, previous_banne
                             get_piece_moves((current_x, current_y), starting_piece, total_path, total_banned_bounces, player, current_player_drops, board)
                     else:
                         piece_moves.append([[board[starting_piece[1]][starting_piece[0]], current_path[-1]], ["0", starting_piece]])
-    except KeyError:
-        pass
 
 
 def get_all_moves(board, player):
@@ -102,7 +82,7 @@ def get_all_moves(board, player):
         player_1_moves = []
         for x in range(6):
             if board[player_1_active_line][x] != "0":
-                get_piece_moves((x, player_1_active_line), (x, player_1_active_line), [], [(x, player_2_active_line)], 1, player_1_drops, board)
+                get_piece_moves((x, player_1_active_line), (x, player_1_active_line), [], [], 1, player_1_drops, board)
                 player_1_moves.extend(piece_moves)
                 piece_moves.clear()
         return player_1_moves
@@ -113,9 +93,10 @@ def get_all_moves(board, player):
         player_2_moves = []
         for x in range(6):
             if board[player_2_active_line][x] != "0":
-                get_piece_moves((x, player_2_active_line), (x, player_2_active_line), [], [(x, player_2_active_line)], 2, player_2_drops, board)
+                get_piece_moves((x, player_2_active_line), (x, player_2_active_line), [], [], 2, player_2_drops, board)
                 player_2_moves.extend(piece_moves)
                 piece_moves.clear()
+
         return player_2_moves
 
 
@@ -171,34 +152,23 @@ def game_over(board):
 
 @cython.cfunc
 def static_evaluation(board):
+    if board[6] == "!":
+        return float("inf")
+    elif board[7] == "!":
+        return float("-inf")
+
     evaluation = 0
 
-    # ---------- Wins/Losses ----------
-
-    if board[6] == "!":
-        evaluation += 1000000
-    elif board[7] == "!":
-        evaluation -= 1000000
-
-    # ---------- Move Counts ----------
-
+    # ---------- GET DATA ----------
     player_1_moves = get_all_moves(board, 1)
-    evaluation -= len(player_1_moves) * 200
-
-    # ---------- Heat Maps ----------
-
-    for x in range(6):
-        for y in range(6):
-            if board[y][x] != "0":
-                heat_map = piece_heat_maps[board[y][x]]
-                evaluation += (int(heat_map[y][x]) * 25)
-
     # --------------------
+
+    evaluation -= len(player_1_moves)
 
     return evaluation
 
 
-def mini_max(depth, is_maximizing, board):
+def mini_max(depth, alpha, beta, is_maximizing, board):
     if depth == 0 or game_over(board):
         return static_evaluation(board)
 
@@ -226,8 +196,8 @@ def mini_max(depth, is_maximizing, board):
                     change_piece = change[0]
                     board[change_y][change_x] = change_piece
 
-            score = mini_max(depth - 1, False, board)
-            max_eval = max(score, max_eval)
+            eval = mini_max(depth - 1, alpha, beta, False, board)
+            max_eval = max(eval, max_eval)
 
             for i in range(len(changed_pieces)):
                 if changed_pieces[i] == "G1":
@@ -240,6 +210,10 @@ def mini_max(depth, is_maximizing, board):
                     change_y = change[1][1]
 
                     board[change_y][change_x] = changed_pieces[i]
+
+            alpha = max(alpha, eval)
+            if alpha >= beta:
+                break
 
         return max_eval
 
@@ -267,8 +241,8 @@ def mini_max(depth, is_maximizing, board):
                     change_piece = change[0]
                     board[change_y][change_x] = change_piece
 
-            score = mini_max(depth - 1, True, board)
-            min_eval = min(score, min_eval)
+            eval = mini_max(depth - 1, alpha, beta, True, board)
+            min_eval = min(eval, min_eval)
 
             for i in range(len(changed_pieces)):
                 if changed_pieces[i] == "G1":
@@ -281,5 +255,9 @@ def mini_max(depth, is_maximizing, board):
                     change_y = change[1][1]
 
                     board[change_y][change_x] = changed_pieces[i]
+
+            beta = min(beta, eval)
+            if beta <= alpha:
+                break
 
         return min_eval

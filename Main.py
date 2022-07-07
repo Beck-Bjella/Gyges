@@ -1,12 +1,13 @@
-from lib import Calculations
-from lib import Multiprocessor
+import Multiprocessor
+import Calculations
+import random
 
-current_board = [["0", "0", "0", "0", "0", "0"],
-                 ["0", "0", "0", "0", "0", "0"],
-                 ["1", "0", "1", "1", "0", "2"],
-                 ["2", "3", "3", "3", "2", "0"],
-                 ["0", "0", "1", "0", "0", "2"],
-                 ["0", "3", "0", "0", "0", "0"],
+current_board = [["0", "2", "0", "3", "2", "0"],
+                 ["0", "0", "0", "0", "0", "1"],
+                 ["0", "1", "0", "0", "0", "0"],
+                 ["3", "0", "1", "0", "0", "0"],
+                 ["0", "2", "0", "0", "0", "0"],
+                 ["0", "3", "0", "2", "3", "1"],
                  "0", "0"]
 
 
@@ -38,7 +39,27 @@ def print_board(board, player=1):
         print(f"                            |         |")
         print(f"                            + ------- +")
         print(f"")
+
+        print(f"        5         4         3         2         1         0     ")
+        print(f"   + ------- + ------- + ------- + ------- + ------- + ------- +")
+
+        for y in range(5, -1, -1):
+            print(f"   |         |         |         |         |         |         |")
+            print(f"{y}  |    {new_board[y][5]}    |    {new_board[y][4]}    |    {new_board[y][3]}    |    {new_board[y][2]}    |    {new_board[y][1]}    |    {new_board[y][0]}    |  {y}")
+            print(f"   |         |         |         |         |         |         |")
+            print(f"   + ------- + ------- + ------- + ------- + ------- + ------- +")
+        print(f"        5         4         3         2         1         0     ")
+
+        print(f"")
+        print(f"                            + ------- +")
+        print(f"                            |         |")
+        print(f"                            |    {new_board[6]}    |")
+        print(f"                            |         |")
+        print(f"                            + ------- +")
+        print(f"                              PLAYER 1")
+        print(f"")
     else:
+
         print(f"")
         print(f"                              PLAYER 1")
         print(f"                            + ------- +")
@@ -48,34 +69,16 @@ def print_board(board, player=1):
         print(f"                            + ------- +")
         print(f"")
 
-    print(f"        0         1         2         3         4         5     ")
-    print(f"   + ------- + ------- + ------- + ------- + ------- + ------- +")
+        print(f"        0         1         2         3         4         5     ")
+        print(f"   + ------- + ------- + ------- + ------- + ------- + ------- +")
 
-    if player == 1:
-        for y in range(5, -1, -1):
-            print(f"   |         |         |         |         |         |         |")
-            print(f"{y}  |    {new_board[y][0]}    |    {new_board[y][1]}    |    {new_board[y][2]}    |    {new_board[y][3]}    |    {new_board[y][4]}    |    {new_board[y][5]}    |  {y}")
-            print(f"   |         |         |         |         |         |         |")
-            print(f"   + ------- + ------- + ------- + ------- + ------- + ------- +")
-    else:
         for y in range(6):
             print(f"   |         |         |         |         |         |         |")
             print(f"{y}  |    {new_board[y][0]}    |    {new_board[y][1]}    |    {new_board[y][2]}    |    {new_board[y][3]}    |    {new_board[y][4]}    |    {new_board[y][5]}    |  {y}")
             print(f"   |         |         |         |         |         |         |")
             print(f"   + ------- + ------- + ------- + ------- + ------- + ------- +")
+        print(f"        0         1         2         3         4         5     ")
 
-    print(f"        0         1         2         3         4         5     ")
-
-    if player == 1:
-        print(f"")
-        print(f"                            + ------- +")
-        print(f"                            |         |")
-        print(f"                            |    {new_board[6]}    |")
-        print(f"                            |         |")
-        print(f"                            + ------- +")
-        print(f"                              PLAYER 1")
-        print(f"")
-    else:
         print(f"")
         print(f"                            + ------- +")
         print(f"                            |         |")
@@ -120,7 +123,7 @@ def player_turn():
 
 def computer_turn():
     print("Waiting on computer...")
-    best_move, best_score = Multiprocessor.get_best_move(current_board, 1)
+    best_move, best_score = Multiprocessor.get_best_move(current_board, depth=1)
     print(best_move, best_score)
 
     changed_pieces = []
@@ -142,12 +145,18 @@ def computer_turn():
             current_board[change_y][change_x] = change_piece
 
 
-if __name__ == '__main__':
+def play_against_computer():
     player_starting = input("Do you want to start: ")
     player_starting_line = input("Enter your starting line: ")
 
     for x in range(len(player_starting_line)):
         current_board[0][x] = str(player_starting_line[x])
+
+    computer_starting_pieces = ["1", "1", "2", "2", "3", "3"]
+    for x in range(6):
+        index = random.randrange(len(computer_starting_pieces))
+        current_board[5][x] = computer_starting_pieces[index]
+        computer_starting_pieces.pop(index)
 
     if player_starting == "Y":
         while True:
@@ -179,3 +188,10 @@ if __name__ == '__main__':
                 print_board(current_board)
                 print("PLAYER WINS")
                 break
+
+
+if __name__ == '__main__':
+    print_board(current_board, 2)
+    moves = Multiprocessor.get_best_move(current_board, depth=1)
+    for item_idx, item in enumerate(moves):
+        print(f"{item_idx}. {item}")
