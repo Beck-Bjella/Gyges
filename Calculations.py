@@ -1,13 +1,17 @@
+import cython
+
 piece_moves = []
 piece_movements = {"1": [[(-1, 0)], [(0, -1)], [(1, 0)], [(0, 1)]],
 
                    "2": [[(-1, 0), (-1, 0)], [(-1, 0), (0, -1)], [(0, -1), (-1, 0)], [(0, -1), (0, -1)], [(0, -1), (1, 0)], [(1, 0), (0, -1)], [(1, 0), (1, 0)], [(1, 0), (0, 1)], [(0, 1), (1, 0)], [(0, 1), (0, 1)], [(0, 1), (-1, 0)], [(-1, 0), (0, 1)]],
 
                    "3": [[(-1, 0), (-1, 0), (-1, 0)], [(0, -1), (0, -1), (0, -1)], [(1, 0), (1, 0), (1, 0)], [(0, 1), (0, 1), (0, 1)], [(-1, 0), (-1, 0), (0, -1)], [(-1, 0), (0, -1), (-1, 0)], [(0, -1), (-1, 0), (-1, 0)], [(-1, 0), (0, -1), (0, -1)], [(0, -1), (-1, 0), (0, -1)], [(0, -1), (0, -1), (-1, 0)], [(0, -1), (0, -1), (1, 0)], [(0, -1), (1, 0), (0, -1)], [(1, 0), (0, -1), (0, -1)],
-                         [(0, -1), (1, 0), (1, 0)], [(1, 0), (0, -1), (1, 0)], [(1, 0), (1, 0), (0, -1)], [(1, 0), (1, 0), (0, 1)], [(1, 0), (0, 1), (1, 0)], [(0, 1), (1, 0), (1, 0)], [(1, 0), (0, 1), (0, 1)], [(0, 1), (1, 0), (0, 1)], [(0, 1), (0, 1), (1, 0)], [(0, 1), (0, 1), (-1, 0)], [(0, 1), (-1, 0), (0, 1)], [(-1, 0), (0, 1), (0, 1)], [(0, 1), (-1, 0), (-1, 0)], [(-1, 0), (0, 1), (-1, 0)],
+                         [(0, -1), (1, 0), (1, 0)], [(1, 0), (0, -1), (1, 0)], [(1, 0), (1, 0), (0, -1)], [(1, 0), (1, 0), (0, 1)], [(1, 0), (0, 1), (1, 0)], [(0, 1), (1, 0), (1, 0)], [(1, 0), (0, 1), (0, 1)], [(0, 1), (1, 0), (0, 1)], [(0, 1), (0, 1), (1, 0)], [(0, 1), (0, 1), (-1, 0)], [(0, 1), (-1, 0), (0, 1)], [(-1, 0), (0, 1), (0, 1)], [(0, 1), (-1, 0), (-1, 0)],
+                         [(-1, 0), (0, 1), (-1, 0)],
                          [(-1, 0), (-1, 0), (0, 1)], [(0, 1), (-1, 0), (0, -1)], [(0, -1), (-1, 0), (0, 1)], [(-1, 0), (0, -1), (1, 0)], [(1, 0), (0, -1), (-1, 0)], [(0, -1), (1, 0), (0, 1)], [(0, 1), (1, 0), (0, -1)], [(1, 0), (0, 1), (-1, 0)], [(-1, 0), (0, 1), (1, 0)]]}
 
 
+@cython.cfunc
 def get_piece_moves(current_piece, starting_piece, previous_path, previous_banned_bounces, player, current_player_drops, board):
     piece = board[current_piece[1]][current_piece[0]]
     if piece == 1 or piece == 2 or piece == 3:
@@ -98,6 +102,7 @@ def get_all_moves(board, player):
         return player_2_moves
 
 
+@cython.cfunc
 def get_all_drops(board, player):
     player_1_active_line, player_2_active_line = get_active_lines(board)
 
@@ -120,6 +125,7 @@ def get_all_drops(board, player):
         return player_2_drops
 
 
+@cython.cfunc
 def get_active_lines(board):
     player_1_set = False
 
@@ -140,16 +146,17 @@ def get_active_lines(board):
 def game_over(board):
     game_over = False
 
-    if board[6][0] == 1 or board[7][0] == 1:
+    if board[6] == 1 or board[7] == 1:
         game_over = True
 
     return game_over
 
 
+@cython.cfunc
 def static_evaluation(board):
-    if board[6][0] == 1:
+    if board[6] == 1:
         return float("inf")
-    elif board[7][0] == 1:
+    elif board[7] == 1:
         return float("-inf")
 
     evaluation = 0
@@ -178,10 +185,10 @@ def mini_max(depth, alpha, beta, is_maximizing, board):
                 change = position[i]
 
                 if change[1] == "G1":
-                    board[6][0] = 1
+                    board[6] = 1
                     changed_pieces.append("G1")
                 elif change[1] == "G2":
-                    board[7][0] = 1
+                    board[7] = 1
                     changed_pieces.append("G2")
                 else:
                     changed_pieces.append(board[change[1][1]][change[1][0]])
@@ -196,9 +203,9 @@ def mini_max(depth, alpha, beta, is_maximizing, board):
 
             for i in range(len(changed_pieces)):
                 if changed_pieces[i] == "G1":
-                    board[6][0] = 0
+                    board[6] = 0
                 elif changed_pieces[i] == "G2":
-                    board[7][0] = 0
+                    board[7] = 0
                 else:
                     change = position[i]
                     change_x = change[1][0]
@@ -223,10 +230,10 @@ def mini_max(depth, alpha, beta, is_maximizing, board):
                 change = position[i]
 
                 if change[1] == "G1":
-                    board[6][0] = 1
+                    board[6] = 1
                     changed_pieces.append("G1")
                 elif change[1] == "G2":
-                    board[7][0] = 1
+                    board[7] = 1
                     changed_pieces.append("G2")
                 else:
                     changed_pieces.append(board[change[1][1]][change[1][0]])
@@ -241,9 +248,9 @@ def mini_max(depth, alpha, beta, is_maximizing, board):
 
             for i in range(len(changed_pieces)):
                 if changed_pieces[i] == "G1":
-                    board[6][0] = 0
+                    board[6] = 0
                 elif changed_pieces[i] == "G2":
-                    board[7][0] = 0
+                    board[7] = 0
                 else:
                     change = position[i]
                     change_x = change[1][0]

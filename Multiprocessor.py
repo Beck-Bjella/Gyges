@@ -9,10 +9,10 @@ def get_position_score(board, depth, position, process_index, processes_complete
         change = position[i]
 
         if change[1] == "G1":
-            board[6, 0] = 1
+            board[6] = 1
             changed_pieces.append("G1")
         elif change[1] == "G2":
-            board[7, 0] = 1
+            board[7] = 1
             changed_pieces.append("G2")
         else:
             changed_pieces.append(board[change[1][1]][change[1][0]])
@@ -26,9 +26,9 @@ def get_position_score(board, depth, position, process_index, processes_complete
 
     for i in range(len(changed_pieces)):
         if changed_pieces[i] == "G1":
-            board[6, 0] = 0
+            board[6] = 0
         elif changed_pieces[i] == "G2":
-            board[7, 0] = 0
+            board[7] = 0
         else:
             change = position[i]
             change_x = change[1][0]
