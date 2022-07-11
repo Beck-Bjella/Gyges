@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/GygesBot.iml" filepath="$PROJECT_DIR$/.idea/GygesBot.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/Gyges.iml" filepath="$PROJECT_DIR$/.idea/Gyges.iml" />
     </modules>
   </component>
 </project>
