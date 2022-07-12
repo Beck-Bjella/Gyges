@@ -56,7 +56,7 @@ def __get_move_score(board, depth, move, process_index, processes_complete, tota
     print(f"{len(processes_complete)} / {total_processes} completed in {round(time.perf_counter() - start_time, 3)} seconds.")
 
 
-def get_best_move(board, depth):
+def best_move(board, depth):
     start_time = time.perf_counter()
 
     processes = []

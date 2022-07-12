@@ -205,7 +205,7 @@ class Board:
         final_moves = []
 
         piece = self.board[current_piece[1]][current_piece[0]]
-        if piece == 1 or piece == 2 or piece == 3:
+        if piece != 0:
             for path_index, path in enumerate(self.piece_movements[str(piece)]):
                 current_x = current_piece[0]
                 current_y = current_piece[1]
@@ -229,18 +229,15 @@ class Board:
                         if current_y == -1:
                             if player == 2:
                                 final_moves.append([[self.board[starting_piece[1]][starting_piece[0]], "G1"], [0, starting_piece]])
-                                break
-                        if current_y == 6:
+                            break
+
+                        elif current_y == 6:
                             if player == 1:
                                 final_moves.append([[self.board[starting_piece[1]][starting_piece[0]], "G2"], [0, starting_piece]])
-                                break
+                            break
 
                     if not 0 <= current_y <= 5:
                         break
-
-                    if self.board[current_y][current_x] != 0:
-                        if step_index != len(path) - 1:
-                            break
 
                     current_path.append((current_x, current_y))
 
@@ -264,5 +261,8 @@ class Board:
                                 final_moves.extend(self.__get_piece_moves((current_x, current_y), starting_piece, total_path, total_banned_bounces, player, current_player_drops))
                         else:
                             final_moves.append([[self.board[starting_piece[1]][starting_piece[0]], current_path[-1]], [0, starting_piece]])
+                    else:
+                        if self.board[current_y][current_x] != 0:
+                            break
 
         return final_moves
