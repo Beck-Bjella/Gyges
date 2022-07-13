@@ -14,7 +14,7 @@ def __mini_max(depth, alpha, beta, is_maximizing, board):
         current_moves = __remove_dupes(board.valid_moves(2))
 
         max_eval = float('-inf')
-        for move in current_moves:
+        for move_idx, move in enumerate(current_moves):
             board.push(move)
 
             eval = __mini_max(depth - 1, alpha, beta, False, board)
@@ -32,7 +32,7 @@ def __mini_max(depth, alpha, beta, is_maximizing, board):
         current_moves = __remove_dupes(board.valid_moves(1))
 
         min_eval = float('inf')
-        for move in current_moves:
+        for move_idx, move in enumerate(current_moves):
             board.push(move)
 
             eval = __mini_max(depth - 1, alpha, beta, True, board)

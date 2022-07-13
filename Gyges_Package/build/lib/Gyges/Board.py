@@ -250,7 +250,7 @@ class Board:
                             if not (current_x, current_y) in total_banned_bounces:
                                 total_banned_bounces.append((current_x, current_y))
 
-                                for drop in current_player_drops:
+                                for drop_idx, drop in enumerate(current_player_drops):
                                     piece_to_drop = self.board[current_y][current_x]
                                     drop_location = drop
                                     replacement_piece = self.board[starting_piece[1]][starting_piece[0]]
