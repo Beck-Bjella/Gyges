@@ -2,12 +2,16 @@ import time
 import multiprocessing
 
 
+def __remove_dupes(seq):
+    return [x for y, x in enumerate(seq) if x not in seq[:y]]
+
+
 def __mini_max(depth, alpha, beta, is_maximizing, board):
     if depth == 0 or board.game_over():
         return board.evaluate()
 
     if is_maximizing:
-        current_moves = board.valid_moves(2)
+        current_moves = __remove_dupes(board.valid_moves(2))
 
         max_eval = float('-inf')
         for move in current_moves:
@@ -25,7 +29,7 @@ def __mini_max(depth, alpha, beta, is_maximizing, board):
         return max_eval
 
     else:
-        current_moves = board.valid_moves(1)
+        current_moves = __remove_dupes(board.valid_moves(1))
 
         min_eval = float('inf')
         for move in current_moves:
@@ -63,7 +67,7 @@ def best_move(board, depth):
     process_data = multiprocessing.Manager().list()
     processes_complete = multiprocessing.Manager().list()
 
-    player_2_moves = board.valid_moves(2)
+    player_2_moves = __remove_dupes(board.valid_moves(2))
     for move_idx, move in enumerate(player_2_moves):
         process = multiprocessing.Process(target=__get_move_score, args=(board, depth, move, move_idx, processes_complete, len(player_2_moves), process_data, start_time,))
         processes.append(process)

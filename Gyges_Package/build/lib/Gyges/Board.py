@@ -250,13 +250,13 @@ class Board:
                             if not (current_x, current_y) in total_banned_bounces:
                                 total_banned_bounces.append((current_x, current_y))
 
-                                for drop in current_player_drops:
-                                    piece_to_drop = self.board[current_y][current_x]
-                                    drop_location = drop
-                                    replacement_piece = self.board[starting_piece[1]][starting_piece[0]]
-                                    replacement_location = (current_x, current_y)
+                                # for drop in current_player_drops:
+                                piece_to_drop = self.board[current_y][current_x]
+                                drop_location = (-1, -1)
+                                replacement_piece = self.board[starting_piece[1]][starting_piece[0]]
+                                replacement_location = (current_x, current_y)
 
-                                    final_moves.append([[piece_to_drop, drop_location], [replacement_piece, replacement_location], [0, starting_piece]])
+                                final_moves.append([[piece_to_drop, drop_location], [replacement_piece, replacement_location], [0, starting_piece]])
 
                                 final_moves.extend(self.__get_piece_moves((current_x, current_y), starting_piece, total_path, total_banned_bounces, player, current_player_drops))
                         else:
