@@ -69,7 +69,7 @@ def best_move(board, depth):
 
     player_2_moves = __remove_dupes(board.valid_moves(2))
     for move_idx, move in enumerate(player_2_moves):
-        process = multiprocessing.Process(target=__get_move_score, args=(board, depth, move, move_idx, processes_complete, len(player_2_moves), process_data, start_time,))
+        process = multiprocessing.Process(target=__get_move_score, args=(board, depth, move, move_idx, processes_complete, len(player_2_moves), process_data, start_time))
         processes.append(process)
 
     for p in processes:
