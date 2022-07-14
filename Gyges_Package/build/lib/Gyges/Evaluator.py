@@ -2,55 +2,55 @@ import time
 import multiprocessing
 
 
-def __remove_dupes(seq):
+def remove_dupes(seq):
     return [x for y, x in enumerate(seq) if x not in seq[:y]]
 
 
-def __mini_max(depth, alpha, beta, is_maximizing, board):
+def mini_max(depth, alpha, beta, is_maximizing, board):
     if depth == 0 or board.game_over():
         return board.evaluate()
 
     if is_maximizing:
-        current_moves = __remove_dupes(board.valid_moves(2))
+        current_moves = remove_dupes(board.valid_moves(2))
 
         max_eval = float('-inf')
         for move_idx, move in enumerate(current_moves):
             board.push(move)
 
-            eval = __mini_max(depth - 1, alpha, beta, False, board)
-            max_eval = max(eval, max_eval)
+            cur_eval = mini_max(depth - 1, alpha, beta, False, board)
+            max_eval = max(cur_eval, max_eval)
 
             board.pop()
 
-            alpha = max(alpha, eval)
+            alpha = max(alpha, cur_eval)
             if alpha >= beta:
                 break
 
         return max_eval
 
     else:
-        current_moves = __remove_dupes(board.valid_moves(1))
+        current_moves = remove_dupes(board.valid_moves(1))
 
         min_eval = float('inf')
         for move_idx, move in enumerate(current_moves):
             board.push(move)
 
-            eval = __mini_max(depth - 1, alpha, beta, True, board)
-            min_eval = min(eval, min_eval)
+            cur_eval = mini_max(depth - 1, alpha, beta, True, board)
+            min_eval = min(cur_eval, min_eval)
 
             board.pop()
 
-            beta = min(beta, eval)
+            beta = min(beta, cur_eval)
             if beta <= alpha:
                 break
 
         return min_eval
 
 
-def __get_move_score(board, depth, move, process_index, processes_complete, total_processes, process_data, start_time):
+def get_move_score(board, depth, move, process_index, processes_complete, total_processes, process_data, start_time):
     board.push(move)
 
-    score = __mini_max(depth, float("-inf"), float("inf"), False, board)
+    score = mini_max(depth, float("-inf"), float("inf"), False, board)
 
     board.pop()
 
@@ -67,9 +67,9 @@ def best_move(board, depth):
     process_data = multiprocessing.Manager().list()
     processes_complete = multiprocessing.Manager().list()
 
-    player_2_moves = __remove_dupes(board.valid_moves(2))
+    player_2_moves = remove_dupes(board.valid_moves(2))
     for move_idx, move in enumerate(player_2_moves):
-        process = multiprocessing.Process(target=__get_move_score, args=(board, depth, move, move_idx, processes_complete, len(player_2_moves), process_data, start_time))
+        process = multiprocessing.Process(target=get_move_score, args=(board, depth, move, move_idx, processes_complete, len(player_2_moves), process_data, start_time))
         processes.append(process)
 
     for p in processes:
