@@ -1,0 +1,1 @@
+This is to run the program: cargo run --release -- -C target-cpu=native
