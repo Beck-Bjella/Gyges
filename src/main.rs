@@ -35,16 +35,6 @@ impl Board {
     
     }
 
-    fn game_over(&self, current_player: i8) -> bool{
-        if self.threat_count(current_player) > 0 {
-            return true;
-
-        }
-
-        return false;
-    
-    }
-
     fn evalulate(&self) -> usize {
         let starting_value = usize::MAX / 2;
         let player_1_moves = self.valid_moves(1);
@@ -60,11 +50,20 @@ impl Board {
         let mut threats = 0;
         let moves = self.valid_moves(player);
         for mv in moves {
-            if mv[0][1] == PLAYER_1_GOAL || mv[0][1] == PLAYER_2_GOAL {
-                threats += 1;
-
+            if player == 1 {
+                if mv[0][1] == PLAYER_2_GOAL {
+                    threats += 1;
+    
+                }
+    
+            } else {
+                if mv[0][1] == PLAYER_1_GOAL {
+                    threats += 1;
+    
+                }
+    
             }
-
+            
         }
 
         return threats;
@@ -144,13 +143,24 @@ impl Board {
             return score;
     
         }
-    
+
         if is_maximisizing {
-            if self.game_over(2){
+            if self.threat_count(2) > 0 {
                 return usize::MAX;
         
             }
 
+        } else {
+            if self.threat_count(1) > 0 {
+                return usize::MIN;
+        
+            }
+
+        }
+
+
+    
+        if is_maximisizing {
             let current_moves = self.valid_moves(2);
     
             let mut max_eval: usize = usize::MIN;
@@ -182,11 +192,6 @@ impl Board {
             return max_eval;
     
         } else {
-            if self.game_over(1){
-                return usize::MIN;
-        
-            }
-
             let current_moves = self.valid_moves(1);
     
             let mut min_eval: usize = usize::MAX;
@@ -241,22 +246,31 @@ impl Board {
             self.make_move(&mv);
             
             println!("Starting Index {}", move_idx);
-    
-            let eval = self.mini_max(alpha, beta, false, depth);
+            
+            let eval;
 
-            // println!("{:?} - {} - {}", mv, eval, self._threat_count(1));
+            if mv[0][1] == PLAYER_1_GOAL {
+                eval = usize::MAX;
 
-            // let threat_eval = self._threat_count(2) * 1000;
-            // eval += threat_eval;
+            } else {
+                eval = self.mini_max(alpha, beta, false, depth);
+
+            }
+
+            if eval == usize::MAX {
+                self.print_board();
+                println!("{:?}", mv);
+
+            }
             
             self.undo_move(&mv);
 
-            if eval >= max_eval[0] {
+            if eval > max_eval[0] {
                 max_eval = [eval, move_idx];
             }
 
             alpha = max!(alpha, eval);
-            if alpha > beta {
+            if alpha >= beta {
                 break
     
             }
@@ -711,12 +725,12 @@ fn order_moves(moves: Vec<Vec<[usize; 3]>>) -> Vec<Vec<[usize; 3]>> {
 
 fn main() {
     let mut board = Board {
-        data: [ [0 ,2 ,1 ,1, 2, 0],
-                [0 ,0 ,3 ,3, 0, 0],
+        data: [ [0 ,2 ,1 ,2, 3, 1],
+                [0 ,0 ,3 ,0, 0, 0],
                 [0 ,0 ,0 ,0, 0, 0],
-                [0 ,0 ,2 ,0, 0, 0],
-                [0 ,0 ,1 ,0, 0, 0], 
-                [3 ,2 ,0 ,0, 3, 1]],
+                [0 ,0 ,0 ,0, 0, 0],
+                [0 ,0 ,0 ,0, 0, 2], 
+                [1 ,2 ,3 ,1, 3, 0]],
         goals: [0, 0],
         one_moves: [[0], [1], [2], [3]],
         two_moves: [[0, 0], [0, 1], [1, 0], [1, 1], [1, 2], [2, 1], [2, 2], [2, 3], [3, 2], [3, 3], [3, 0], [0, 3]],
