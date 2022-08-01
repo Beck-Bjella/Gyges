@@ -19,10 +19,41 @@ struct Board {
 }
 
 impl Board {
-    fn print(&self) { 
+    fn new() -> Board {
+        return Board {
+            data: [ [0 ,0, 0 ,0, 0, 0],
+                    [0 ,0 ,0 ,0, 0, 0],
+                    [0 ,0 ,0 ,0, 0, 0],
+                    [0 ,0 ,0 ,0, 0, 0],
+                    [0 ,0, 0 ,0, 0, 0], 
+                    [0 ,0 ,0 ,0, 0, 0]],
+            goals: [0, 0],
+
+            one_moves: [[0], [1], [2], [3]],
+            two_moves: [[0, 0], [0, 1], [1, 0], [1, 1], [1, 2], [2, 1], [2, 2], [2, 3], [3, 2], [3, 3], [3, 0], [0, 3]],
+            three_moves: [[0, 0, 0], [1, 1, 1], [2, 2, 2], [3, 3, 3], [0, 0, 1], [0, 1, 0], [1, 0, 0], [0, 1, 1], [1, 0, 1], [1, 1, 0], [1, 1, 2], [1, 2, 1], [2, 1, 1], [1, 2, 2], [2, 1, 2], [2, 2, 1], [2, 2, 3], [2, 3, 2], [3, 2, 2], [2, 3, 3], [3, 2, 3], [3, 3, 2], [3, 3, 0], [3, 0, 3], [0, 3, 3], [3, 0, 0], [0, 3, 0], [0, 0, 3], [3, 0, 1], [1, 0, 3], [0, 1, 2], [2, 1, 0], [1, 2, 3], [3, 2, 1], [2, 3, 0], [0, 3, 2]],
+    
+        };
+        
+    }
+
+    fn set(&mut self, data: [[usize; 6]; 6], goals: [usize; 2]) {
+        self.data = data;
+        self.goals = goals;
+
+    }
+
+    fn print(&self) {
         println!(" ");
-        println!("         {}", self.goals[0]);
+        if self.goals[0] == 0 {
+            println!("         .");
+
+        } else {
+            println!("         {}", self.goals[0]);
+
+        }
         println!(" ");
+
         for y in 0..6 {
             for x in 0..6 {
                 if self.data[y][x] == 0 {
@@ -35,24 +66,64 @@ impl Board {
             }
             println!(" ");
         }
+
         println!(" ");
-        println!("         {}",  self.goals[1]);
+        if self.goals[1] == 0 {
+            println!("         .");
+
+        } else {
+            println!("         {}", self.goals[1]);
+
+        }
         println!(" ");
     
     }
+
+    fn fancy_print(&self) {
+        println!("");
+        println!("                              PLAYER 1");
+        println!("                            + ------- +");
+        println!("                            |         |");
+        println!("                            |    {}    |", self.goals[0]);
+        println!("                            |         |");
+        println!("                            + ------- +");
+        println!("");
+
+        println!("        0         1         2         3         4         5     ");
+        println!("   + ------- + ------- + ------- + ------- + ------- + ------- +");
+
+        for y in 0..6 {
+            println!("   |         |         |         |         |         |         |");
+            println!("{}  |    {}    |    {}    |    {}    |    {}    |    {}    |    {}    |  {}", y, self.data[y][0], self.data[y][1], self.data[y][2], self.data[y][3], self.data[y][4], self.data[y][5], y);
+            println!("   |         |         |         |         |         |         |");
+            println!("   + ------- + ------- + ------- + ------- + ------- + ------- +");
+
+        }
+        println!("        0         1         2         3         4         5     ");
+
+        println!("");
+        println!("                            + ------- +");
+        println!("                            |         |");
+        println!("                            |    {}    |", self.goals[1]);
+        println!("                            |         |");
+        println!("                            + ------- +");
+        println!("                              PLAYER 2");
+        println!("");
+
+    }
     
-    fn evalulate(&self) -> usize {
+    fn evalulate(&mut self) -> usize {
         let starting_value = usize::MAX / 2;
         let player_1_moves = self.valid_moves(1);
         let player_2_moves = self.valid_moves(2);
 
-        let score = starting_value + (player_2_moves.len() - player_1_moves.len());
+        let score = starting_value + (player_2_moves.len() - (player_1_moves.len() * 1));
 
         return score;
     
     }
 
-    fn threat_count(&self, player: i8) -> usize {
+    fn threat_count(&mut self, player: i8) -> usize {
         let mut threats = 0;
         let moves = self.valid_moves(player);
         for mv in moves {
@@ -157,7 +228,7 @@ impl Board {
             }
 
             let current_moves = self.valid_moves(2);
-    
+            
             let mut max_eval: [usize; 2] = [usize::MIN, usize::MIN];
             let mut used_moves: Vec<Vec<[usize; 3]>> = Vec::new();
             for mv in current_moves.iter() {
@@ -202,7 +273,7 @@ impl Board {
             }
 
             let current_moves = self.valid_moves(1);
-    
+            
             let mut min_eval: [usize; 2] = [usize::MAX, usize::MIN];
             let mut used_moves: Vec<Vec<[usize; 3]>> = Vec::new();
             for mv in current_moves.iter() {
@@ -310,7 +381,7 @@ impl Board {
         
     }
 
-    fn valid_moves(&self, player: i8) -> Vec<Vec<[usize; 3]>> {
+    fn valid_moves(&mut self, player: i8) -> Vec<Vec<[usize; 3]>> {
         let active_lines = self.active_lines();
     
         if player == 1 {
@@ -332,12 +403,21 @@ impl Board {
             for x in 0..6 {
                 if self.data[active_lines[0]][x] != 0 {
                     let current_piece: [usize; 2] = [x, active_lines[0]];
+                    let current_piece_type: usize = self.data[current_piece[1]][current_piece[0]];
+
+                    let starting_piece: [usize; 2] = [x, active_lines[0]];
+                    let starting_piece_type: usize = self.data[starting_piece[1]][starting_piece[0]];
+
                     let mut previous_path: Vec<[i8; 2]> = vec![[x as i8, active_lines[0] as i8]];
-                    let mut previous_banned_bounces: Vec<[i8; 2]> = vec![[x as i8, active_lines[0] as i8]];
-    
-                    let mut moves =  self.get_piece_moves(&current_piece, &current_piece, &mut previous_path, &mut previous_banned_bounces, 1, &player_1_drops);
+                    let mut previous_banned_bounces: Vec<[i8; 2]> = Vec::new();
+                    
+                    self.data[starting_piece[1]][starting_piece[0]] = 0;
+
+                    let mut moves = self.get_piece_moves(&current_piece, current_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 1, &player_1_drops);
                     player_1_moves.append(&mut moves);
-    
+
+                    self.data[starting_piece[1]][starting_piece[0]] = starting_piece_type;
+
                 }
     
             }
@@ -362,13 +442,21 @@ impl Board {
             for x in 0..6 {
                 if self.data[active_lines[1]][x] != 0 {
                     let current_piece: [usize; 2] = [x, active_lines[1]];
+                    let current_piece_type: usize = self.data[current_piece[1]][current_piece[0]];
+
+                    let starting_piece: [usize; 2] = [x, active_lines[1]];
+                    let starting_piece_type: usize = self.data[starting_piece[1]][starting_piece[0]];
+
                     let mut previous_path: Vec<[i8; 2]> = vec![[x as i8, active_lines[1] as i8]];
-                    let mut previous_banned_bounces: Vec<[i8; 2]> = vec![[x as i8, active_lines[1] as i8]];
-    
-                    let mut moves = self.get_piece_moves(&current_piece, &current_piece, &mut previous_path, &mut previous_banned_bounces, 2, &player_2_drops);
-                    player_2_moves.append(&mut moves);
+                    let mut previous_banned_bounces: Vec<[i8; 2]> = Vec::new();
                     
-    
+                    self.data[starting_piece[1]][starting_piece[0]] = 0;
+
+                    let mut moves = self.get_piece_moves(&current_piece, current_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 2, &player_2_drops);
+                    player_2_moves.append(&mut moves);
+
+                    self.data[starting_piece[1]][starting_piece[0]] = starting_piece_type;
+
                 }
     
             }
@@ -379,12 +467,10 @@ impl Board {
     
     }
 
-    fn get_piece_moves(&self, current_piece: &[usize; 2],  starting_piece: &[usize; 2], previous_path: &mut Vec<[i8; 2]>, previous_banned_bounces: &mut Vec<[i8; 2]>, player: i8, current_player_drops: &Vec<[usize; 2]>) -> Vec<Vec<[usize; 3]>> {
+    fn get_piece_moves(&self, current_piece: &[usize; 2], current_piece_type: usize, starting_piece: &[usize; 2], starting_piece_type: usize, previous_path: &mut Vec<[i8; 2]>, previous_banned_bounces: &mut Vec<[i8; 2]>, player: i8, current_player_drops: &Vec<[usize; 2]>) -> Vec<Vec<[usize; 3]>> {
         let mut final_moves: Vec<Vec<[usize; 3]>> = Vec::new();
     
-        let piece: usize = self.data[current_piece[1]][current_piece[0]];
-    
-        if piece == ONE_PIECE {
+        if current_piece_type == ONE_PIECE {
             for path in self.one_moves.iter() {
                 let mut current_x: i8 = current_piece[0] as i8;
                 let mut current_y: i8 = current_piece[1] as i8;
@@ -435,10 +521,10 @@ impl Board {
         
                     if step_idx == path.len() - 1 {
                         if current_y == 6 && player == 1 {
-                            final_moves.push(vec![[self.data[starting_piece[1]][starting_piece[0]], PLAYER_2_GOAL, PLAYER_2_GOAL], [0, starting_piece[0], starting_piece[1]]]);
+                            final_moves.push(vec![[starting_piece_type, PLAYER_2_GOAL, PLAYER_2_GOAL], [0, starting_piece[0], starting_piece[1]]]);
         
                         } else if current_y == -1 && player == 2{
-                            final_moves.push(vec![[self.data[starting_piece[1]][starting_piece[0]], PLAYER_1_GOAL, PLAYER_1_GOAL], [0, starting_piece[0], starting_piece[1]]]);
+                            final_moves.push(vec![[starting_piece_type, PLAYER_1_GOAL, PLAYER_1_GOAL], [0, starting_piece[0], starting_piece[1]]]);
                             
                         }
         
@@ -468,17 +554,20 @@ impl Board {
                                 total_banned_bounces.push([current_x ,current_y]);
     
                                 for drop in current_player_drops.iter() {
-                                    final_moves.push(vec![[self.data[current_y as usize][current_x as usize], drop[0], drop[1]], [self.data[starting_piece[1]][starting_piece[0]], current_x as usize ,current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
+                                    final_moves.push(vec![[self.data[current_y as usize][current_x as usize], drop[0], drop[1]], [starting_piece_type, current_x as usize ,current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
     
                                 }
                                 
-                                let mut moves: Vec<Vec<[usize; 3]>> = self.get_piece_moves(&[current_x as usize ,current_y as usize], starting_piece, &mut total_path, &mut total_banned_bounces, player, current_player_drops);
+                                let mut moves: Vec<Vec<[usize; 3]>> = self.get_piece_moves(&[current_x as usize ,current_y as usize], self.data[current_y as usize][current_x as usize], starting_piece, starting_piece_type, &mut total_path, &mut total_banned_bounces, player, current_player_drops);
                                 final_moves.append(&mut moves);
     
                             }
     
                         } else {
-                            final_moves.push(vec![[self.data[starting_piece[1]][starting_piece[0]], current_x as usize, current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
+                            if &[current_x as usize,  current_y as usize] != starting_piece {
+                                final_moves.push(vec![[starting_piece_type, current_x as usize, current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
+
+                            }
     
                         }
     
@@ -488,7 +577,7 @@ impl Board {
                 
             }
     
-        } else if piece == TWO_PIECE {
+        } else if current_piece_type == TWO_PIECE {
             for path in self.two_moves.iter() {
                 let mut current_x: i8 = current_piece[0] as i8;
                 let mut current_y: i8 = current_piece[1] as i8;
@@ -539,10 +628,10 @@ impl Board {
         
                     if step_idx == path.len() - 1 {
                         if current_y == 6 && player == 1 {
-                            final_moves.push(vec![[self.data[starting_piece[1]][starting_piece[0]], PLAYER_2_GOAL, PLAYER_2_GOAL], [0, starting_piece[0], starting_piece[1]]]);
+                            final_moves.push(vec![[starting_piece_type, PLAYER_2_GOAL, PLAYER_2_GOAL], [0, starting_piece[0], starting_piece[1]]]);
         
                         } else if current_y == -1 && player == 2{
-                            final_moves.push(vec![[self.data[starting_piece[1]][starting_piece[0]], PLAYER_1_GOAL, PLAYER_1_GOAL], [0, starting_piece[0], starting_piece[1]]]);
+                            final_moves.push(vec![[starting_piece_type, PLAYER_1_GOAL, PLAYER_1_GOAL], [0, starting_piece[0], starting_piece[1]]]);
                             
                         }
         
@@ -572,17 +661,20 @@ impl Board {
                                 total_banned_bounces.push([current_x ,current_y]);
     
                                 for drop in current_player_drops.iter() {
-                                    final_moves.push(vec![[self.data[current_y as usize][current_x as usize], drop[0], drop[1]], [self.data[starting_piece[1]][starting_piece[0]], current_x as usize ,current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
+                                    final_moves.push(vec![[self.data[current_y as usize][current_x as usize], drop[0], drop[1]], [starting_piece_type, current_x as usize ,current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
     
                                 }
                                 
-                                let mut moves: Vec<Vec<[usize; 3]>> = self.get_piece_moves(&[current_x as usize ,current_y as usize], starting_piece, &mut total_path, &mut total_banned_bounces, player, current_player_drops);
+                                let mut moves: Vec<Vec<[usize; 3]>> = self.get_piece_moves(&[current_x as usize ,current_y as usize], self.data[current_y as usize][current_x as usize], starting_piece, starting_piece_type, &mut total_path, &mut total_banned_bounces, player, current_player_drops);
                                 final_moves.append(&mut moves);
     
                             }
     
                         } else {
-                            final_moves.push(vec![[self.data[starting_piece[1]][starting_piece[0]], current_x as usize, current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
+                            if &[current_x as usize,  current_y as usize] != starting_piece {
+                                final_moves.push(vec![[starting_piece_type, current_x as usize, current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
+
+                            }
     
                         }
     
@@ -592,7 +684,7 @@ impl Board {
                 
             }
     
-        } else if piece == THREE_PIECE {
+        } else if current_piece_type == THREE_PIECE {
             for path in self.three_moves.iter() {
                 let mut current_x: i8 = current_piece[0] as i8;
                 let mut current_y: i8 = current_piece[1] as i8;
@@ -643,10 +735,10 @@ impl Board {
         
                     if step_idx == path.len() - 1 {
                         if current_y == 6 && player == 1 {
-                            final_moves.push(vec![[self.data[starting_piece[1]][starting_piece[0]], PLAYER_2_GOAL, PLAYER_2_GOAL], [0, starting_piece[0], starting_piece[1]]]);
+                            final_moves.push(vec![[starting_piece_type, PLAYER_2_GOAL, PLAYER_2_GOAL], [0, starting_piece[0], starting_piece[1]]]);
         
                         } else if current_y == -1 && player == 2{
-                            final_moves.push(vec![[self.data[starting_piece[1]][starting_piece[0]], PLAYER_1_GOAL, PLAYER_1_GOAL], [0, starting_piece[0], starting_piece[1]]]);
+                            final_moves.push(vec![[starting_piece_type, PLAYER_1_GOAL, PLAYER_1_GOAL], [0, starting_piece[0], starting_piece[1]]]);
                             
                         }
         
@@ -676,18 +768,21 @@ impl Board {
                                 total_banned_bounces.push([current_x ,current_y]);
     
                                 for drop in current_player_drops.iter() {
-                                    final_moves.push(vec![[self.data[current_y as usize][current_x as usize], drop[0], drop[1]], [self.data[starting_piece[1]][starting_piece[0]], current_x as usize ,current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
+                                    final_moves.push(vec![[self.data[current_y as usize][current_x as usize], drop[0], drop[1]], [starting_piece_type, current_x as usize ,current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
     
                                 }
                                 
-                                let mut moves: Vec<Vec<[usize; 3]>> = self.get_piece_moves(&[current_x as usize ,current_y as usize], starting_piece, &mut total_path, &mut total_banned_bounces, player, current_player_drops);
+                                let mut moves: Vec<Vec<[usize; 3]>> = self.get_piece_moves(&[current_x as usize ,current_y as usize], self.data[current_y as usize][current_x as usize], starting_piece, starting_piece_type, &mut total_path, &mut total_banned_bounces, player, current_player_drops);
                                 final_moves.append(&mut moves);
     
                             }
     
                         } else {
-                            final_moves.push(vec![[self.data[starting_piece[1]][starting_piece[0]], current_x as usize, current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
-    
+                            if &[current_x as usize,  current_y as usize] != starting_piece {
+                                final_moves.push(vec![[starting_piece_type, current_x as usize, current_y as usize], [0, starting_piece[0], starting_piece[1]]]);
+
+                            }
+
                         }
     
                     } 
@@ -734,7 +829,7 @@ impl Board {
 
     }
 
-    fn is_tie(&self) -> bool {
+    fn is_tie(&mut self) -> bool {
         let player_1_moves = self.valid_moves(1);
         let player_2_moves = self.valid_moves(2);
 
@@ -798,6 +893,23 @@ impl Board {
     
         return ordered_moves;
     
+    }
+
+    fn _set_starting_line(&mut self, line: [usize; 6], player: i8) {
+        if player == 1 {
+            for x in 0..6 {
+                self.data[0][x] = line[x];
+
+            }
+
+        } else if player == 2 {
+            for x in 0..6 {
+                self.data[5][x] = line[x];
+
+            }
+
+        }
+
     }
 
     fn _flip(&mut self) {
@@ -877,26 +989,27 @@ impl Board {
 
 
 fn main() {
-    let mut board = Board {
-        data: [ [0 ,0, 0 ,0, 3, 3],
-                [2 ,3 ,0 ,1, 3, 0],
-                [0 ,1 ,2 ,2, 0, 0],
-                [0 ,1 ,1 ,0, 0, 0],
-                [0 ,0 ,0 ,2, 0, 0], 
-                [0 ,0 ,0 ,0, 0, 0]],
-        goals: [0, 0],
-        one_moves: [[0], [1], [2], [3]],
-        two_moves: [[0, 0], [0, 1], [1, 0], [1, 1], [1, 2], [2, 1], [2, 2], [2, 3], [3, 2], [3, 3], [3, 0], [0, 3]],
-        three_moves: [[0, 0, 0], [1, 1, 1], [2, 2, 2], [3, 3, 3], [0, 0, 1], [0, 1, 0], [1, 0, 0], [0, 1, 1], [1, 0, 1], [1, 1, 0], [1, 1, 2], [1, 2, 1], [2, 1, 1], [1, 2, 2], [2, 1, 2], [2, 2, 1], [2, 2, 3], [2, 3, 2], [3, 2, 2], [2, 3, 3], [3, 2, 3], [3, 3, 2], [3, 3, 0], [3, 0, 3], [0, 3, 3], [3, 0, 0], [0, 3, 0], [0, 0, 3], [3, 0, 1], [1, 0, 3], [0, 1, 2], [2, 1, 0], [1, 2, 3], [3, 2, 1], [2, 3, 0], [0, 3, 2]],
-
-    };
+    let mut board = Board::new(); 
+    board.set([   [0 ,0, 1 ,0, 3, 0],
+                        [0 ,0 ,2 ,3, 0, 0],
+                        [0 ,0 ,1 ,3, 0, 0],
+                        [0 ,2 ,1 ,0, 0, 0],
+                        [0 ,0, 1 ,2, 0, 0], 
+                        [3 ,0 ,0 ,2, 0, 0]], 
+                    [0 ,0]);
     
-    board.print();
+    board.fancy_print();
 
     let start = std::time::Instant::now();
 
-    // board.simualate_game(3);
     println!("{:?}", board.get_best_move(3));
+
+    // let moves = board.valid_moves(2);
+    // println!("{}", moves.len());
+    // for mv in moves {
+    //     println!("{:?}", &mv);
+
+    // }
 
     let elapsed_time = start.elapsed();
     println!("DONE! in {} seconds.", elapsed_time.as_secs_f64());
