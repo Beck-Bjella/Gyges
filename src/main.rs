@@ -347,7 +347,7 @@ impl Board {
         let mut used_moves: Vec<[usize; 9]> = Vec::new();
         for (move_idx, mv) in current_moves.iter().enumerate() {
             if used_moves.contains(mv) {
-                println!("Indix {} is a dupe", move_idx);
+                // println!("Indix {} is a dupe", move_idx);
                 continue;
             }
     
@@ -361,7 +361,7 @@ impl Board {
 
             used_moves.push(*mv);
             
-            println!("Starting Index {}", move_idx);
+            // println!("Starting Index {}", move_idx);
             
             let eval: [usize; 3];
             let temp_eval = self.mini_max(alpha, beta, false, depth - 1);
@@ -864,13 +864,11 @@ impl Board {
 
             predicted_score -= threats;
     
-            if mv.len() == 3 {
-                predicted_score -= 200;
-    
-            }
-    
-            if mv.len() == 2 {
+            if mv[7] == 9 {
                 predicted_score -= 100;
+    
+            } else if mv[7] != 9 {
+                predicted_score -= 200;
     
             }
     
@@ -1006,7 +1004,7 @@ fn main() {
                         [3 ,2 ,1 ,2, 3, 1]], 
                     [0 ,0]);
     
-    board.fancy_print();
+    // board.fancy_print();
 
     let start = std::time::Instant::now();
 
