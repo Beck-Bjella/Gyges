@@ -7,7 +7,6 @@ name = "gyges"
 version = "0.1.0"
 dependencies = [
  "min-max",
- "sys",
 ]
 
 [[package]]
@@ -24,9 +23,3 @@ name = "partial-min-max"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6448add382c60bbbc64f9dab41309a12ec530c05191601042f911356ac09758c"
-
-[[package]]
-name = "sys"
-version = "0.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e788d0b8692abbe8b3818a8b132e081438264f285170188cb214a5b790c37ea1"
