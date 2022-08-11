@@ -84,7 +84,7 @@ impl Board {
         let player_1_move_count = self.valid_move_count(1);
         let player_2_move_count = self.valid_move_count(2);
 
-        let score = starting_value + (player_2_move_count - (player_1_move_count * 1));
+        let score = starting_value + (player_2_move_count - player_1_move_count);
 
         return score;
     
@@ -191,8 +191,7 @@ impl Board {
     
                 used_moves.push(*mv);
     
-                let curr_eval: [usize; 2];
-                curr_eval = self.mini_max(alpha, beta, false, depth - 1);
+                let curr_eval: [usize; 2] = self.mini_max(alpha, beta, false, depth - 1);
                 
                 self.undo_move(&mv);
 
@@ -236,9 +235,8 @@ impl Board {
     
                 self.make_move(&mv);
                 
-                let curr_eval: [usize; 2];
-                curr_eval = self.mini_max(alpha, beta, true, depth - 1);
-                
+                let curr_eval: [usize; 2] = self.mini_max(alpha, beta, true, depth - 1);
+
                 self.undo_move(&mv);
 
                 if curr_eval[0] < min_eval[0] {
@@ -290,7 +288,7 @@ impl Board {
         let mut used_moves: Vec<[usize; 9]> = vec![];
         for (move_idx, mv) in current_moves.iter().enumerate() {
             if used_moves.contains(mv) {
-                // println!("Indix {} is a dupe", move_idx);
+                println!("Indix {} is a dupe", move_idx);
                 continue;
             }
     
@@ -304,7 +302,7 @@ impl Board {
 
             used_moves.push(*mv);
             
-            // println!("Starting Index {}", move_idx);
+            println!("Starting Index {}", move_idx);
             
             let eval: [usize; 3];
             let temp_eval = self.mini_max(alpha, beta, false, depth - 1);
@@ -1093,7 +1091,7 @@ impl Board {
                         _=> println!("ERROR"),
                     }
     
-                    if  current_x < 0 || current_x > 5 {
+                    if current_x < 0 || current_x > 5 {
                         break;
                     } 
         
@@ -1794,7 +1792,7 @@ fn main() {
 
     let start = std::time::Instant::now();
 
-    println!("{:?}", board.get_best_move(3));
+    println!("{:?}", board.get_best_move(4));
 
     let elapsed_time = start.elapsed();
     println!("DONE! in {} seconds.", elapsed_time.as_secs_f64());
