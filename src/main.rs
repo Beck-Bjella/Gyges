@@ -179,7 +179,7 @@ impl Board {
             }
 
             let current_moves = self.valid_moves(2);
-
+            
             let mut max_eval: [usize; 2] = [usize::MIN, usize::MIN];
             let mut used_moves: Vec<[usize; 9]> = vec![];
             for mv in current_moves.iter() {
@@ -1780,19 +1780,29 @@ impl Board {
 
 fn main() {
     let mut board = Board::new(); 
-    board.set([   [3 ,2, 1 ,1, 2, 3],
+    board.set([   [1 ,3, 2 ,0, 2, 1],
+                        [0 ,0 ,0 ,3, 0, 0],
                         [0 ,0 ,0 ,0, 0, 0],
                         [0 ,0 ,0 ,0, 0, 0],
-                        [0 ,0 ,0 ,0, 0, 0],
-                        [0 ,0, 0 ,0, 0, 0], 
-                        [3 ,2 ,1 ,2, 3, 1]], 
+                        [0 ,0, 2 ,0, 0, 0], 
+                        [3 ,2 ,1 ,1, 3, 0]], 
                     [0 ,0]);
+    // DEPTH OF 4 BOARD
+
+    // board.set([   [0 ,0, 0 ,0, 0, 0],
+    //                     [0 ,0 ,0 ,0, 0, 0],
+    //                     [0 ,0 ,0 ,0, 0, 0],
+    //                     [0 ,0 ,0 ,0, 0, 0],
+    //                     [0 ,0, 0 ,0, 0, 0], 
+    //                     [1 ,2 ,3 ,1, 2, 3]], 
+    //                 [0 ,0]);
+    // DEPTH OF 3 BOARD
 
     board._print();
 
     let start = std::time::Instant::now();
 
-    println!("{:?}", board.get_best_move(4));
+    println!("{:?}", board.get_best_move(3));
 
     let elapsed_time = start.elapsed();
     println!("DONE! in {} seconds.", elapsed_time.as_secs_f64());
