@@ -101,13 +101,17 @@ impl Board {
             self.data[step3[2]][step3[1]] = step3[0];
 
         } else {
-            self.data[step2[2]][step2[1]] = 0;
-
             if step1[1] == PLAYER_1_GOAL {
                 self.goals[0] = step1[0];
+                self.data[step2[2]][step2[1]] = 0;
 
             } else if step1[1] == PLAYER_2_GOAL {
                 self.goals[1] = step1[0];
+                self.data[step2[2]][step2[1]] = 0;
+
+            } else {
+                self.data[step2[2]][step2[1]] = 0;
+                self.data[step1[2]][step1[1]] = step1[0];
 
             }
 
@@ -126,16 +130,19 @@ impl Board {
             self.data[step1[2]][step1[1]] = step3[0];
 
         } else {
-            self.data[step2[2]][step2[1]] = step1[0];
-
             if self.goals[0] != 0 {
                 self.goals[0] = 0;
+                self.data[step2[2]][step2[1]] = step1[0];
 
             } else if self.goals[1] != 0 {
                 self.goals[1] = 0;
+                self.data[step2[2]][step2[1]] = step1[0];
+
+            } else {
+                self.data[step2[2]][step2[1]] = step1[0];
+                self.data[step1[2]][step1[1]] = 0;
 
             }
-
 
         }
 
@@ -180,16 +187,16 @@ impl Board {
 
             let current_moves = self.valid_moves(2);
             
-            let mut max_eval: [usize; 2] = [usize::MIN, usize::MIN];
+            let mut max_eval: [usize; 2] = [usize::MIN, usize::MAX];
             let mut used_moves: Vec<[usize; 9]> = vec![];
             for mv in current_moves.iter() {
                 if used_moves.contains(mv) {
                     continue;
                 }
                 
-                self.make_move(&mv);
-    
                 used_moves.push(*mv);
+
+                self.make_move(&mv);
     
                 let curr_eval: [usize; 2] = self.mini_max(alpha, beta, false, depth - 1);
                 
@@ -199,13 +206,23 @@ impl Board {
                     max_eval = curr_eval;
 
                 } else if curr_eval[0] == max_eval[0] {
-                    if curr_eval[1] > max_eval[1] {
-                        max_eval = curr_eval;
+                    if curr_eval[0] == usize::MAX {
+                        if curr_eval[1] > max_eval[1] {
+                            max_eval = curr_eval;
+    
+                        }
+
+                    } else if curr_eval[0] == usize::MIN {
+                        if curr_eval[1] < max_eval[1] {
+                            max_eval = curr_eval;
+    
+                        }
 
                     }
+                   
 
                 }
-    
+                
                 alpha = max!(alpha, curr_eval[0]);
                 if beta <= alpha {
                     break
@@ -224,7 +241,7 @@ impl Board {
 
             let current_moves = self.valid_moves(1);
             
-            let mut min_eval: [usize; 2] = [usize::MAX, usize::MIN];
+            let mut min_eval: [usize; 2] = [usize::MAX, usize::MAX];
             let mut used_moves: Vec<[usize; 9]> = vec![];
             for mv in current_moves.iter() {
                 if used_moves.contains(mv) {
@@ -242,14 +259,23 @@ impl Board {
                 if curr_eval[0] < min_eval[0] {
                     min_eval = curr_eval;
 
-                } else if curr_eval[0] == min_eval[0] {
-                    if curr_eval[1] > min_eval[1] {
-                        min_eval = curr_eval;
+                } else if curr_eval[0] ==  min_eval[0] {
+                    if curr_eval[0] == usize::MAX {
+                        if curr_eval[1] < min_eval[1] {
+                            min_eval = curr_eval;
+    
+                        }
+
+                    } else if curr_eval[0] == usize::MIN {
+                        if curr_eval[1] > min_eval[1] {
+                            min_eval = curr_eval;
+    
+                        }
 
                     }
 
                 }
-    
+                
                 beta = min!(beta, curr_eval[0]);
                 if beta <= alpha {
                     break;
@@ -257,7 +283,7 @@ impl Board {
                 }
                     
             }
-    
+
             return min_eval;
     
         }
@@ -265,10 +291,7 @@ impl Board {
     }
 
     fn get_best_move(&mut self, depth: i8) -> [usize; 9] {
-        if !self.is_valid() {
-            panic!("NOT A VAILD BOARD POSITION");
-
-        }
+        self.is_valid();
 
         let mut current_moves = self.valid_moves(2);
         current_moves = self.order_moves(current_moves);
@@ -283,7 +306,7 @@ impl Board {
 
         let mut alpha = usize::MIN;
         let beta = usize::MAX;
-        let mut max_eval: [usize; 3] = [usize::MIN; 3];
+        let mut max_eval: [usize; 3] = [usize::MIN, usize::MAX, usize::MIN];
         
         let mut used_moves: Vec<[usize; 9]> = vec![];
         for (move_idx, mv) in current_moves.iter().enumerate() {
@@ -313,11 +336,8 @@ impl Board {
             if eval[0] > max_eval[0] {
                 max_eval = eval;
 
-            } else if eval[0] == max_eval[0] {
-                if eval[1] > max_eval[1] {
-                    max_eval = eval;
-
-                }
+            } else if eval[0] == max_eval[0] && eval[1] > max_eval[1] {
+                max_eval = eval;
 
             }
 
@@ -330,7 +350,7 @@ impl Board {
         
     }
 
-    fn is_valid(&self) -> bool{
+    fn is_valid(&self) {
         let mut one_count = 0;
         let mut two_count = 0;
         let mut three_count = 0;
@@ -353,12 +373,12 @@ impl Board {
 
         }
 
-        if one_count == 4 && two_count == 4 && three_count == 4 {
-            return true;
+        if !(one_count == 4 && two_count == 4 && three_count == 4) {
+            
+        self._print();
+        panic!("ERROR INVALD BOARD");
 
         }
-
-        return false;
 
     }
 
@@ -539,9 +559,6 @@ impl Board {
             
             for x in 0..6 {
                 if self.data[active_lines[0]][x] != 0 {
-                    let current_piece: [usize; 2] = [x, active_lines[0]];
-                    let current_piece_type: usize = self.data[current_piece[1]][current_piece[0]];
-
                     let starting_piece: [usize; 2] = [x, active_lines[0]];
                     let starting_piece_type: usize = self.data[starting_piece[1]][starting_piece[0]];
 
@@ -550,7 +567,7 @@ impl Board {
                     
                     self.data[starting_piece[1]][starting_piece[0]] = 0;
 
-                    let mut moves = self.get_piece_moves(&current_piece, current_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 1, &player_1_drops);
+                    let mut moves = self.get_piece_moves(&starting_piece, starting_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 1, &player_1_drops);
                     player_1_moves.append(&mut moves);
 
                     self.data[starting_piece[1]][starting_piece[0]] = starting_piece_type;
@@ -578,9 +595,6 @@ impl Board {
     
             for x in 0..6 {
                 if self.data[active_lines[1]][x] != 0 {
-                    let current_piece: [usize; 2] = [x, active_lines[1]];
-                    let current_piece_type: usize = self.data[current_piece[1]][current_piece[0]];
-
                     let starting_piece: [usize; 2] = [x, active_lines[1]];
                     let starting_piece_type: usize = self.data[starting_piece[1]][starting_piece[0]];
 
@@ -589,7 +603,7 @@ impl Board {
                     
                     self.data[starting_piece[1]][starting_piece[0]] = 0;
 
-                    let mut moves = self.get_piece_moves(&current_piece, current_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 2, &player_2_drops);
+                    let mut moves = self.get_piece_moves(&starting_piece, starting_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 2, &player_2_drops);
                     player_2_moves.append(&mut moves);
 
                     self.data[starting_piece[1]][starting_piece[0]] = starting_piece_type;
@@ -978,9 +992,6 @@ impl Board {
             
             for x in 0..6 {
                 if self.data[active_lines[0]][x] != 0 {
-                    let current_piece: [usize; 2] = [x, active_lines[0]];
-                    let current_piece_type: usize = self.data[current_piece[1]][current_piece[0]];
-
                     let starting_piece: [usize; 2] = [x, active_lines[0]];
                     let starting_piece_type: usize = self.data[starting_piece[1]][starting_piece[0]];
 
@@ -989,7 +1000,7 @@ impl Board {
                     
                     self.data[starting_piece[1]][starting_piece[0]] = 0;
 
-                    let move_count = self.get_piece_move_count(&current_piece, current_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 1, player_1_drop_count);
+                    let move_count = self.get_piece_move_count(&starting_piece, starting_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 1, player_1_drop_count);
                     player_1_move_count += move_count;
 
                     self.data[starting_piece[1]][starting_piece[0]] = starting_piece_type;
@@ -1017,9 +1028,6 @@ impl Board {
     
             for x in 0..6 {
                 if self.data[active_lines[1]][x] != 0 {
-                    let current_piece: [usize; 2] = [x, active_lines[1]];
-                    let current_piece_type: usize = self.data[current_piece[1]][current_piece[0]];
-
                     let starting_piece: [usize; 2] = [x, active_lines[1]];
                     let starting_piece_type: usize = self.data[starting_piece[1]][starting_piece[0]];
 
@@ -1028,7 +1036,7 @@ impl Board {
                     
                     self.data[starting_piece[1]][starting_piece[0]] = 0;
 
-                    let move_count = self.get_piece_move_count(&current_piece, current_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 2, player_2_drop_count);
+                    let move_count = self.get_piece_move_count(&starting_piece, starting_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 2, player_2_drop_count);
                     player_2_move_count += move_count;
 
                     self.data[starting_piece[1]][starting_piece[0]] = starting_piece_type;
@@ -1401,9 +1409,6 @@ impl Board {
             
             for x in 0..6 {
                 if self.data[active_lines[0]][x] != 0 {
-                    let current_piece: [usize; 2] = [x, active_lines[0]];
-                    let current_piece_type: usize = self.data[current_piece[1]][current_piece[0]];
-
                     let starting_piece: [usize; 2] = [x, active_lines[0]];
                     let starting_piece_type: usize = self.data[starting_piece[1]][starting_piece[0]];
 
@@ -1412,7 +1417,7 @@ impl Board {
                     
                     self.data[starting_piece[1]][starting_piece[0]] = 0;
 
-                    let move_count = self.get_piece_threat_count(&current_piece, current_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 1);
+                    let move_count = self.get_piece_threat_count(&starting_piece, starting_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 1);
                     player_1_threat_count += move_count;
 
                     self.data[starting_piece[1]][starting_piece[0]] = starting_piece_type;
@@ -1428,9 +1433,6 @@ impl Board {
     
             for x in 0..6 {
                 if self.data[active_lines[1]][x] != 0 {
-                    let current_piece: [usize; 2] = [x, active_lines[1]];
-                    let current_piece_type: usize = self.data[current_piece[1]][current_piece[0]];
-
                     let starting_piece: [usize; 2] = [x, active_lines[1]];
                     let starting_piece_type: usize = self.data[starting_piece[1]][starting_piece[0]];
 
@@ -1439,7 +1441,7 @@ impl Board {
                     
                     self.data[starting_piece[1]][starting_piece[0]] = 0;
 
-                    let move_count = self.get_piece_threat_count(&current_piece, current_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 2);
+                    let move_count = self.get_piece_threat_count(&starting_piece, starting_piece_type, &starting_piece, starting_piece_type, &mut previous_path, &mut previous_banned_bounces, 2);
                     player_2_threat_count += move_count;
 
                     self.data[starting_piece[1]][starting_piece[0]] = starting_piece_type;
@@ -1780,28 +1782,36 @@ impl Board {
 
 fn main() {
     let mut board = Board::new(); 
-    board.set([   [1 ,3, 2 ,0, 2, 1],
-                        [0 ,0 ,0 ,3, 0, 0],
-                        [0 ,0 ,0 ,0, 0, 0],
-                        [0 ,0 ,0 ,0, 0, 0],
-                        [0 ,0, 2 ,0, 0, 0], 
-                        [3 ,2 ,1 ,1, 3, 0]], 
-                    [0 ,0]);
-    // DEPTH OF 4 BOARD
-
-    // board.set([   [0 ,0, 0 ,0, 0, 0],
-    //                     [0 ,0 ,0 ,0, 0, 0],
-    //                     [0 ,0 ,0 ,0, 0, 0],
-    //                     [0 ,0 ,0 ,0, 0, 0],
-    //                     [0 ,0, 0 ,0, 0, 0], 
-    //                     [1 ,2 ,3 ,1, 2, 3]], 
+    // board.set([   [0 ,0, 2 ,0, 1, 0],
+    //                     [0 ,2 ,0 ,3, 2, 0],
+    //                     [0 ,0 ,3 ,2, 0, 0],
+    //                     [0 ,0 ,3 ,1, 0, 0],
+    //                     [0 ,0, 1 ,1, 0, 0], 
+    //                     [0 ,0 ,0 ,0, 3, 0]], 
     //                 [0 ,0]);
-    // DEPTH OF 3 BOARD
 
+    // board.set([   [1 ,3, 0 ,0, 2, 0],
+    //                     [3 ,0 ,0 ,1, 0, 0],
+    //                     [0 ,0 ,0 ,2, 0, 0],
+    //                     [0 ,0 ,0 ,1, 0, 0],
+    //                     [3 ,0, 2 ,0, 0, 0], 
+    //                     [1 ,2 ,0 ,0, 3, 0]], 
+    //                 [0 ,0]);
+
+
+
+    board.set([   [0 ,0, 2 ,0, 1, 0],
+                        [0 ,0 ,0 ,3, 2, 0],
+                        [0 ,0 ,3 ,2, 0, 0],
+                        [0 ,0 ,3 ,2, 0, 0],
+                        [0 ,0, 1 ,1, 0, 0], 
+                        [0 ,0 ,0 ,1, 3, 0]], 
+                    [0 ,0]);
+    
     board._print();
 
     let start = std::time::Instant::now();
-
+    
     println!("{:?}", board.get_best_move(3));
 
     let elapsed_time = start.elapsed();
