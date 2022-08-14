@@ -336,11 +336,23 @@ impl Board {
             if eval[0] > max_eval[0] {
                 max_eval = eval;
 
-            } else if eval[0] == max_eval[0] && eval[1] > max_eval[1] {
-                max_eval = eval;
+            } else if eval[0] == max_eval[0]  {
+                if eval[0] == usize::MAX {
+                    if eval[1] > max_eval[1] {
+                        max_eval = eval;
+
+                    }
+
+                } else if eval[0] == usize::MIN {
+                    if eval[1] < max_eval[1] {
+                        max_eval = eval;
+
+                    }
+
+                } 
 
             }
-
+        
             alpha = max!(alpha, eval[0]);
 
         }
