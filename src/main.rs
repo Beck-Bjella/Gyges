@@ -40,7 +40,7 @@ impl Board {
     fn set(&mut self, data: [[usize; 6]; 6], goals: [usize; 2]) {
         self.data = data;
         self.goals = goals;
-
+        
     }
 
     fn _print(&self) {
@@ -93,27 +93,27 @@ impl Board {
     }
 
     fn make_move(&mut self, mv: &[usize; 9]) {
-        let step1 = [mv[6], mv[7], mv[8]];
+        let step1 = [mv[0], mv[1], mv[2]];
         let step2 = [mv[3], mv[4], mv[5]];
-        let step3 = [mv[0], mv[1], mv[2]];
+        let step3 = [mv[6], mv[7], mv[8]];
         
-        if step1[1] != 9 {
+        if step3[1] != 9 {
             self.data[step1[2]][step1[1]] = step1[0];
             self.data[step2[2]][step2[1]] = step2[0];
             self.data[step3[2]][step3[1]] = step3[0];
 
         } else {
-            if step3[1] == PLAYER_1_GOAL {
-                self.goals[0] = step3[0];
-                self.data[step2[2]][step2[1]] = 0;
+            if step2[1] == PLAYER_1_GOAL {
+                self.goals[0] = step2[0];
+                self.data[step1[2]][step1[1]] = 0;
 
-            } else if step3[1] == PLAYER_2_GOAL {
-                self.goals[1] = step3[0];
-                self.data[step2[2]][step2[1]] = 0;
+            } else if step2[1] == PLAYER_2_GOAL {
+                self.goals[1] = step2[0];
+                self.data[step1[2]][step1[1]] = 0;
 
             } else {
-                self.data[step2[2]][step2[1]] = 0;
-                self.data[step3[2]][step3[1]] = step3[0];
+                self.data[step1[2]][step1[1]] = 0;
+                self.data[step2[2]][step2[1]] = step2[0];
 
             }
 
@@ -122,11 +122,11 @@ impl Board {
     }
 
     fn undo_move(&mut self, mv: &[usize; 9]) {
-        let step1 = [mv[6], mv[7], mv[8]];
+        let step1 = [mv[0], mv[1], mv[2]];
         let step2 = [mv[3], mv[4], mv[5]];
-        let step3 = [mv[0], mv[1], mv[2]];
+        let step3 = [mv[6], mv[7], mv[8]];
 
-        if step1[1] != 9 {
+        if step3[1] != 9 {
             self.data[step3[2]][step3[1]] = step1[0];
             self.data[step2[2]][step2[1]] = step3[0];
             self.data[step1[2]][step1[1]] = step2[0];
@@ -134,15 +134,15 @@ impl Board {
         } else {
             if self.goals[0] != 0 {
                 self.goals[0] = 0;
-                self.data[step2[2]][step2[1]] = step3[0];
+                self.data[step1[2]][step1[1]] = step2[0];
 
             } else if self.goals[1] != 0 {
                 self.goals[1] = 0;
-                self.data[step2[2]][step2[1]] = step3[0];
+                self.data[step1[2]][step1[1]] = step2[0];
 
             } else {
-                self.data[step2[2]][step2[1]] = step3[0];
-                self.data[step3[2]][step3[1]] = 0;
+                self.data[step1[2]][step1[1]] = step2[0];
+                self.data[step2[2]][step2[1]] = 0;
 
             }
 
@@ -270,7 +270,7 @@ impl Board {
         current_moves = self.order_moves(current_moves);
 
         for mv in current_moves.iter() {
-            if mv[1] == PLAYER_1_GOAL {
+            if mv[4] == PLAYER_1_GOAL {
                 return (usize::MAX, *mv, start_time.elapsed().as_secs_f64());   
 
             }
@@ -600,10 +600,10 @@ impl Board {
         
                     if step_idx == path.len() - 1 {
                         if current_y == 6 && player == 1 {
-                            final_moves.push([starting_piece_type, PLAYER_2_GOAL, PLAYER_2_GOAL, 0, starting_piece[0], starting_piece[1], 9, 9, 9]);
+                            final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, PLAYER_2_GOAL, PLAYER_2_GOAL, 9, 9, 9]);
         
                         } else if current_y == -1 && player == 2{
-                            final_moves.push([starting_piece_type, PLAYER_1_GOAL, PLAYER_1_GOAL, 0, starting_piece[0], starting_piece[1], 9, 9, 9]);
+                            final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, PLAYER_1_GOAL, PLAYER_1_GOAL, 9, 9, 9]);
                             
                         }
         
@@ -633,7 +633,7 @@ impl Board {
                                 }
     
                                 for drop in current_player_drops.iter() {
-                                    final_moves.push([self.data[current_y as usize][current_x as usize], drop[0], drop[1], starting_piece_type, current_x as usize ,current_y as usize, 0, starting_piece[0], starting_piece[1]]);
+                                    final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, current_x as usize ,current_y as usize, self.data[current_y as usize][current_x as usize], drop[0], drop[1]]);
     
                                 }
                                 
@@ -651,7 +651,7 @@ impl Board {
     
                         } else {
                             if &[current_x as usize,  current_y as usize] != starting_piece {
-                                final_moves.push([starting_piece_type, current_x as usize, current_y as usize, 0, starting_piece[0], starting_piece[1], 9, 9, 9]);
+                                final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, current_x as usize, current_y as usize, 9, 9, 9]);
 
                             }
 
@@ -714,10 +714,10 @@ impl Board {
         
                     if step_idx == path.len() - 1 {
                         if current_y == 6 && player == 1 {
-                            final_moves.push([starting_piece_type, PLAYER_2_GOAL, PLAYER_2_GOAL, 0, starting_piece[0], starting_piece[1], 9, 9, 9]);
+                            final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, PLAYER_2_GOAL, PLAYER_2_GOAL, 9, 9, 9]);
         
                         } else if current_y == -1 && player == 2{
-                            final_moves.push([starting_piece_type, PLAYER_1_GOAL, PLAYER_1_GOAL, 0, starting_piece[0], starting_piece[1], 9, 9, 9]);
+                            final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, PLAYER_1_GOAL, PLAYER_1_GOAL, 9, 9, 9]);
                             
                         }
         
@@ -747,7 +747,7 @@ impl Board {
                                 }
     
                                 for drop in current_player_drops.iter() {
-                                    final_moves.push([self.data[current_y as usize][current_x as usize], drop[0], drop[1], starting_piece_type, current_x as usize ,current_y as usize, 0, starting_piece[0], starting_piece[1]]);
+                                    final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, current_x as usize ,current_y as usize, self.data[current_y as usize][current_x as usize], drop[0], drop[1]]);
     
                                 }
                                 
@@ -765,7 +765,7 @@ impl Board {
     
                         } else {
                             if &[current_x as usize,  current_y as usize] != starting_piece {
-                                final_moves.push([starting_piece_type, current_x as usize, current_y as usize, 0, starting_piece[0], starting_piece[1], 9, 9, 9]);
+                                final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, current_x as usize, current_y as usize, 9, 9, 9]);
 
                             }
 
@@ -828,10 +828,10 @@ impl Board {
         
                     if step_idx == path.len() - 1 {
                         if current_y == 6 && player == 1 {
-                            final_moves.push([starting_piece_type, PLAYER_2_GOAL, PLAYER_2_GOAL, 0, starting_piece[0], starting_piece[1], 9, 9, 9]);
+                            final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, PLAYER_2_GOAL, PLAYER_2_GOAL, 9, 9, 9]);
         
                         } else if current_y == -1 && player == 2{
-                            final_moves.push([starting_piece_type, PLAYER_1_GOAL, PLAYER_1_GOAL, 0, starting_piece[0], starting_piece[1], 9, 9, 9]);
+                            final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, PLAYER_1_GOAL, PLAYER_1_GOAL, 9, 9, 9]);
                             
                         }
         
@@ -861,7 +861,7 @@ impl Board {
                                 }
     
                                 for drop in current_player_drops.iter() {
-                                    final_moves.push([self.data[current_y as usize][current_x as usize], drop[0], drop[1], starting_piece_type, current_x as usize ,current_y as usize, 0, starting_piece[0], starting_piece[1]]);
+                                    final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, current_x as usize ,current_y as usize, self.data[current_y as usize][current_x as usize], drop[0], drop[1]]);
     
                                 }
                                 
@@ -879,7 +879,7 @@ impl Board {
     
                         } else {
                             if &[current_x as usize,  current_y as usize] != starting_piece {
-                                final_moves.push([starting_piece_type, current_x as usize, current_y as usize, 0, starting_piece[0], starting_piece[1], 9, 9, 9]);
+                                final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, current_x as usize, current_y as usize, 9, 9, 9]);
 
                             }
 
@@ -1711,15 +1711,13 @@ impl Board {
 fn main() {
     let mut board = Board::new(); 
 
-    board.set([   [0 ,3, 0 ,0, 2, 0],
-                        [3 ,0 ,0 ,1, 1, 3],
-                        [0 ,0 ,0 ,2, 0, 0],
-                        [0 ,0 ,0 ,1, 0, 0],
-                        [3 ,0, 2, 0, 0, 0], 
-                        [1 ,2 ,0 ,0, 0, 0]], 
+    board.set([   [2 ,1, 3 ,3, 1, 2],
+                        [0 ,0 ,0 ,0, 0, 0],
+                        [0 ,0 ,0 ,0, 0, 0],
+                        [0 ,0 ,0 ,0, 0, 0],
+                        [0 ,0, 0, 0, 0, 0], 
+                        [3 ,2 ,1 ,2, 3, 1]], 
                     [0 ,0]);
-    
-    board._print();
 
     let data = board.get_best_move(3);
 
