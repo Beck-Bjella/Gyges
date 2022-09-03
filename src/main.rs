@@ -84,13 +84,13 @@ impl Board {
     fn evalulate(&mut self) -> usize {
         let starting_value = usize::MAX / 2;
         let player_1_move_count = self.valid_move_count(1);
-        let player_2_move_count = self.valid_move_count(2);
+        // let player_2_move_count = self.valid_move_count(2);
 
-        let score = starting_value + (player_2_move_count - player_1_move_count);
+        let score = starting_value - player_1_move_count;
 
         return score;
     
-    }
+    } 
 
     fn make_move(&mut self, mv: &[usize; 9]) {
         let step1 = [mv[0], mv[1], mv[2]];
@@ -284,7 +284,7 @@ impl Board {
         let mut used_moves: Vec<[usize; 9]> = vec![];
         for (move_idx, mv) in current_moves.iter().enumerate() {
             if used_moves.contains(mv) {
-                println!("Indix {} is a dupe", move_idx);
+                // println!("Indix {} is a dupe", move_idx);
                 continue;
             }
     
@@ -298,10 +298,12 @@ impl Board {
 
             used_moves.push(*mv);
             
-            println!("Starting Index {}", move_idx);
+            // println!("Starting Index {}", move_idx);
             
             let temp_eval: usize = self.mini_max(alpha, beta, false, depth - 1);
             let eval: [usize; 2] = [temp_eval, move_idx];
+
+            println!("{:?} {}", mv, eval[0]);
 
             self.undo_move(&mv);
 
@@ -385,7 +387,7 @@ impl Board {
             moves_to_sort.push([predicted_score, mv_idx]);
             
         }
-    
+
         moves_to_sort.sort_by(|a, b| {
             if a[0] < b[0] {
                 Ordering::Less
@@ -541,7 +543,7 @@ impl Board {
 
     fn get_piece_moves(&self, current_piece: &[usize; 2], current_piece_type: usize, starting_piece: &[usize; 2], starting_piece_type: usize, previous_path: &mut Vec<[i8; 2]>, previous_banned_bounces: &mut Vec<[i8; 2]>, player: i8, current_player_drops: &Vec<[usize; 2]>) -> Vec<[usize; 9]> {
         let mut final_moves: Vec<[usize; 9]> = vec![];
-        
+
         if current_piece_type == ONE_PIECE {
             for path in self.one_moves.iter() {
                 let mut current_x: i8 = current_piece[0] as i8;
@@ -872,6 +874,7 @@ impl Board {
     
                         } else {
                             if &[current_x as usize,  current_y as usize] != starting_piece {
+                                print!("{:?}", current_path);
                                 final_moves.push([0, starting_piece[0], starting_piece[1], starting_piece_type, current_x as usize, current_y as usize, 9, 9, 9]);
 
                             }
@@ -907,7 +910,6 @@ impl Board {
                 }
     
             }
-            
             
             let mut player_1_move_count: usize = 0;
             
@@ -1704,20 +1706,47 @@ impl Board {
 fn main() {
     let mut board = Board::new(); 
 
-    board.set([   [2 ,0, 3 ,1, 0, 2],
-                        [0 ,0 ,0 ,0, 1, 0],
-                        [0 ,0 ,0 ,0, 3, 0],
-                        [0 ,0 ,0 ,0, 2, 0],
-                        [0 ,0, 3, 0, 0, 0], 
-                        [0 ,2 ,1 ,0, 3, 1]], 
+    // board.set([   [0 ,0, 0 ,0, 0, 0],
+    //                     [0 ,0 ,0 ,0, 0, 0],
+    //                     [0 ,0 ,0 ,0, 0, 0],
+    //                     [0 ,0 ,0 ,0, 0, 0],
+    //                     [0 ,0, 0, 0, 0, 0], 
+    //                     [0 ,0 ,0 ,0, 0, 0]], 
+    //                 [0 ,0]);
+
+
+
+
+    board.set([   [0 ,0, 0 ,0, 0, 0],
+                        [0 ,0 ,0 ,0, 0, 0],
+                        [0 ,0 ,0 ,0, 0, 0],
+                        [0 ,0 ,0 ,0, 0, 0],
+                        [0 ,0, 0, 0, 0, 0], 
+                        [0 ,0 ,0 ,0, 0, 0]], 
                     [0 ,0]);
 
-    let data = board.get_best_move(3);
+    println!("[");
+    for y in 0..6 {
+        for x in 0..6  {
+            board.data[y][x] = 3;
+    
+            print!("vec![");
+            board.valid_moves(2);
+            println!("],");
+            
+            board.data[y][x] = 0;
+            
+        }
+    }        
+    println!("];"); 
+                    
 
-    println!("");
-    println!("SCORE: {}", data.0);
-    println!("MOVE: {:?}", data.1);
-    println!("DONE! in {} seconds.", data.2);
-    println!("");
+    // let data = board.get_best_move(5);
+
+    // println!("");
+    // println!("SCORE: {}", data.0);
+    // println!("MOVE: {:?}", data.1);
+    // println!("DONE! in {} seconds.", data.2);
+    // println!("");
 
 }
