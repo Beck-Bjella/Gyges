@@ -1,5 +1,5 @@
 [package]
-name = "gyges"
+name = "gyges_engine"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,10 +7,10 @@ edition = "2021"
 
 [dependencies]
 min-max = "0.1"
+rand = "0.8.5"
+mimalloc = { version = "*", default-features = false}
 
 [profile.release]
-lto = "fat"
-codegen-units = 1
+lto = true
+code_gen_units = 1
 panic = "abort"
-overflow-checks = false 
-
