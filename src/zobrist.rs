@@ -55,4 +55,29 @@ impl ZobristHasher {
 
     }
 
+    pub fn get_hash_new(&self, board: &mut BoardState, player: f64) -> u64 {
+        let mut hash = 0;
+
+        if player == 1.0 {
+            hash ^= self.player_1_hash;
+
+        } else {
+            hash ^= self.player_2_hash;
+
+        }
+
+        for i in 0..36 {
+            if board.data[i] != 0 {
+                let piece_type = board.data[i];
+                hash ^= self.hash_data[i][piece_type - 1];
+
+            }
+
+        }
+
+        return hash;
+
+    }
+
+
 }

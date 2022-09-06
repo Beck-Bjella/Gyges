@@ -3,7 +3,10 @@ use std::cmp::Ordering;
 use crate::board::*;
 use crate::bitboard::*;
 
-pub fn sort_moves(mut evaluations: Vec<(f64, [usize; 6], usize, usize, bool)>) -> Vec<[usize; 6]> {
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub struct Move(pub [usize; 6]);
+
+pub fn sort_moves(mut evaluations: Vec<(f64, Move, usize, usize, bool)>) -> Vec<Move> {
     evaluations.sort_by(|a, b| {
         if a.0 > b.0 {
             Ordering::Less
@@ -31,7 +34,7 @@ pub fn sort_moves(mut evaluations: Vec<(f64, [usize; 6], usize, usize, bool)>) -
 }
 
 
-pub fn valid_moves_2(board: &mut BoardState, player: i8) -> Vec<[usize; 6]> {
+pub fn valid_moves_2(board: &mut BoardState, player: i8) -> Vec<Move> {
     let active_lines = board.get_active_lines();
 
     let banned_positions: [bool; 36] = [false; 36];
@@ -39,7 +42,7 @@ pub fn valid_moves_2(board: &mut BoardState, player: i8) -> Vec<[usize; 6]> {
 
     if player == 1 {
         let mut player_1_drops: Vec<usize> = board.get_drops(active_lines, 1);
-        let mut player_1_moves: Vec<[usize; 6]> = vec![];
+        let mut player_1_moves: Vec<Move> = vec![];
 
         for x in 0..6 {
             if board.data[active_lines[0] + x] != 0 {
@@ -65,7 +68,7 @@ pub fn valid_moves_2(board: &mut BoardState, player: i8) -> Vec<[usize; 6]> {
 
     } else {
         let mut player_2_drops: Vec<usize> = board.get_drops(active_lines, 2);
-        let mut player_2_moves: Vec<[usize; 6]> = vec![];
+        let mut player_2_moves: Vec<Move> = vec![];
 
         for x in 0..6 {
             if board.data[active_lines[1] + x] != 0 {
@@ -76,7 +79,7 @@ pub fn valid_moves_2(board: &mut BoardState, player: i8) -> Vec<[usize; 6]> {
 
                 board.data[starting_piece] = 0;
 
-                let mut piece_moves: Vec<[usize; 6]> = get_piece_moves_2(board, backtrack_board, banned_positions, starting_piece, starting_piece_type, starting_piece, starting_piece_type,2, &player_2_drops);
+                let mut piece_moves = get_piece_moves_2(board, backtrack_board, banned_positions, starting_piece, starting_piece_type, starting_piece, starting_piece_type,2, &player_2_drops);
                 player_2_moves.append(&mut piece_moves);
 
                 board.data[starting_piece] = starting_piece_type;
@@ -93,8 +96,8 @@ pub fn valid_moves_2(board: &mut BoardState, player: i8) -> Vec<[usize; 6]> {
 
 }
 
-fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut banned_positions: [bool; 36], current_piece: usize, current_piece_type: usize, starting_piece: usize, starting_piece_type: usize, player: i8, current_player_drops: &Vec<usize>) -> Vec<[usize; 6]> {
-    let mut final_moves: Vec<[usize; 6]> = vec![];
+fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut banned_positions: [bool; 36], current_piece: usize, current_piece_type: usize, starting_piece: usize, starting_piece_type: usize, player: i8, current_player_drops: &Vec<usize>) -> Vec<Move> {
+    let mut final_moves: Vec<Move> = vec![];
     
     if current_piece_type == ONE_PIECE {
         for (path_idx, path) in board.one_moves[current_piece].iter().enumerate() {
@@ -113,11 +116,11 @@ fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut bann
             } 
 
             if end == PLAYER_1_GOAL {
-                final_moves.push([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL]);
+                final_moves.push(Move([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL]));
                 continue;
 
             } else if end == PLAYER_2_GOAL {
-                final_moves.push([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL]);
+                final_moves.push(Move([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL]));
                 continue;
 
             }
@@ -129,11 +132,11 @@ fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut bann
                     backtrack_board ^= backtrack_path;
 
                     for drop_pos in current_player_drops.iter() {
-                        final_moves.push([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos]);
+                        final_moves.push(Move([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos]));
 
                     }
                     
-                    let mut moves: Vec<[usize; 6]> = get_piece_moves_2(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops);
+                    let mut moves = get_piece_moves_2(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops);
                     final_moves.append(&mut moves);
                     
                     banned_positions[end] = false;
@@ -143,7 +146,7 @@ fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut bann
                 }
                 
             } else {
-                final_moves.push([0, starting_piece, starting_piece_type, end, NULL, NULL]);
+                final_moves.push(Move([0, starting_piece, starting_piece_type, end, NULL, NULL]));
 
             }
 
@@ -171,11 +174,11 @@ fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut bann
             } 
 
             if end == PLAYER_1_GOAL {
-                final_moves.push([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL]);
+                final_moves.push(Move([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL]));
                 continue;
 
             } else if end == PLAYER_2_GOAL {
-                final_moves.push([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL]);
+                final_moves.push(Move([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL]));
                 continue;
 
             }
@@ -187,11 +190,11 @@ fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut bann
                     backtrack_board ^= backtrack_path;
                     
                     for drop_pos in current_player_drops.iter() {
-                        final_moves.push([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos]);
+                        final_moves.push(Move([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos]));
 
                     }
                     
-                    let mut moves: Vec<[usize; 6]> = get_piece_moves_2(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops);
+                    let mut moves = get_piece_moves_2(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops);
                     final_moves.append(&mut moves);
                     
                     banned_positions[end] = false;
@@ -201,7 +204,7 @@ fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut bann
                 }
                 
             } else {
-                final_moves.push([0, starting_piece, starting_piece_type, end, NULL, NULL]);
+                final_moves.push(Move([0, starting_piece, starting_piece_type, end, NULL, NULL]));
 
             }
 
@@ -232,11 +235,11 @@ fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut bann
             } 
 
             if end == PLAYER_1_GOAL {
-                final_moves.push([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL]);
+                final_moves.push(Move([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL]));
                 continue;
 
             } else if end == PLAYER_2_GOAL {
-                final_moves.push([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL]);
+                final_moves.push(Move([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL]));
                 continue;
 
             }
@@ -248,11 +251,11 @@ fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut bann
                     backtrack_board ^= backtrack_path;
 
                     for drop_pos in current_player_drops.iter() {
-                        final_moves.push([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos]);
+                        final_moves.push(Move([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos]));
 
                     }
                     
-                    let mut moves: Vec<[usize; 6]> = get_piece_moves_2(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops);
+                    let mut moves = get_piece_moves_2(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops);
                     final_moves.append(&mut moves);
 
                     banned_positions[end] = false;
@@ -262,7 +265,7 @@ fn get_piece_moves_2(board: &BoardState, mut backtrack_board: BitBoard, mut bann
                 }
                 
             } else {
-                final_moves.push([0, starting_piece, starting_piece_type, end, NULL, NULL]);
+                final_moves.push(Move([0, starting_piece, starting_piece_type, end, NULL, NULL]));
 
             }
 

@@ -334,10 +334,10 @@ impl BoardState {
     
     }
 
-    pub fn make_move(&mut self, mv: &[usize; 6]) {
-        let step1 = [mv[0], mv[1]];
-        let step2 = [mv[2], mv[3]];
-        let step3 = [mv[4], mv[5]];
+    pub fn make_move(&mut self, mv: &Move) {
+        let step1 = [mv.0[0], mv.0[1]];
+        let step2 = [mv.0[2], mv.0[3]];
+        let step3 = [mv.0[4], mv.0[5]];
         
         if step3[1] != NULL {
             self.data[step1[1]] = step1[0];
@@ -363,10 +363,10 @@ impl BoardState {
 
     }
 
-    pub fn undo_move(&mut self, mv: &[usize; 6]) {
-        let step1 = [mv[0], mv[1]];
-        let step2 = [mv[2], mv[3]];
-        let step3 = [mv[4], mv[5]];
+    pub fn undo_move(&mut self, mv: &Move) {
+        let step1 = [mv.0[0], mv.0[1]];
+        let step2 = [mv.0[2], mv.0[3]];
+        let step3 = [mv.0[4], mv.0[5]];
 
         if step3[1] != NULL {
             self.data[step3[1]] = step1[0];
@@ -428,7 +428,7 @@ impl BoardState {
     
             }
 
-        } else if player == 1 {
+        } else {
             for i in 0..active_lines[1] + 6 {
                 if self.data[i] == 0 {
                     current_player_drops.push(i);
