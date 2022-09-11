@@ -9,6 +9,7 @@ edition = "2021"
 min-max = "0.1"
 rand = "0.8.5"
 mimalloc = { version = "*", default-features = false}
+minimax = "0.3.0"
 
 [profile.release]
 lto = true

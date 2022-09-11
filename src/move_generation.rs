@@ -6,12 +6,12 @@ use crate::bitboard::*;
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct Move(pub [usize; 6]);
 
-pub fn sort_moves(mut evaluations: Vec<(f64, Move, usize, usize, bool)>) -> Vec<Move> {
+pub fn sort_moves(mut evaluations: Vec<(Move, f64)>) -> Vec<Move> {
     evaluations.sort_by(|a, b| {
-        if a.0 > b.0 {
+        if a.1 > b.1 {
             Ordering::Less
             
-        } else if a.0 == b.0 {
+        } else if a.1 == b.1 {
             Ordering::Equal
 
         } else {
@@ -25,7 +25,7 @@ pub fn sort_moves(mut evaluations: Vec<(f64, Move, usize, usize, bool)>) -> Vec<
     let mut sorted_moves = vec![];
 
     for item in &evaluations {
-        sorted_moves.push(item.1);
+        sorted_moves.push(item.0);
         
     }
 

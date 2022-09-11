@@ -1,151 +1,128 @@
+use std::vec;
+
 use crate::board::*;
 use crate::move_generation::*;
 use crate::evaluation::*;
 use crate::transposition_tables::*;
 use crate::zobrist::*;
 
-pub struct Engine {
-    pub search_stats: SearchStats,
+
+pub struct Negamax {
+    pub root_node_moves: Vec<Move>,
+
+    pub search_data: SearchData,
 
     pub transposition_table: TranspositionTable,
-    pub evaluation_table: EvaluationTable,
+    eval_table: EvaluationTable,
 
     pub zobrist_hasher: ZobristHasher,
 
 }
 
-impl Engine {
-    pub fn new() -> Engine {
-        return Engine {
-            search_stats: SearchStats::new(),
-            
+impl Negamax {
+    pub fn new() -> Negamax {
+        return Negamax {
+            root_node_moves: vec![],
+
+            search_data: SearchData::new(),
+
             transposition_table: TranspositionTable::new(),
-            evaluation_table: EvaluationTable::new(),
+            eval_table: EvaluationTable::new(),
 
             zobrist_hasher: ZobristHasher::new(),
 
-        }
+        };
 
     }
 
-    pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_depth: i8, max_time: f64) -> Vec<(f64, Move, usize, usize, bool)> {
-        self.search_stats.reset_stats();
-        self.search_stats.start_timer();
-
+    pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) -> Vec<SearchData> {
         let start_time = std::time::Instant::now();
     
-        let mut moves = valid_moves_2(board, 1);
+        self.root_node_moves = valid_moves_2(board, 1);
     
-        let mut all_bests: Vec<(f64, Move, usize, usize, bool)> = vec![];
+        let mut all_searchs: Vec<SearchData> = vec![];
     
-        for mv in moves.iter() {
-            if mv.0[3] == PLAYER_2_GOAL {
-                all_bests.push((f64::INFINITY, *mv, 0, 0, true));
-                return all_bests;
-    
-            }
-    
-        }
-    
-        let mut current_depth = 1;
+        let mut current_ply = 1;
         'depth: loop {
-            let mut evaluations: Vec<(f64, Move, usize, usize, bool)> = vec![];
-            let mut best_move = (f64::NEG_INFINITY, moves[0], 0, current_depth as usize, false);
-            
-            let mut alpha = f64::NEG_INFINITY;
-            let beta = f64::INFINITY;
+            let search_data = self.search(board, current_ply);
+            all_searchs.push(search_data.clone());
+
+            self.root_node_moves = sort_moves(search_data.root_node_evals);
     
-            let mut used_moves = vec![];
-            for mv in moves.iter() {
-                if used_moves.contains(mv) {
-                    continue;
-    
-                }
-        
-                board.make_move(&mv);
-    
-                used_moves.push(*mv);
-                
-                let negscout_eval = -self.negascout(board, -beta, -alpha, -1.0, current_depth - 1);
-                let eval: (f64, Move, usize, usize, bool) = (negscout_eval, *mv, valid_threat_count_2(board, 1), current_depth as usize, false);
-                
-                evaluations.push(eval);
-    
-                board.undo_move(&mv);
-    
-                if eval.0 > best_move.0 {
-                    best_move = eval;
-    
-                } else if eval.0 == best_move.0 {
-                    if eval.2 > best_move.2 {
-                        best_move = eval;
-    
-                    }
-    
-                }
-    
-                if best_move.0 > alpha {
-                    alpha = best_move.0;
-    
-                }
-                if beta <= alpha {
-                    best_move.4 = true;
-    
-                    all_bests.push(best_move);
-                    break 'depth;
-    
-                }
-    
-                if start_time.elapsed().as_secs_f64() >= max_time {
-                    all_bests.push(best_move);
-    
-                    break 'depth;
-    
-                }
-    
-            }
-    
-            best_move.4 = true;
-            all_bests.push(best_move);
-            println!("{:?}", best_move);
-    
-            moves = sort_moves(evaluations);
-    
-            current_depth += 1;
-            if current_depth > max_depth {
+            current_ply += 2;
+            if current_ply > max_ply {
                 break 'depth;
     
             }
     
         }
 
-        self.search_stats.stop_timer();
-    
-        return all_bests;
+        println!("{}", start_time.elapsed().as_secs_f64());
+
+        return all_searchs;
     
     }
-    
-    pub fn negascout(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8) -> f64 {
+
+    fn search(&mut self, board: &mut BoardState, depth: usize) -> SearchData {
+        self.search_data = SearchData::new();
+        self.search_data.depth = depth;
+        let start_time = std::time::Instant::now();
+
+        self.negamax(board, -f64::INFINITY, f64::INFINITY, 1.0, depth as i8, true);
+        
+        let search_time = start_time.elapsed().as_secs_f64();
+        self.search_data.search_time = search_time;
+       
+        self.search_data.nps = (self.search_data.nodes as f64 / self.search_data.search_time) as usize;
+        self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
+
+        let mut best_move: (Move, f64) = (Move([NULL, NULL, NULL, NULL, NULL, NULL]), -f64::INFINITY);
+        for mv in &self.search_data.root_node_evals {
+            if mv.1 > best_move.1 {
+                best_move = *mv;
+
+            }
+
+        }
+        
+        self.search_data.best_move = best_move;
+
+        return self.search_data.clone();
+
+    }
+
+    fn negamax(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, root_node: bool) -> f64 {
+        self.search_data.nodes += 1;
+
+        let board_hash = self.zobrist_hasher.get_hash_new(board, player);
+
         if depth == 0 {
-            self.search_stats.nodes_evaluated += 1;
+            self.search_data.leafs += 1;
+          
+            let look_up = self.eval_table.get(&board_hash);
+            if look_up.is_some() {
+                return *look_up.unwrap();
 
-            let score = get_evalulation(board) * player;
+            } else {
+                let score = get_evalulation(board, player) * player;
 
-            return score;
+                self.eval_table.insert(board_hash, score);
+
+                return score;
+                
+            }
 
         }
 
         let original_alpha = alpha;
 
-        let board_hash = self.zobrist_hasher.get_hash_new(board, player);
-      
         let look_up = self.transposition_table.get(&board_hash);
         if look_up.is_some() {
             let entry = look_up.unwrap();
             if entry.depth >= depth {
-                self.search_stats.minimax_hits += 1;
+                self.search_data.tt_hits += 1;
                 if entry.flag == TTEntryType::ExactValue {
-                    self.search_stats.exact_hits += 1;
+                    self.search_data.tt_exacts += 1;
                     return entry.value;
 
                 } else if entry.flag == TTEntryType::LowerBound {
@@ -163,7 +140,7 @@ impl Engine {
                 }
                     
                 if alpha >= beta {
-                    self.search_stats.tt_cuts += 1;
+                    self.search_data.tt_cuts += 1;
                     return entry.value;
 
                 }
@@ -173,27 +150,34 @@ impl Engine {
         }
 
         let current_player_moves: Vec<Move>;
-        if player == 1.0 {
-            if valid_threat_count_2(board, 1) > 0 {
-                return f64::INFINITY;
-        
-            }
+        if root_node {
+            current_player_moves = self.root_node_moves.clone();
 
-            current_player_moves = valid_moves_2(board, 1);
-            
         } else {
-            if valid_threat_count_2(board, 2) > 0 {
-                return f64::INFINITY;
-        
+            if player == 1.0 {
+                if valid_threat_count_2(board, 1) > 0 {
+                    return f64::INFINITY;
+            
+                }
+
+                current_player_moves = valid_moves_2(board, 1);
+                
+            } else {
+                if valid_threat_count_2(board, 2) > 0 {
+                    return f64::INFINITY;
+            
+                }
+
+                current_player_moves = valid_moves_2(board, 2);
+                
             }
 
-            current_player_moves = valid_moves_2(board, 2);
-            
         }
 
-        let mut value = f64::NEG_INFINITY;
+        let mut value = -f64::INFINITY;
         let mut used_moves = vec![];
-        for (mv_idx, mv) in current_player_moves.iter().enumerate() {
+        let mut moves_with_evals: Vec<(Move, f64)> = vec![];
+        for mv in current_player_moves.iter() {
             if used_moves.contains(mv) {
                 continue;
             }
@@ -202,21 +186,11 @@ impl Engine {
 
             board.make_move(&mv);
 
-            let mut score: f64;
-
-            if mv_idx > 0 {
-                score = -self.negascout(board, -alpha - 1.0, -alpha, -player, depth - 1);
-                if alpha < score && score < beta {
-                    score = -self.negascout(board, -beta, -score, -player, depth - 1);
-
-                }
-
-            } else {
-                score =  -self.negascout(board, -beta, -alpha, -player, depth - 1);
-
-            }
+            let score = -self.negamax(board, -beta, -alpha, -player, depth - 1, false);
 
             board.undo_move(&mv);
+
+            moves_with_evals.push((*mv, score));
 
             if score > value {
                 value = score;
@@ -229,6 +203,7 @@ impl Engine {
             }
 
             if alpha >= beta {
+                self.search_data.beta_cuts += 1;
                 break;
 
             }
@@ -250,61 +225,64 @@ impl Engine {
 
         self.transposition_table.insert(board_hash, entry);
 
+        if root_node {
+            self.search_data.root_node_evals = moves_with_evals;
+
+        }
+
         return value;
 
     }
 
+
 }
 
-pub struct SearchStats {
-    pub nodes_evaluated: usize,
+#[derive(Debug, Clone)]
+pub struct SearchData {
+    pub best_move: (Move, f64),
+    pub root_node_evals: Vec<(Move, f64)>,
 
     pub search_time: f64,
-    pub start_time: std::time::Instant,
 
+    pub nodes: usize,
+    pub leafs: usize,
+
+    pub lps: usize,
     pub nps: usize,
 
-    pub minimax_hits: usize,
-    pub exact_hits: usize,
+    pub beta_cuts: usize,
+
+    pub tt_hits: usize,
+    pub tt_exacts: usize,
     pub tt_cuts: usize,
+
+    pub depth: usize
 
 }
 
-impl SearchStats {
-    fn new() -> SearchStats {
-        return SearchStats {
-            nodes_evaluated: 0,
+impl SearchData {
+    fn new() -> SearchData {
+        return SearchData {
+            best_move: (Move([NULL, NULL, NULL, NULL, NULL, NULL]), -f64::INFINITY),
+            root_node_evals: vec![],
 
             search_time: 0.0,
-            start_time: std::time::Instant::now(),
+
+            nodes: 0,
+            leafs: 0,
 
             nps: 0,
+            lps: 0,
 
-            minimax_hits: 0,
-            exact_hits: 0,
+            beta_cuts: 0,
+
+            tt_hits: 0,
+            tt_exacts: 0,
             tt_cuts: 0,
 
+            depth: 0
+
         }
-
-    }
-
-    fn reset_stats(&mut self) {
-        self.nodes_evaluated = 0;
-
-        self.minimax_hits = 0;
-        self.exact_hits = 0;
-        self.tt_cuts = 0;
-
-    }
-
-    fn start_timer(&mut self) {
-        self.start_time = std::time::Instant::now();
-
-    }
-
-    fn stop_timer(&mut self) {
-        self.search_time = self.start_time.elapsed().as_secs_f64();
-        self.nps = (self.nodes_evaluated as f64 / self.search_time) as usize
 
     }
 

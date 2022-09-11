@@ -10,6 +10,8 @@ mod engine;
 mod transposition_tables;
 mod zobrist;
 
+use evaluation::get_positional_eval;
+
 use crate::board::*;
 use crate::engine::*;
 
@@ -18,31 +20,49 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {
     let mut board = BoardState::new();
-    board.set_rank([1, 3, 2 ,1, 2, 3], 5);
-    board.set_rank([0 ,0 ,0 ,0, 0, 0], 4);
-    board.set_rank([0 ,0 ,0 ,0, 0, 0], 3);
-    board.set_rank([0 ,0 ,0 ,0, 0, 0], 2);
-    board.set_rank([0 ,0, 0, 0, 0, 0], 1);
-    board.set_rank([2 ,3 ,1 ,3, 1, 2], 0);
+    board.set_rank([0, 0, 3 ,0, 1, 2], 5);
+    board.set_rank([0 ,0 ,0 ,0, 1, 0], 4);
+    board.set_rank([0 ,0 ,0 ,0, 3, 1], 3);
+    board.set_rank([0 ,0 ,0 ,0, 1, 2], 2);
+    board.set_rank([0 ,0, 3, 0, 0, 0], 1);
+    board.set_rank([0 ,2 ,0 ,2, 3, 0], 0);
     board.set_goals([0, 0]);
 
-    let mut engine = Engine::new();
+    board.flip();
 
-    let results = engine.iterative_deepening_search(&mut board, 4, 10000.0);
-        
-    println!("");
-    println!("==================== FINAL DATA ====================");
-    println!("");
-    for result in results {
-        println!("{:?}", result);
+    // board.set_rank([0, 0, 0 ,0, 0, 0], 5);
+    // board.set_rank([0 ,0 ,0 ,0, 0, 0], 4);
+    // board.set_rank([0 ,2 ,2 ,2, 0, 3], 3);
+    // board.set_rank([0 ,3 ,1 ,3, 1, 2], 2);
+    // board.set_rank([0 ,0, 1, 3, 0, 1], 1);
+    // board.set_rank([0 ,0 ,0 ,0, 0, 0], 0);
+    // board.set_goals([0, 0]);
+    // println!("{}", get_positional_eval(&mut board));
+
+    let mut negamax = Negamax::new();
+
+    for result in negamax.iterative_deepening_search(&mut board, 3) {
+        println!("");
+        println!("");
+        println!("");
+        println!("==================== FINAL DATA ====================");
+        println!("");
+        println!("Found the bestmove of {:?}", result.best_move);
+        println!("    - In {} seconds", result.search_time);
+        println!("    - Depth of {} ply", result.depth);
+        println!("");
+        println!("Searched {} total nodes with {} leaf nodes", result.nodes, result.leafs);
+        println!("    - {} NPS", result.nps);
+        println!("    - {} LPS", result.lps);
+        println!("");
+        println!("{} TT hits", result.tt_hits);
+        println!("    - {} TT exacts", result.tt_exacts);
+        println!("    - {} TT cuts", result.tt_cuts);
+        println!("");
+        println!("{} AlphaBeta cuts", result.beta_cuts);
+        println!("");
+        println!("====================================================");
 
     }
-    println!("");
-    println!("Evaluated {} nodes in {} seconds at a rate of {} NPS.", engine.search_stats.nodes_evaluated, engine.search_stats.search_time, engine.search_stats.nps);
-    println!("   - {} minimax hits", engine.search_stats.minimax_hits);
-    println!("       - {} exact hits", engine.search_stats.exact_hits);
-    println!("       - {} tt cuts", engine.search_stats.tt_cuts);
-    println!("");
-    println!("====================================================");
 
 }
