@@ -20,15 +20,15 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {
     let mut board = BoardState::new();
-    board.set_rank([0, 0, 3 ,0, 1, 2], 5);
-    board.set_rank([0 ,0 ,0 ,0, 1, 0], 4);
-    board.set_rank([0 ,0 ,0 ,0, 3, 1], 3);
-    board.set_rank([0 ,0 ,0 ,0, 1, 2], 2);
+    board.set_rank([3, 0, 0 ,3, 0, 0], 5);
+    board.set_rank([0 ,0 ,0 ,1, 1, 1], 4);
+    board.set_rank([0 ,0 ,0 ,2, 3, 1], 3);
+    board.set_rank([0 ,0 ,0 ,0, 2, 2], 2);
     board.set_rank([0 ,0, 3, 0, 0, 0], 1);
-    board.set_rank([0 ,2 ,0 ,2, 3, 0], 0);
+    board.set_rank([0 ,0 ,0 ,2, 0, 0], 0);
     board.set_goals([0, 0]);
 
-    board.flip();
+    // board.flip();
 
     // board.set_rank([0, 0, 0 ,0, 0, 0], 5);
     // board.set_rank([0 ,0 ,0 ,0, 0, 0], 4);
@@ -41,7 +41,7 @@ fn main() {
 
     let mut negamax = Negamax::new();
 
-    for result in negamax.iterative_deepening_search(&mut board, 3) {
+    for result in negamax.iterative_deepening_search(&mut board, 5) {
         println!("");
         println!("");
         println!("");
