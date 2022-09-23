@@ -10,6 +10,7 @@ pub static PLAYER_2_GOAL: usize = 37;
 
 pub static NULL: usize = 100;
 
+#[derive(Clone)]
 pub struct BoardState {
     pub data: [usize; 38],
 
@@ -277,6 +278,17 @@ impl BoardState {
 
         };
         
+    }
+
+    pub fn to_training_data(&self) -> [f64; 36] {
+        let mut data: [f64; 36] = [0.0; 36];
+        for i in 0..36 {
+            data[i] = self.data[i] as f64;
+    
+        }
+
+        return data;
+
     }
 
     pub fn set_rank(&mut self, rank_data: [usize; 6], rank: usize) {

@@ -10,8 +10,6 @@ mod engine;
 mod transposition_tables;
 mod zobrist;
 
-use evaluation::get_positional_eval;
-
 use crate::board::*;
 use crate::engine::*;
 
@@ -20,28 +18,18 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {
     let mut board = BoardState::new();
-    board.set_rank([3, 0, 0 ,3, 0, 0], 5);
-    board.set_rank([0 ,0 ,0 ,1, 1, 1], 4);
-    board.set_rank([0 ,0 ,0 ,2, 3, 1], 3);
-    board.set_rank([0 ,0 ,0 ,0, 2, 2], 2);
-    board.set_rank([0 ,0, 3, 0, 0, 0], 1);
-    board.set_rank([0 ,0 ,0 ,2, 0, 0], 0);
+    board.set_rank([3, 2, 1 ,1, 2, 3], 5);
+    board.set_rank([0 ,0 ,0, 0, 0, 0], 4);
+    board.set_rank([0 ,0 ,0, 0, 0, 0], 3);
+    board.set_rank([0 ,0 ,0 ,0, 0, 0], 2);
+    board.set_rank([0 ,0, 0, 0, 0, 0], 1);
+    board.set_rank([3 ,2 ,1 ,2, 3, 1], 0);
     board.set_goals([0, 0]);
 
-    // board.flip();
-
-    // board.set_rank([0, 0, 0 ,0, 0, 0], 5);
-    // board.set_rank([0 ,0 ,0 ,0, 0, 0], 4);
-    // board.set_rank([0 ,2 ,2 ,2, 0, 3], 3);
-    // board.set_rank([0 ,3 ,1 ,3, 1, 2], 2);
-    // board.set_rank([0 ,0, 1, 3, 0, 1], 1);
-    // board.set_rank([0 ,0 ,0 ,0, 0, 0], 0);
-    // board.set_goals([0, 0]);
-    // println!("{}", get_positional_eval(&mut board));
-
     let mut negamax = Negamax::new();
+    let results = negamax.iterative_deepening_search(&mut board, 3);
 
-    for result in negamax.iterative_deepening_search(&mut board, 5) {
+    for result in results {
         println!("");
         println!("");
         println!("");

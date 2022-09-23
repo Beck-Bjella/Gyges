@@ -1,5 +1,3 @@
-
-
 pub fn sort_moves_2(mut evaluations: Vec<(usize, [usize; 6], usize, usize)>) -> Vec<[usize; 6]> {
     evaluations.sort_by(|a, b| {
         if a.0 > b.0 {

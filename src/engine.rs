@@ -6,17 +6,16 @@ use crate::evaluation::*;
 use crate::transposition_tables::*;
 use crate::zobrist::*;
 
-
 pub struct Negamax {
     pub root_node_moves: Vec<Move>,
 
     pub search_data: SearchData,
 
     pub transposition_table: TranspositionTable,
-    eval_table: EvaluationTable,
+    pub eval_table: EvaluationTable,
 
     pub zobrist_hasher: ZobristHasher,
-
+    
 }
 
 impl Negamax {
@@ -36,16 +35,20 @@ impl Negamax {
     }
 
     pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) -> Vec<SearchData> {
-        let start_time = std::time::Instant::now();
-    
         self.root_node_moves = valid_moves_2(board, 1);
-    
+        self.transposition_table = TranspositionTable::new();
+        self.eval_table = EvaluationTable::new();
+
         let mut all_searchs: Vec<SearchData> = vec![];
     
         let mut current_ply = 1;
         'depth: loop {
             let search_data = self.search(board, current_ply);
             all_searchs.push(search_data.clone());
+
+            if search_data.best_move.1 == f64::INFINITY || search_data.best_move.1 == f64::NEG_INFINITY {
+                break;
+            }
 
             self.root_node_moves = sort_moves(search_data.root_node_evals);
     
@@ -56,8 +59,6 @@ impl Negamax {
             }
     
         }
-
-        println!("{}", start_time.elapsed().as_secs_f64());
 
         return all_searchs;
     
@@ -84,7 +85,7 @@ impl Negamax {
             }
 
         }
-        
+
         self.search_data.best_move = best_move;
 
         return self.search_data.clone();
@@ -98,7 +99,21 @@ impl Negamax {
 
         if depth == 0 {
             self.search_data.leafs += 1;
-          
+            
+            if player == 1.0 {
+                if valid_threat_count_2(board, 1) > 0  {
+                    return f64::INFINITY;
+            
+                }
+        
+            } else {
+                if valid_threat_count_2(board, 2) > 0  {
+                    return f64::INFINITY;
+            
+                }
+        
+            }
+        
             let look_up = self.eval_table.get(&board_hash);
             if look_up.is_some() {
                 return *look_up.unwrap();
@@ -109,7 +124,6 @@ impl Negamax {
                 self.eval_table.insert(board_hash, score);
 
                 return score;
-                
             }
 
         }
