@@ -204,13 +204,13 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 }
 
 
-pub fn get_evalulation(board: &mut BoardState, player: f64) -> f64 {
+pub fn get_evalulation(board: &mut BoardState) -> f64 {
     let mut score: f64 = 0.0;
 
     //  Move Counts
 
-    let player_1_move_count = valid_move_count_2(board, 1) as f64;
-    let player_2_moves_count = valid_move_count_2(board, 2) as f64;
+    let player_1_move_count = valid_move_count(board, 1) as f64;
+    let player_2_moves_count = valid_move_count(board, 2) as f64;
 
     score += player_1_move_count * 1.5;
     score -= player_2_moves_count;

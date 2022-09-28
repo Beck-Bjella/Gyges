@@ -27,7 +27,7 @@ fn main() {
     board.set_goals([0, 0]);
 
     let mut negamax = Negamax::new();
-    let results = negamax.iterative_deepening_search(&mut board, 3);
+    let results = negamax.iterative_deepening_search(&mut board, 5);
 
     for result in results {
         println!("");

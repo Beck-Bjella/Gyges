@@ -35,7 +35,7 @@ impl Negamax {
     }
 
     pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) -> Vec<SearchData> {
-        self.root_node_moves = valid_moves_2(board, 1);
+        self.root_node_moves = valid_moves(board, 1);
         self.transposition_table = TranspositionTable::new();
         self.eval_table = EvaluationTable::new();
 
@@ -43,10 +43,10 @@ impl Negamax {
     
         let mut current_ply = 1;
         'depth: loop {
-            let search_data = self.search(board, current_ply);
+            let search_data = self.search_at_ply(board, current_ply);
             all_searchs.push(search_data.clone());
 
-            if search_data.best_move.1 == f64::INFINITY || search_data.best_move.1 == f64::NEG_INFINITY {
+            if search_data.best_move.score == f64::INFINITY || search_data.best_move.score == f64::NEG_INFINITY {
                 break;
             }
 
@@ -64,7 +64,7 @@ impl Negamax {
     
     }
 
-    fn search(&mut self, board: &mut BoardState, depth: usize) -> SearchData {
+    fn search_at_ply(&mut self, board: &mut BoardState, depth: usize) -> SearchData {
         self.search_data = SearchData::new();
         self.search_data.depth = depth;
         let start_time = std::time::Instant::now();
@@ -77,9 +77,9 @@ impl Negamax {
         self.search_data.nps = (self.search_data.nodes as f64 / self.search_data.search_time) as usize;
         self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
 
-        let mut best_move: (Move, f64) = (Move([NULL, NULL, NULL, NULL, NULL, NULL]), -f64::INFINITY);
+        let mut best_move: Move = Move::new_worst();
         for mv in &self.search_data.root_node_evals {
-            if mv.1 > best_move.1 {
+            if mv.score > best_move.score {
                 best_move = *mv;
 
             }
@@ -101,25 +101,25 @@ impl Negamax {
             self.search_data.leafs += 1;
             
             if player == 1.0 {
-                if valid_threat_count_2(board, 1) > 0  {
+                if valid_threat_count(board, 1) > 0  {
                     return f64::INFINITY;
             
                 }
         
             } else {
-                if valid_threat_count_2(board, 2) > 0  {
+                if valid_threat_count(board, 2) > 0  {
                     return f64::INFINITY;
             
                 }
         
             }
-        
+
             let look_up = self.eval_table.get(&board_hash);
             if look_up.is_some() {
                 return *look_up.unwrap();
 
             } else {
-                let score = get_evalulation(board, player) * player;
+                let score = get_evalulation(board) * player;
 
                 self.eval_table.insert(board_hash, score);
 
@@ -169,20 +169,20 @@ impl Negamax {
 
         } else {
             if player == 1.0 {
-                if valid_threat_count_2(board, 1) > 0 {
+                if valid_threat_count(board, 1) > 0 {
                     return f64::INFINITY;
             
                 }
 
-                current_player_moves = valid_moves_2(board, 1);
+                current_player_moves = valid_moves(board, 1);
                 
             } else {
-                if valid_threat_count_2(board, 2) > 0 {
+                if valid_threat_count(board, 2) > 0 {
                     return f64::INFINITY;
             
                 }
 
-                current_player_moves = valid_moves_2(board, 2);
+                current_player_moves = valid_moves(board, 2);
                 
             }
 
@@ -190,12 +190,11 @@ impl Negamax {
 
         let mut value = -f64::INFINITY;
         let mut used_moves = vec![];
-        let mut moves_with_evals: Vec<(Move, f64)> = vec![];
+        let mut moves_with_scores = vec![];
         for mv in current_player_moves.iter() {
             if used_moves.contains(mv) {
                 continue;
             }
-
             used_moves.push(*mv);
 
             board.make_move(&mv);
@@ -204,7 +203,9 @@ impl Negamax {
 
             board.undo_move(&mv);
 
-            moves_with_evals.push((*mv, score));
+            let mut scored_move = mv.clone();
+            scored_move.score = score;
+            moves_with_scores.push(scored_move);
 
             if score > value {
                 value = score;
@@ -240,7 +241,7 @@ impl Negamax {
         self.transposition_table.insert(board_hash, entry);
 
         if root_node {
-            self.search_data.root_node_evals = moves_with_evals;
+            self.search_data.root_node_evals = moves_with_scores;
 
         }
 
@@ -248,13 +249,12 @@ impl Negamax {
 
     }
 
-
 }
 
 #[derive(Debug, Clone)]
 pub struct SearchData {
-    pub best_move: (Move, f64),
-    pub root_node_evals: Vec<(Move, f64)>,
+    pub best_move: Move,
+    pub root_node_evals: Vec<Move>,
 
     pub search_time: f64,
 
@@ -277,7 +277,7 @@ pub struct SearchData {
 impl SearchData {
     fn new() -> SearchData {
         return SearchData {
-            best_move: (Move([NULL, NULL, NULL, NULL, NULL, NULL]), -f64::INFINITY),
+            best_move: Move::new_worst(),
             root_node_evals: vec![],
 
             search_time: 0.0,
