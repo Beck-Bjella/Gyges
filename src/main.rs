@@ -18,16 +18,16 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {
     let mut board = BoardState::new();
-    board.set_rank([3, 2, 1 ,1, 2, 3], 5);
-    board.set_rank([0 ,0 ,0, 0, 0, 0], 4);
-    board.set_rank([0 ,0 ,0, 0, 0, 0], 3);
-    board.set_rank([0 ,0 ,0 ,0, 0, 0], 2);
-    board.set_rank([0 ,0, 0, 0, 0, 0], 1);
-    board.set_rank([3 ,2 ,1 ,2, 3, 1], 0);
+    board.set_rank([3, 0, 0 ,0, 0, 0], 5);
+    board.set_rank([0 ,0 ,3, 2, 0, 0], 4);
+    board.set_rank([0 ,0 ,1, 2, 3, 0], 3);
+    board.set_rank([0 ,1 ,3 ,0, 0, 0], 2);
+    board.set_rank([0 ,0, 1, 1, 0, 0], 1);
+    board.set_rank([0 ,2 ,0 ,0, 0, 2], 0);
     board.set_goals([0, 0]);
 
     let mut negamax = Negamax::new();
-    let results = negamax.iterative_deepening_search(&mut board, 5);
+    let results = negamax.iterative_deepening_search(&mut board, 7);
 
     for result in results {
         println!("");
@@ -37,6 +37,7 @@ fn main() {
         println!("");
         println!("Found the bestmove of {:?}", result.best_move);
         println!("    - In {} seconds", result.search_time);
+        println!("    - Average branching factor of {} moves", result.average_branching_factor);
         println!("    - Depth of {} ply", result.depth);
         println!("");
         println!("Searched {} total nodes with {} leaf nodes", result.nodes, result.leafs);

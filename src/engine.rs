@@ -1,4 +1,4 @@
-use std::vec;
+use std::cmp::Ordering;
 
 use crate::board::*;
 use crate::move_generation::*;
@@ -35,7 +35,7 @@ impl Negamax {
     }
 
     pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) -> Vec<SearchData> {
-        self.root_node_moves = valid_moves(board, 1);
+        self.root_node_moves = valid_moves(board, 1.0);
         self.transposition_table = TranspositionTable::new();
         self.eval_table = EvaluationTable::new();
 
@@ -50,7 +50,7 @@ impl Negamax {
                 break;
             }
 
-            self.root_node_moves = sort_moves(search_data.root_node_evals);
+            self.root_node_moves = sort_moves_highest_score_first(search_data.root_node_evals);
     
             current_ply += 2;
             if current_ply > max_ply {
@@ -76,17 +76,23 @@ impl Negamax {
        
         self.search_data.nps = (self.search_data.nodes as f64 / self.search_data.search_time) as usize;
         self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
+        self.search_data.average_branching_factor = (self.search_data.nodes as f64).powf(1.0 / self.search_data.depth as f64);
 
-        let mut best_move: Move = Move::new_worst();
-        for mv in &self.search_data.root_node_evals {
-            if mv.score > best_move.score {
-                best_move = *mv;
-
+        self.search_data.root_node_evals.sort_unstable_by(|a, b| {
+            if a.score > b.score {
+                Ordering::Less
+                
+            } else if a.score == b.score {
+                Ordering::Equal
+    
+            } else {
+                Ordering::Greater
+    
             }
-
-        }
-
-        self.search_data.best_move = best_move;
+    
+        });
+        
+        self.search_data.best_move = self.search_data.root_node_evals[0];
 
         return self.search_data.clone();
 
@@ -95,19 +101,19 @@ impl Negamax {
     fn negamax(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, root_node: bool) -> f64 {
         self.search_data.nodes += 1;
 
-        let board_hash = self.zobrist_hasher.get_hash_new(board, player);
+        let board_hash = self.zobrist_hasher.get_hash(board, player);
 
         if depth == 0 {
             self.search_data.leafs += 1;
             
             if player == 1.0 {
-                if valid_threat_count(board, 1) > 0  {
+                if valid_threat_count(board, 1.0) > 0  {
                     return f64::INFINITY;
             
                 }
         
             } else {
-                if valid_threat_count(board, 2) > 0  {
+                if valid_threat_count(board, -1.0) > 0  {
                     return f64::INFINITY;
             
                 }
@@ -169,20 +175,22 @@ impl Negamax {
 
         } else {
             if player == 1.0 {
-                if valid_threat_count(board, 1) > 0 {
+                if valid_threat_count(board, 1.0) > 0 {
                     return f64::INFINITY;
             
                 }
 
-                current_player_moves = valid_moves(board, 1);
-                
+                current_player_moves = order_moves(valid_moves(board, player), board, player);
+                // current_player_moves = valid_moves(board, player);
+
             } else {
-                if valid_threat_count(board, 2) > 0 {
+                if valid_threat_count(board, -1.0) > 0 {
                     return f64::INFINITY;
             
                 }
 
-                current_player_moves = valid_moves(board, 2);
+                current_player_moves = order_moves(valid_moves(board, player), board, player);
+                // current_player_moves = valid_moves(board, player);
                 
             }
 
@@ -260,17 +268,18 @@ pub struct SearchData {
 
     pub nodes: usize,
     pub leafs: usize,
+    pub average_branching_factor: f64,
 
     pub lps: usize,
     pub nps: usize,
-
-    pub beta_cuts: usize,
 
     pub tt_hits: usize,
     pub tt_exacts: usize,
     pub tt_cuts: usize,
 
-    pub depth: usize
+    pub beta_cuts: usize,
+
+    pub depth: usize,
 
 }
 
@@ -284,17 +293,19 @@ impl SearchData {
 
             nodes: 0,
             leafs: 0,
+            average_branching_factor: 0.0,
 
             nps: 0,
             lps: 0,
-
-            beta_cuts: 0,
 
             tt_hits: 0,
             tt_exacts: 0,
             tt_cuts: 0,
 
-            depth: 0
+            
+            beta_cuts: 0,
+
+            depth: 0,
 
         }
 

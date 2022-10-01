@@ -190,8 +190,8 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
             }
 
 
-            println!("current_pos: {},   goodness: {}", current_pos, goodness);
-            println!("");
+            // println!("current_pos: {},   goodness: {}", current_pos, goodness);
+            // println!("");
 
             score += goodness as f64;
 
@@ -209,8 +209,8 @@ pub fn get_evalulation(board: &mut BoardState) -> f64 {
 
     //  Move Counts
 
-    let player_1_move_count = valid_move_count(board, 1) as f64;
-    let player_2_moves_count = valid_move_count(board, 2) as f64;
+    let player_1_move_count = valid_move_count(board, 1.0) as f64;
+    let player_2_moves_count = valid_move_count(board, -1.0) as f64;
 
     score += player_1_move_count * 1.5;
     score -= player_2_moves_count;

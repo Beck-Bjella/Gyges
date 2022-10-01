@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use crate::board::*;
 use crate::bitboard::*;
+use crate::evaluation::*;
 
 pub const ONE_PIECE: usize = 1;
 pub const TWO_PIECE: usize = 2;
@@ -250,6 +251,7 @@ pub const ONE_PATH_BACKTRACK_CHECKS: [[BitBoard; 5]; 36]  = [
     [BitBoard(0b100000000000000000000000000000000000000000000000000000000000), BitBoard(0b000000000000000000000000000000000000000000000000000000000000), BitBoard(0b000001000000000000000000000000000000000000000000000000000000), NULL_BB, NULL_BB],
 ];
 
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum MoveType {
     Drop,
@@ -289,7 +291,7 @@ impl Move {
 
 }
 
-pub fn sort_moves(mut moves: Vec<Move>) -> Vec<Move> {
+pub fn sort_moves_highest_score_first(mut moves: Vec<Move>) -> Vec<Move> {
     moves.sort_by(|a, b| {
         if a.score > b.score {
             Ordering::Less
@@ -308,14 +310,104 @@ pub fn sort_moves(mut moves: Vec<Move>) -> Vec<Move> {
 
 }
 
+pub fn sort_moves_bounces_first(moves: Vec<Move>) -> Vec<Move> {
+    let mut new_moves: Vec<Move> = vec![];
+    for mv in moves {
+        if mv.flag == MoveType::Drop {
+            new_moves.push(mv);
 
-pub fn valid_moves(board: &mut BoardState, player: i8) -> Vec<Move> {
+        } else if mv.flag == MoveType::Bounce {
+            new_moves.insert(0, mv);
+
+        }
+
+    }
+
+    return new_moves;
+
+}
+
+pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<Move> {
+    let mut moves_to_sort: Vec<(Move, f64)> = Vec::new();
+    
+    for mv in moves {
+        board.make_move(&mv);
+
+        let predicted_score: f64 = valid_move_count(board, -player) as f64;
+        // valid_move_count(board, -player) as f64;
+        // get_positional_eval(board);
+
+        board.undo_move(&mv);
+
+        moves_to_sort.push((mv, predicted_score));
+        
+    }
+
+    moves_to_sort.sort_unstable_by(|a, b| {
+        if a.1 < b.1 {
+            Ordering::Less
+            
+        } else if a.1 == b.1 {
+            Ordering::Equal
+
+        } else {
+            Ordering::Greater
+
+        }
+
+    });
+
+    // if player == 1.0 {
+    //     moves_to_sort.sort_by(|a, b| {
+    //         if a.1 > b.1 {
+    //             Ordering::Less
+                
+    //         } else if a.1 == b.1 {
+    //             Ordering::Equal
+    
+    //         } else {
+    //             Ordering::Greater
+    
+    //         }
+    
+    //     });
+
+
+    // } else {
+    //     moves_to_sort.sort_by(|a, b| {
+    //         if a.1 < b.1 {
+    //             Ordering::Less
+                
+    //         } else if a.1 == b.1 {
+    //             Ordering::Equal
+    
+    //         } else {
+    //             Ordering::Greater
+    
+    //         }
+    
+    //     });
+
+    // }
+
+    let mut ordered_moves: Vec<Move> = Vec::new();
+
+    for item in &moves_to_sort {
+        ordered_moves.push(item.0);
+        
+    }
+
+    return ordered_moves;
+
+}
+
+pub fn valid_moves(board: &mut BoardState, player: f64) -> Vec<Move> {
     let active_lines = board.get_active_lines();
 
     let banned_positions: [bool; 36] = [false; 36];
     let backtrack_board = BitBoard(0);
 
-    if player == 1 {
+    if player == 1.0 {
         let mut player_1_drops: Vec<usize> = board.get_drops(active_lines, 1);
         let mut player_1_moves: Vec<Move> = vec![];
 
@@ -567,13 +659,13 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
 
 }
 
-pub fn valid_move_count(board: &mut BoardState, player: i8) -> usize {
+pub fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
     let active_lines = board.get_active_lines();
 
     let banned_positions: [bool; 36] = [false; 36];
     let backtrack_board = BitBoard(0);
 
-    if player == 1 {
+    if player == 1.0 {
         let player_1_drop_count: usize = board.get_drops(active_lines, 1).len() + 1;
         let mut player_1_move_count: usize = 0;
 
@@ -808,13 +900,13 @@ pub fn get_piece_move_count(board: &BoardState, mut backtrack_board: BitBoard, m
 
 }
 
-pub fn valid_threat_count(board: &mut BoardState, player: i8) -> usize {
+pub fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
     let active_lines = board.get_active_lines();
 
     let banned_positions: [bool; 36] = [false; 36];
     let backtrack_board = BitBoard(0);
 
-    if player == 1 {
+    if player == 1.0 {
         let mut player_1_threat_count: usize = 0;
 
         for x in 0..6 {
