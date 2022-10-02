@@ -5,7 +5,6 @@ use crate::move_generation::*;
 use crate::evaluation::*;
 use crate::transposition_tables::*;
 use crate::zobrist::*;
-
 pub struct Negamax {
     pub root_node_moves: Vec<Move>,
 
@@ -13,8 +12,6 @@ pub struct Negamax {
 
     pub transposition_table: TranspositionTable,
     pub eval_table: EvaluationTable,
-
-    pub zobrist_hasher: ZobristHasher,
     
 }
 
@@ -28,14 +25,12 @@ impl Negamax {
             transposition_table: TranspositionTable::new(),
             eval_table: EvaluationTable::new(),
 
-            zobrist_hasher: ZobristHasher::new(),
-
         };
 
     }
 
     pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) -> Vec<SearchData> {
-        self.root_node_moves = valid_moves(board, 1.0);
+        self.root_node_moves = order_moves(valid_moves(board, 1.0), board, 1.0);
         self.transposition_table = TranspositionTable::new();
         self.eval_table = EvaluationTable::new();
 
@@ -101,22 +96,13 @@ impl Negamax {
     fn negamax(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, root_node: bool) -> f64 {
         self.search_data.nodes += 1;
 
-        let board_hash = self.zobrist_hasher.get_hash(board, player);
+        let board_hash = get_hash(board);
 
         if depth == 0 {
             self.search_data.leafs += 1;
             
-            if player == 1.0 {
-                if valid_threat_count(board, 1.0) > 0  {
-                    return f64::INFINITY;
-            
-                }
-        
-            } else {
-                if valid_threat_count(board, -1.0) > 0  {
-                    return f64::INFINITY;
-            
-                }
+            if valid_threat_count(board, player) > 0  {
+                return f64::INFINITY;
         
             }
 
@@ -126,7 +112,7 @@ impl Negamax {
 
             } else {
                 let score = get_evalulation(board) * player;
-
+                
                 self.eval_table.insert(board_hash, score);
 
                 return score;
@@ -174,29 +160,16 @@ impl Negamax {
             current_player_moves = self.root_node_moves.clone();
 
         } else {
-            if player == 1.0 {
-                if valid_threat_count(board, 1.0) > 0 {
-                    return f64::INFINITY;
-            
-                }
-
-                current_player_moves = order_moves(valid_moves(board, player), board, player);
-                // current_player_moves = valid_moves(board, player);
-
-            } else {
-                if valid_threat_count(board, -1.0) > 0 {
-                    return f64::INFINITY;
-            
-                }
-
-                current_player_moves = order_moves(valid_moves(board, player), board, player);
-                // current_player_moves = valid_moves(board, player);
-                
+            if valid_threat_count(board, player) > 0  {
+                return f64::INFINITY;
+        
             }
+
+            current_player_moves = order_moves(valid_moves(board, player), board, player);
 
         }
 
-        let mut value = -f64::INFINITY;
+        let mut best_score = -f64::INFINITY;
         let mut used_moves = vec![];
         let mut moves_with_scores = vec![];
         for mv in current_player_moves.iter() {
@@ -215,13 +188,13 @@ impl Negamax {
             scored_move.score = score;
             moves_with_scores.push(scored_move);
 
-            if score > value {
-                value = score;
+            if score > best_score {
+                best_score = score;
 
             }
 
-            if value > alpha {
-                alpha = value;
+            if best_score > alpha {
+                alpha = best_score;
 
             }
 
@@ -233,12 +206,12 @@ impl Negamax {
 
         }
 
-        let mut entry = TTEntry {value: value, flag: TTEntryType::None, depth: depth};
+        let mut entry = TTEntry {value: best_score, flag: TTEntryType::None, depth: depth};
 
-        if value <= original_alpha {
+        if best_score <= original_alpha {
             entry.flag = TTEntryType::UpperBound;
 
-        } else if value >= beta {
+        } else if best_score >= beta {
             entry.flag = TTEntryType::LowerBound;
 
         } else {
@@ -253,7 +226,7 @@ impl Negamax {
 
         }
 
-        return value;
+        return best_score;
 
     }
 
@@ -301,7 +274,6 @@ impl SearchData {
             tt_hits: 0,
             tt_exacts: 0,
             tt_cuts: 0,
-
             
             beta_cuts: 0,
 

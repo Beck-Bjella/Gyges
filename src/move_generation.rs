@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use crate::board::*;
 use crate::bitboard::*;
-use crate::evaluation::*;
+use crate::evaluation::get_evalulation;
 
 pub const ONE_PIECE: usize = 1;
 pub const TWO_PIECE: usize = 2;
@@ -310,23 +310,6 @@ pub fn sort_moves_highest_score_first(mut moves: Vec<Move>) -> Vec<Move> {
 
 }
 
-pub fn sort_moves_bounces_first(moves: Vec<Move>) -> Vec<Move> {
-    let mut new_moves: Vec<Move> = vec![];
-    for mv in moves {
-        if mv.flag == MoveType::Drop {
-            new_moves.push(mv);
-
-        } else if mv.flag == MoveType::Bounce {
-            new_moves.insert(0, mv);
-
-        }
-
-    }
-
-    return new_moves;
-
-}
-
 pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<Move> {
     let mut moves_to_sort: Vec<(Move, f64)> = Vec::new();
     
@@ -334,8 +317,6 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec
         board.make_move(&mv);
 
         let predicted_score: f64 = valid_move_count(board, -player) as f64;
-        // valid_move_count(board, -player) as f64;
-        // get_positional_eval(board);
 
         board.undo_move(&mv);
 
@@ -356,39 +337,6 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec
         }
 
     });
-
-    // if player == 1.0 {
-    //     moves_to_sort.sort_by(|a, b| {
-    //         if a.1 > b.1 {
-    //             Ordering::Less
-                
-    //         } else if a.1 == b.1 {
-    //             Ordering::Equal
-    
-    //         } else {
-    //             Ordering::Greater
-    
-    //         }
-    
-    //     });
-
-
-    // } else {
-    //     moves_to_sort.sort_by(|a, b| {
-    //         if a.1 < b.1 {
-    //             Ordering::Less
-                
-    //         } else if a.1 == b.1 {
-    //             Ordering::Equal
-    
-    //         } else {
-    //             Ordering::Greater
-    
-    //         }
-    
-    //     });
-
-    // }
 
     let mut ordered_moves: Vec<Move> = Vec::new();
 

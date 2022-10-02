@@ -18,16 +18,17 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {
     let mut board = BoardState::new();
-    board.set_rank([3, 0, 0 ,0, 0, 0], 5);
-    board.set_rank([0 ,0 ,3, 2, 0, 0], 4);
-    board.set_rank([0 ,0 ,1, 2, 3, 0], 3);
-    board.set_rank([0 ,1 ,3 ,0, 0, 0], 2);
-    board.set_rank([0 ,0, 1, 1, 0, 0], 1);
-    board.set_rank([0 ,2 ,0 ,0, 0, 2], 0);
-    board.set_goals([0, 0]);
+    board.set(  [3, 2, 1 ,1, 2, 3],
+                [0 ,0 ,0, 0, 0, 0],
+                [0 ,0 ,0, 0, 0, 0],
+                [0 ,0 ,0 ,0, 0, 0],
+                [0 ,0, 0, 0, 0, 0],
+                [3 ,2 ,1 ,1, 2, 3],
+                [0, 0]);
 
     let mut negamax = Negamax::new();
-    let results = negamax.iterative_deepening_search(&mut board, 7);
+
+    let results = negamax.iterative_deepening_search(&mut board, 3);
 
     for result in results {
         println!("");

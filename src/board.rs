@@ -15,29 +15,19 @@ impl BoardState {
         
     }
 
-    pub fn to_training_data(&self) -> [f64; 36] {
-        let mut data: [f64; 36] = [0.0; 36];
-        for i in 0..36 {
-            data[i] = self.data[i] as f64;
-    
-        }
-
-        return data;
-
-    }
-
-    pub fn set_rank(&mut self, rank_data: [usize; 6], rank: usize) {
+    pub fn set(&mut self, rank5: [usize; 6], rank4: [usize; 6], rank3: [usize; 6], rank2: [usize; 6], rank1: [usize; 6], rank0: [usize; 6], goal_data: [usize; 2]) {
         for x in 0..6 {
-            self.data[x + (rank * 6)] = rank_data[x];
+            self.data[x + 0] = rank0[x];
+            self.data[x + 6] = rank1[x];
+            self.data[x + 12] = rank2[x];
+            self.data[x + 18] = rank3[x];
+            self.data[x + 24] = rank4[x];
+            self.data[x + 30] = rank5[x];
 
         }
-  
-    }
-
-    pub fn set_goals(&mut self, goal_data: [usize; 2]) {
-        self.data[36] = goal_data[0];
-        self.data[37] = goal_data[1];
-
+        
+        self.data[PLAYER_1_GOAL] = goal_data[0];
+        self.data[PLAYER_2_GOAL] = goal_data[1];
 
     }
 
@@ -116,7 +106,7 @@ impl BoardState {
         }
 
     }
-    
+
     pub fn get_active_lines(&self) -> [usize; 2] {
         let mut player_1_set = false;
     
