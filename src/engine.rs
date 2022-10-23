@@ -1,79 +1,127 @@
 use std::cmp::Ordering;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::time::Instant;
+use std::vec;
 
 use crate::board::*;
 use crate::move_generation::*;
 use crate::evaluation::*;
 use crate::transposition_tables::*;
 use crate::zobrist::*;
-pub struct Negamax {
-    pub root_node_moves: Vec<Move>,
 
+
+const MAX_SEARCH_PLY: usize = 99;
+
+pub struct Engine {
+    pub root_node_moves: Vec<Move>,
+    pub stop: bool,
+
+    pub all_searchs: Vec<SearchData>,
     pub search_data: SearchData,
 
     pub transposition_table: TranspositionTable,
     pub eval_table: EvaluationTable,
+
+    pub datain: Receiver<BoardState>,
+    pub stopin: Receiver<bool>,
+    pub dataout: Sender<SearchData>,
     
 }
 
-impl Negamax {
-    pub fn new() -> Negamax {
-        return Negamax {
+impl Engine {
+    pub fn new(datain: Receiver<BoardState>, stopin: Receiver<bool>, dataout: Sender<SearchData>) -> Engine {
+        return Engine {
             root_node_moves: vec![],
+            stop: false,
 
+            all_searchs: vec![],
             search_data: SearchData::new(),
 
             transposition_table: TranspositionTable::new(),
             eval_table: EvaluationTable::new(),
 
+            datain: datain,
+            stopin: stopin,
+            dataout: dataout,
+
         };
 
     }
 
-    pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) -> Vec<SearchData> {
-        self.root_node_moves = order_moves(valid_moves(board, 1.0), board, 1.0);
-        self.transposition_table = TranspositionTable::new();
-        self.eval_table = EvaluationTable::new();
+    pub fn start(&mut self) {
+        loop {
+            let recived = self.datain.try_recv();
+            match recived {
+                Ok(_) => {
+                    println!("STARTING NEW SEARCH");
+                    let mut recived_board = recived.unwrap();
+                    recived_board.print();
+                    self.iterative_deepening_search(&mut recived_board, MAX_SEARCH_PLY);
+                    println!("FINISHED");
 
-        let mut all_searchs: Vec<SearchData> = vec![];
-    
-        let mut current_ply = 1;
-        'depth: loop {
-            let search_data = self.search_at_ply(board, current_ply);
-            all_searchs.push(search_data.clone());
+                },
+                Err(TryRecvError::Disconnected) => {
+                    println!("QUITING");
+                    break;
+                    
+                },
+                Err(TryRecvError::Empty) => {}
 
-            if search_data.best_move.score == f64::INFINITY || search_data.best_move.score == f64::NEG_INFINITY {
-                break;
             }
-
-            self.root_node_moves = sort_moves_highest_score_first(search_data.root_node_evals);
-    
-            current_ply += 2;
-            if current_ply > max_ply {
-                break 'depth;
-    
-            }
-    
+        
         }
 
-        return all_searchs;
-    
     }
 
-    fn search_at_ply(&mut self, board: &mut BoardState, depth: usize) -> SearchData {
-        self.search_data = SearchData::new();
-        self.search_data.depth = depth;
-        let start_time = std::time::Instant::now();
+    pub fn check_stop(&mut self) {
+        let quit = self.stopin.try_recv();
+        match quit {
+            Ok(true) => {
+                self.stop = true;
 
-        self.negamax(board, -f64::INFINITY, f64::INFINITY, 1.0, depth as i8, true);
+            },
+            Ok(false) => {
+                self.stop = false;
+
+            },
+            Err(TryRecvError::Disconnected) => {},
+            Err(TryRecvError::Empty) => {}
+
+        }
+
+    }
+
+    pub fn reset(&mut self) {
+        loop {
+            let clear_data = self.stopin.try_recv();
+            match clear_data {
+                Ok(_) => {},
+                Err(TryRecvError::Disconnected) => {},
+                Err(TryRecvError::Empty) => {
+                    break;
+
+                }
+    
+            }
+
+        }
         
-        let search_time = start_time.elapsed().as_secs_f64();
-        self.search_data.search_time = search_time;
-       
+        self.stop = false;
+        self.root_node_moves = vec![];
+        self.transposition_table = TranspositionTable::new();
+        self.eval_table = EvaluationTable::new();
+        self.all_searchs = vec![];
+        self.search_data = SearchData::new();
+
+    }
+
+    pub fn update_stats(&mut self, mut root_node_evals: Vec<Move>) {
+        self.search_data.search_time = self.search_data.start_time.elapsed().as_secs_f64();
         self.search_data.nps = (self.search_data.nodes as f64 / self.search_data.search_time) as usize;
         self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
         self.search_data.average_branching_factor = (self.search_data.nodes as f64).powf(1.0 / self.search_data.depth as f64);
 
-        self.search_data.root_node_evals.sort_unstable_by(|a, b| {
+        root_node_evals.sort_unstable_by(|a, b| {
             if a.score > b.score {
                 Ordering::Less
                 
@@ -87,7 +135,53 @@ impl Negamax {
     
         });
         
-        self.search_data.best_move = self.search_data.root_node_evals[0];
+        self.search_data.best_move = root_node_evals[0];
+
+    }
+
+    pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) {
+        if board.data[PLAYER_2_GOAL] == 0 && board.data[PLAYER_1_GOAL] == 0 {
+            self.reset();
+            self.root_node_moves = order_moves(valid_moves(board, 1.0), board, 1.0);
+            
+            let mut current_ply = 1;
+            'depth: loop {
+                let search_data = self.search_at_ply(board, current_ply);
+
+                self.all_searchs.push(search_data.clone());
+
+                if self.stop {
+                    break;
+
+                }
+                _ = self.dataout.send(self.search_data.clone());
+            
+                if search_data.best_move.score == f64::INFINITY || search_data.best_move.score == f64::NEG_INFINITY {
+                    break;
+                }
+
+                self.root_node_moves = sort_moves_highest_score_first(search_data.root_node_evals);
+
+                current_ply += 2;
+                if current_ply > max_ply {
+                    break 'depth;
+        
+                }
+        
+            }
+
+        }
+    
+    }
+
+    fn search_at_ply(&mut self, board: &mut BoardState, depth: usize) -> SearchData {
+        self.search_data = SearchData::new();
+        self.search_data.depth = depth;
+        self.search_data.start_time = std::time::Instant::now();
+
+        self.negamax(board, -f64::INFINITY, f64::INFINITY, 1.0, depth as i8, true);
+
+        self.update_stats(self.root_node_moves.clone());
 
         return self.search_data.clone();
 
@@ -95,6 +189,17 @@ impl Negamax {
 
     fn negamax(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, root_node: bool) -> f64 {
         self.search_data.nodes += 1;
+
+        if !root_node {
+            if self.stop {
+                return 0.0;
+
+            } else {
+                self.check_stop();
+
+            }
+
+        }
 
         let board_hash = get_hash(board);
 
@@ -116,6 +221,7 @@ impl Negamax {
                 self.eval_table.insert(board_hash, score);
 
                 return score;
+
             }
 
         }
@@ -203,6 +309,12 @@ impl Negamax {
                 break;
 
             }
+            
+            if root_node {
+                self.update_stats(moves_with_scores.clone());
+                _ = self.dataout.send(self.search_data.clone());
+
+            }
 
         }
 
@@ -237,6 +349,7 @@ pub struct SearchData {
     pub best_move: Move,
     pub root_node_evals: Vec<Move>,
 
+    pub start_time: Instant,
     pub search_time: f64,
 
     pub nodes: usize,
@@ -257,11 +370,12 @@ pub struct SearchData {
 }
 
 impl SearchData {
-    fn new() -> SearchData {
+    pub fn new() -> SearchData {
         return SearchData {
             best_move: Move::new_worst(),
             root_node_evals: vec![],
 
+            start_time: std::time::Instant::now(),
             search_time: 0.0,
 
             nodes: 0,

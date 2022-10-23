@@ -289,6 +289,17 @@ impl Move {
 
     }
 
+    pub fn is_worst(&self) -> bool {
+        if self.data == [NULL; 6] && self.flag == MoveType::None  && self.score == f64::NEG_INFINITY {
+            return true;
+
+        } else {
+            return false;
+
+        }
+
+    }
+
 }
 
 pub fn sort_moves_highest_score_first(mut moves: Vec<Move>) -> Vec<Move> {
@@ -346,7 +357,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec
     }
 
     return ordered_moves;
-
+ 
 }
 
 pub fn valid_moves(board: &mut BoardState, player: f64) -> Vec<Move> {

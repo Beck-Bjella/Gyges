@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 rand = "0.8.5"
 mimalloc = { version = "*", default-features = false}
+# nannou = "0.18.1"
+macroquad = "0.3"
 
 [profile.release]
 lto = true

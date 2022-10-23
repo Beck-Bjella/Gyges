@@ -1,6 +1,6 @@
 use crate::move_generation::*;
 
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct BoardState {
     pub data: [usize; 38],
 
