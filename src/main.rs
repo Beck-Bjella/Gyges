@@ -57,6 +57,23 @@ pub fn draw_one_piece(x: f32, y: f32, radius: f32) {
 
 }
 
+pub fn draw_statisitics(data: Vec<(&str, String)>) {
+    let vertical_spacing = 60;
+    let horizontal_position = 725.0;
+    let vertical_position = 50.0;
+    let font_size = 25.0;
+
+    let mut count = 0;
+    for stat in data {
+        draw_text(&stat.0, horizontal_position, vertical_position + ((count * vertical_spacing) as f32), font_size, BLACK);
+        draw_text(&stat.1, horizontal_position, vertical_position + 20.0 + ((count * vertical_spacing) as f32), font_size, BLACK);
+
+        count += 1;
+
+    }
+
+}
+
 #[derive(PartialEq, Clone)]
 pub enum PieceType {
     One,
@@ -377,25 +394,6 @@ impl DrawableBoard {
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::{thread};
 
-
-
-pub fn draw_statisitics(data: Vec<(&str, String)>) {
-    let vertical_spacing = 60;
-    let horizontal_position = 725.0;
-    let vertical_position = 50.0;
-    let font_size = 25.0;
-
-    let mut count = 0;
-    for stat in data {
-        draw_text(&stat.0, horizontal_position, vertical_position + ((count * vertical_spacing) as f32), font_size, BLACK);
-        draw_text(&stat.1, horizontal_position, vertical_position + 20.0 + ((count * vertical_spacing) as f32), font_size, BLACK);
-
-        count += 1;
-
-    }
-
-}
-
 #[macroquad::main(window_conf)]
 async fn main() {
     let mut drawable_board = DrawableBoard::new(0.0, 0.0);
@@ -418,57 +416,56 @@ async fn main() {
         drawable_board.update();
         drawable_board.draw();
 
-        // if !current_best_search.best_move.is_worst() {
-            drawable_board.draw_move(current_best_search.best_move);
+        drawable_board.draw_move(current_best_search.best_move);
 
-            let depth_text = current_best_search.depth.to_string();
-            let time_searched_text = current_best_search.search_time.to_string();
-            let average_branching_factor_text = current_best_search.average_branching_factor.to_string();
-            let nodes_text = current_best_search.nodes.to_string();
-            let leafs_text = current_best_search.leafs.to_string();
-            let nps_text = current_best_search.nps.to_string();
-            let lps_text = current_best_search.lps.to_string();
-            let tt_hits_text = current_best_search.tt_hits.to_string();
-            let tt_exacts_text = current_best_search.tt_exacts.to_string();
-            let tt_cuts_text = current_best_search.tt_cuts.to_string();
-            let alphabeta_cuts_text = current_best_search.beta_cuts.to_string();
-            
-            let data = vec![
-                ("Current Depth", depth_text),
-                ("Time Searched", time_searched_text),
-                ("Average Branching Factor", average_branching_factor_text),
-                ("Nodes Searched", nodes_text),
-                ("NPS", nps_text),
-                ("Leafs Searched", leafs_text),
-                ("LPS", lps_text),
-                ("TT Hits", tt_hits_text),
-                ("TT Exacts", tt_exacts_text),
-                ("TT Cuts", tt_cuts_text),
-                ("Alphabeta Cuts", alphabeta_cuts_text),
-            
-            ];
+        let depth_text = current_best_search.depth.to_string();
+        let time_searched_text = current_best_search.search_time.to_string();
+        let average_branching_factor_text = current_best_search.average_branching_factor.to_string();
+        let nodes_text = current_best_search.nodes.to_string();
+        let leafs_text = current_best_search.leafs.to_string();
+        let nps_text = current_best_search.nps.to_string();
+        let lps_text = current_best_search.lps.to_string();
+        let tt_hits_text = current_best_search.tt_hits.to_string();
+        let tt_exacts_text = current_best_search.tt_exacts.to_string();
+        let tt_cuts_text = current_best_search.tt_cuts.to_string();
+        let alphabeta_cuts_text = current_best_search.beta_cuts.to_string();
+        let gameover_text = current_best_search.game_over.to_string();
+        let gameover_depth_text = current_best_search.game_over_depth.to_string();
+        
+        let data = vec![
+            ("Current Depth", depth_text),
+            ("Time Searched", time_searched_text),
+            ("Average Branching Factor", average_branching_factor_text),
+            ("Nodes Searched", nodes_text),
+            ("NPS", nps_text),
+            ("Leafs Searched", leafs_text),
+            ("LPS", lps_text),
+            ("TT Hits", tt_hits_text),
+            ("TT Exacts", tt_exacts_text),
+            ("TT Cuts", tt_cuts_text),
+            ("Alphabeta Cuts", alphabeta_cuts_text),
+            ("GAMEOVER", gameover_text),
+            ("Game Over Depth", gameover_depth_text),
+        
+        ];
 
-            draw_statisitics(data);
-
-        // }
+        draw_statisitics(data);
 
         let current_board = drawable_board.boardstate;
         if current_board != previous_board_state {            
             current_best_search = SearchData::new();
+    
             _ = stop_sender.send(true);
             _ = board_sender.send(current_board);
             
-
         }
         previous_board_state = current_board;
         
-        println!("=========================");
         loop {
             let results = results_reciver.try_recv();
             match results {
                 Ok(_) => {
                     let unwraped = results.unwrap();
-                    println!("{:?}: {}", unwraped.best_move, unwraped.depth);
                     current_best_search = unwraped;
                     
                 },

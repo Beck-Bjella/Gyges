@@ -9,14 +9,12 @@ use crate::evaluation::*;
 use crate::transposition_tables::*;
 use crate::zobrist::*;
 
-
 const MAX_SEARCH_PLY: usize = 99;
 
 pub struct Engine {
     pub root_node_moves: Vec<Move>,
     pub stop: bool,
 
-    pub all_searchs: Vec<SearchData>,
     pub search_data: SearchData,
 
     pub transposition_table: TranspositionTable,
@@ -34,7 +32,6 @@ impl Engine {
             root_node_moves: vec![],
             stop: false,
 
-            all_searchs: vec![],
             search_data: SearchData::new(),
 
             transposition_table: TranspositionTable::new(),
@@ -53,11 +50,8 @@ impl Engine {
             let recived = self.datain.try_recv();
             match recived {
                 Ok(_) => {
-                    println!("STARTING NEW SEARCH");
                     let mut recived_board = recived.unwrap();
-                    recived_board.print();
                     self.iterative_deepening_search(&mut recived_board, MAX_SEARCH_PLY);
-                    println!("FINISHED");
 
                 },
                 Err(TryRecvError::Disconnected) => {
@@ -110,18 +104,17 @@ impl Engine {
         self.root_node_moves = vec![];
         self.transposition_table = TranspositionTable::new();
         self.eval_table = EvaluationTable::new();
-        self.all_searchs = vec![];
         self.search_data = SearchData::new();
 
     }
 
-    pub fn update_stats(&mut self, mut root_node_evals: Vec<Move>) {
+    pub fn update_search_stats(&mut self) {
         self.search_data.search_time = self.search_data.start_time.elapsed().as_secs_f64();
         self.search_data.nps = (self.search_data.nodes as f64 / self.search_data.search_time) as usize;
         self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
         self.search_data.average_branching_factor = (self.search_data.nodes as f64).powf(1.0 / self.search_data.depth as f64);
-
-        root_node_evals.sort_unstable_by(|a, b| {
+            
+        self.search_data.root_node_evals.sort_unstable_by(|a, b| {
             if a.score > b.score {
                 Ordering::Less
                 
@@ -135,31 +128,40 @@ impl Engine {
     
         });
         
-        self.search_data.best_move = root_node_evals[0];
+        self.search_data.best_move = self.search_data.root_node_evals[0];
+
+    }
+
+    pub fn output_search_data(&mut self) {
+        self.dataout.send(self.search_data.clone()).unwrap();
 
     }
 
     pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) {
+        self.reset();
+
         if board.data[PLAYER_2_GOAL] == 0 && board.data[PLAYER_1_GOAL] == 0 {
-            self.reset();
             self.root_node_moves = order_moves(valid_moves(board, 1.0), board, 1.0);
             
             let mut current_ply = 1;
             'depth: loop {
                 let search_data = self.search_at_ply(board, current_ply);
 
-                self.all_searchs.push(search_data.clone());
-
                 if self.stop {
                     break;
 
                 }
-                _ = self.dataout.send(self.search_data.clone());
-            
-                if search_data.best_move.score == f64::INFINITY || search_data.best_move.score == f64::NEG_INFINITY {
-                    break;
-                }
 
+                if search_data.best_move.score == f64::INFINITY || search_data.best_move.score == f64::NEG_INFINITY {
+                    self.search_data.game_over = true;
+                    self.search_data.game_over_depth = current_ply;
+
+                    self.output_search_data();
+                    break;
+                    
+                }
+                self.output_search_data();
+            
                 self.root_node_moves = sort_moves_highest_score_first(search_data.root_node_evals);
 
                 current_ply += 2;
@@ -169,6 +171,12 @@ impl Engine {
                 }
         
             }
+
+        } else {
+            self.search_data.game_over = true;
+            self.search_data.game_over_depth = 0;
+
+            self.output_search_data();
 
         }
     
@@ -180,8 +188,8 @@ impl Engine {
         self.search_data.start_time = std::time::Instant::now();
 
         self.negamax(board, -f64::INFINITY, f64::INFINITY, 1.0, depth as i8, true);
-
-        self.update_stats(self.root_node_moves.clone());
+        
+        self.update_search_stats();
 
         return self.search_data.clone();
 
@@ -275,9 +283,9 @@ impl Engine {
 
         }
 
-        let mut best_score = -f64::INFINITY;
+        let mut best_score = f64::NEG_INFINITY;
         let mut used_moves = vec![];
-        let mut moves_with_scores = vec![];
+        let mut root_node_evals = vec![];
         for mv in current_player_moves.iter() {
             if used_moves.contains(mv) {
                 continue;
@@ -290,10 +298,13 @@ impl Engine {
 
             board.undo_move(&mv);
 
-            let mut scored_move = mv.clone();
-            scored_move.score = score;
-            moves_with_scores.push(scored_move);
+            if root_node {
+                let mut scored_move = mv.clone();
+                scored_move.score = score;
+                root_node_evals.push(scored_move);
 
+            }
+            
             if score > best_score {
                 best_score = score;
 
@@ -307,12 +318,6 @@ impl Engine {
             if alpha >= beta {
                 self.search_data.beta_cuts += 1;
                 break;
-
-            }
-            
-            if root_node {
-                self.update_stats(moves_with_scores.clone());
-                _ = self.dataout.send(self.search_data.clone());
 
             }
 
@@ -334,7 +339,7 @@ impl Engine {
         self.transposition_table.insert(board_hash, entry);
 
         if root_node {
-            self.search_data.root_node_evals = moves_with_scores;
+            self.search_data.root_node_evals = root_node_evals;
 
         }
 
@@ -367,6 +372,9 @@ pub struct SearchData {
 
     pub depth: usize,
 
+    pub game_over: bool,
+    pub game_over_depth: usize,
+
 }
 
 impl SearchData {
@@ -392,6 +400,9 @@ impl SearchData {
             beta_cuts: 0,
 
             depth: 0,
+
+            game_over: false,
+            game_over_depth: 0,
 
         }
 
