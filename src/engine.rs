@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::time::Instant;
-use std::vec;
 
 use crate::board::*;
 use crate::move_generation::*;
@@ -9,7 +8,7 @@ use crate::evaluation::*;
 use crate::transposition_tables::*;
 use crate::zobrist::*;
 
-const MAX_SEARCH_PLY: usize = 99;
+pub const MAX_SEARCH_PLY: usize = 99;
 
 pub struct Engine {
     pub root_node_moves: Vec<Move>,
@@ -20,14 +19,14 @@ pub struct Engine {
     pub transposition_table: TranspositionTable,
     pub eval_table: EvaluationTable,
 
-    pub datain: Receiver<BoardState>,
+    pub datain: Receiver<SearchInput>,
     pub stopin: Receiver<bool>,
     pub dataout: Sender<SearchData>,
     
 }
 
 impl Engine {
-    pub fn new(datain: Receiver<BoardState>, stopin: Receiver<bool>, dataout: Sender<SearchData>) -> Engine {
+    pub fn new(datain: Receiver<SearchInput>, stopin: Receiver<bool>, dataout: Sender<SearchData>) -> Engine {
         return Engine {
             root_node_moves: vec![],
             stop: false,
@@ -50,8 +49,11 @@ impl Engine {
             let recived = self.datain.try_recv();
             match recived {
                 Ok(_) => {
-                    let mut recived_board = recived.unwrap();
-                    self.iterative_deepening_search(&mut recived_board, MAX_SEARCH_PLY);
+                    let search_input = recived.unwrap();
+                    let mut board = search_input.board.clone();
+                    let max_ply = search_input.max_ply;
+
+                    self.iterative_deepening_search(&mut board, max_ply);
 
                 },
                 Err(TryRecvError::Disconnected) => {
@@ -148,18 +150,26 @@ impl Engine {
                 let search_data = self.search_at_ply(board, current_ply);
 
                 if self.stop {
-                    break;
+                    break 'depth;
 
                 }
 
-                if search_data.best_move.score == f64::INFINITY || search_data.best_move.score == f64::NEG_INFINITY {
+                if search_data.best_move.score == f64::INFINITY {
                     self.search_data.game_over = true;
-                    self.search_data.game_over_depth = current_ply;
+                    self.search_data.winner = 1;
 
                     self.output_search_data();
-                    break;
-                    
+                    break 'depth;
+
+                } else if search_data.best_move.score == f64::NEG_INFINITY {
+                    self.search_data.game_over = true;
+                    self.search_data.winner = 2;
+
+                    self.output_search_data();
+                    break 'depth;
+
                 }
+
                 self.output_search_data();
             
                 self.root_node_moves = sort_moves_highest_score_first(search_data.root_node_evals);
@@ -174,7 +184,14 @@ impl Engine {
 
         } else {
             self.search_data.game_over = true;
-            self.search_data.game_over_depth = 0;
+
+            if board.data[PLAYER_2_GOAL] != 0 {
+                self.search_data.winner = 1;
+
+            } else if board.data[PLAYER_1_GOAL] != 0 {
+                self.search_data.winner = 2;
+
+            }
 
             self.output_search_data();
 
@@ -187,7 +204,7 @@ impl Engine {
         self.search_data.depth = depth;
         self.search_data.start_time = std::time::Instant::now();
 
-        self.negamax(board, -f64::INFINITY, f64::INFINITY, 1.0, depth as i8, true);
+        self.negamax(board, f64::NEG_INFINITY, f64::INFINITY, 1.0, depth as i8, true);
         
         self.update_search_stats();
 
@@ -349,6 +366,25 @@ impl Engine {
 
 }
 
+#[derive(Clone)]
+pub struct SearchInput {
+    pub board: BoardState,
+    pub max_ply: usize,
+
+}
+
+impl SearchInput {
+    pub fn new(board: BoardState, max_ply: usize) -> SearchInput {
+        return SearchInput {
+            board: board,
+            max_ply: max_ply,
+
+        }
+
+    }
+    
+}
+
 #[derive(Debug, Clone)]
 pub struct SearchData {
     pub best_move: Move,
@@ -373,14 +409,14 @@ pub struct SearchData {
     pub depth: usize,
 
     pub game_over: bool,
-    pub game_over_depth: usize,
+    pub winner: usize,
 
 }
 
 impl SearchData {
     pub fn new() -> SearchData {
         return SearchData {
-            best_move: Move::new_worst(),
+            best_move: Move::new_null(),
             root_node_evals: vec![],
 
             start_time: std::time::Instant::now(),
@@ -402,7 +438,7 @@ impl SearchData {
             depth: 0,
 
             game_over: false,
-            game_over_depth: 0,
+            winner: 0,
 
         }
 

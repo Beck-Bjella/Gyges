@@ -21,6 +21,8 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 // ====================== GUI ======================
 
 use macroquad::prelude::*;
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::thread;
 
 fn window_conf() -> Conf {
     Conf {
@@ -391,14 +393,11 @@ impl DrawableBoard {
 
 }
 
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
-use std::{thread};
-
 #[macroquad::main(window_conf)]
 async fn main() {
     let mut drawable_board = DrawableBoard::new(0.0, 0.0);
 
-    let (board_sender, board_reciver): (Sender<BoardState>, Receiver<BoardState>) = mpsc::channel();
+    let (board_sender, board_reciver): (Sender<SearchInput>, Receiver<SearchInput>) = mpsc::channel();
     let (stop_sender, stop_reciver): (Sender<bool>, Receiver<bool>) = mpsc::channel();
     let (results_sender, results_reciver): (Sender<SearchData>, Receiver<SearchData>) = mpsc::channel();
 
@@ -419,6 +418,8 @@ async fn main() {
         drawable_board.draw_move(current_best_search.best_move);
 
         let depth_text = current_best_search.depth.to_string();
+        let gameover_text = current_best_search.game_over.to_string();
+        let winner_text = current_best_search.winner.to_string();
         let time_searched_text = current_best_search.search_time.to_string();
         let average_branching_factor_text = current_best_search.average_branching_factor.to_string();
         let nodes_text = current_best_search.nodes.to_string();
@@ -429,11 +430,12 @@ async fn main() {
         let tt_exacts_text = current_best_search.tt_exacts.to_string();
         let tt_cuts_text = current_best_search.tt_cuts.to_string();
         let alphabeta_cuts_text = current_best_search.beta_cuts.to_string();
-        let gameover_text = current_best_search.game_over.to_string();
-        let gameover_depth_text = current_best_search.game_over_depth.to_string();
-        
+
         let data = vec![
-            ("Current Depth", depth_text),
+            ("Depth", depth_text),
+            ("GAMEOVER", gameover_text),
+            ("WINNER", winner_text),
+            ("_____________________", String::from("")),
             ("Time Searched", time_searched_text),
             ("Average Branching Factor", average_branching_factor_text),
             ("Nodes Searched", nodes_text),
@@ -444,38 +446,30 @@ async fn main() {
             ("TT Exacts", tt_exacts_text),
             ("TT Cuts", tt_cuts_text),
             ("Alphabeta Cuts", alphabeta_cuts_text),
-            ("GAMEOVER", gameover_text),
-            ("Game Over Depth", gameover_depth_text),
-        
+            
         ];
 
         draw_statisitics(data);
 
-        let current_board = drawable_board.boardstate;
+        let current_board = drawable_board.boardstate.clone();
         if current_board != previous_board_state {            
             current_best_search = SearchData::new();
     
             _ = stop_sender.send(true);
-            _ = board_sender.send(current_board);
+            _ = board_sender.send(SearchInput::new(current_board, MAX_SEARCH_PLY));
             
         }
         previous_board_state = current_board;
         
-        loop {
-            let results = results_reciver.try_recv();
-            match results {
-                Ok(_) => {
-                    let unwraped = results.unwrap();
-                    current_best_search = unwraped;
-                    
-                },
-                Err(TryRecvError::Disconnected) => {},
-                Err(TryRecvError::Empty) => {
-                    break;
-
-                }
-    
-            }
+        let results = results_reciver.try_recv();
+        match results {
+            Ok(_) => {
+                let unwraped = results.unwrap();
+                current_best_search = unwraped;
+                
+            },
+            Err(TryRecvError::Disconnected) => {},
+            Err(TryRecvError::Empty) => {}
 
         }
         

@@ -2,7 +2,6 @@ use std::cmp::Ordering;
 
 use crate::board::*;
 use crate::bitboard::*;
-use crate::evaluation::get_evalulation;
 
 pub const ONE_PIECE: usize = 1;
 pub const TWO_PIECE: usize = 2;
@@ -251,6 +250,33 @@ pub const ONE_PATH_BACKTRACK_CHECKS: [[BitBoard; 5]; 36]  = [
     [BitBoard(0b100000000000000000000000000000000000000000000000000000000000), BitBoard(0b000000000000000000000000000000000000000000000000000000000000), BitBoard(0b000001000000000000000000000000000000000000000000000000000000), NULL_BB, NULL_BB],
 ];
 
+// const FLIPPED_POSITIONS: [usize; 38] = [35, 34, 33, 32, 31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 37, 36];
+
+
+// pub fn flip_move(mv: Move) -> Move {
+//     let mut flipped = mv.clone();
+
+//     let mv_data = mv.data;
+
+//     let mut idx = 1;
+//     loop {
+//         if mv_data[idx] == NULL {
+//             break;
+
+//         }
+
+//         flipped.data[idx] = FLIPPED_POSITIONS[mv_data[idx]];
+
+//         idx += 2;
+//         if idx > 5 {
+//             break;
+//         }
+
+//     }
+    
+//     return flipped;
+
+// }
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum MoveType {
@@ -279,7 +305,7 @@ impl Move {
 
     }
 
-    pub fn new_worst() -> Move {
+    pub fn new_null() -> Move {
         return Move {
             data: [NULL; 6],
             flag: MoveType::None,
@@ -289,7 +315,7 @@ impl Move {
 
     }
 
-    pub fn is_worst(&self) -> bool {
+    pub fn is_null(&self) -> bool {
         if self.data == [NULL; 6] && self.flag == MoveType::None  && self.score == f64::NEG_INFINITY {
             return true;
 
