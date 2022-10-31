@@ -228,7 +228,7 @@ pub fn get_evalulation(board: &mut BoardState) -> f64 {
         return f64::NEG_INFINITY;
 
     }
-
+    
     let mut move_score: f64 = 0.0;
 
     let player_1_move_count = valid_move_count(board, 1.0) as f64;

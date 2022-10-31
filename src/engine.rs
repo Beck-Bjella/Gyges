@@ -226,28 +226,23 @@ impl Engine {
 
         }
 
-        let board_hash = get_hash(board);
+        let board_hash = get_hash(board, player);
 
         if depth == 0 {
             self.search_data.leafs += 1;
             
-            if valid_threat_count(board, player) > 0  {
-                return f64::INFINITY;
-        
-            }
+            // let look_up = self.eval_table.get(&board_hash);
+            // if look_up.is_some() {
+            //     return *look_up.unwrap();
 
-            let look_up = self.eval_table.get(&board_hash);
-            if look_up.is_some() {
-                return *look_up.unwrap();
-
-            } else {
+            // } else {
                 let score = get_evalulation(board) * player;
                 
-                self.eval_table.insert(board_hash, score);
+                // self.eval_table.insert(board_hash, score);
 
                 return score;
 
-            }
+            // }
 
         }
 

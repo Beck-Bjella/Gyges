@@ -202,7 +202,7 @@ impl DrawableBoard {
 
     }
 
-    pub fn draw(&self) {
+    pub fn draw_boardstate(&self) {
         draw_circle(self.pos.0, self.pos.1, 5.0, RED);
         draw_rectangle_lines(self.pos.0, self.pos.1, 700.0, 900.0, 5.0, RED);
 
@@ -290,11 +290,37 @@ impl DrawableBoard {
                         self.held_piece_idx = usize::MAX;
                         self.is_still = true;
 
+                        for i in 0..38 {
+                            self.boardstate.data[i] = 0;
+        
+                        }
+                        for (snap_pos_idx, snap_pos) in self.piece_snap_positions.iter().enumerate() {
+                            for piece_idx in 0..12 {
+                                let piece = self.pieces[piece_idx].clone();
+        
+                                if &piece.pos == snap_pos {
+                                    if piece.piece_type == PieceType::One {
+                                        self.boardstate.data[snap_pos_idx] = 1
+        
+                                    } else if piece.piece_type == PieceType::Two {
+                                        self.boardstate.data[snap_pos_idx] = 2
+        
+                                    } else if piece.piece_type == PieceType::Three {
+                                         self.boardstate.data[snap_pos_idx] = 3
+        
+                                    }
+        
+                                }
+        
+                            }
+        
+                        }
+
                     } else {
                         self.held_piece_idx = new_held_piece;
                         
                     }
-                   
+
                 } else if piece.being_dropped {
                     let mut closest_pos = (0.0, 0.0);
                     let mut closest_distance = f32::INFINITY;
@@ -327,6 +353,32 @@ impl DrawableBoard {
 
                     self.is_still = true;
 
+                    for i in 0..38 {
+                        self.boardstate.data[i] = 0;
+    
+                    }    
+                    for (snap_pos_idx, snap_pos) in self.piece_snap_positions.iter().enumerate() {
+                        for piece_idx in 0..12 {
+                            let piece = self.pieces[piece_idx].clone();
+    
+                            if &piece.pos == snap_pos {
+                                if piece.piece_type == PieceType::One {
+                                    self.boardstate.data[snap_pos_idx] = 1
+    
+                                } else if piece.piece_type == PieceType::Two {
+                                    self.boardstate.data[snap_pos_idx] = 2
+    
+                                } else if piece.piece_type == PieceType::Three {
+                                     self.boardstate.data[snap_pos_idx] = 3
+    
+                                }
+    
+                            }
+    
+                        }
+    
+                    }
+
                 }
 
             } else {
@@ -337,13 +389,10 @@ impl DrawableBoard {
             }
  
         } else {
-            let mut piece_selected = false;
             for piece_idx in 0..12 {
                 let mut piece = self.pieces[piece_idx].clone();
     
                 if piece.is_touching_point(mouse_pos.0, mouse_pos.1) && is_mouse_button_pressed(MouseButton::Left) && !piece.being_dropped && !piece.being_dragged {
-                    piece_selected = true;
-
                     piece.being_dragged = true;
                     self.held_piece_idx = piece_idx;
 
@@ -355,36 +404,6 @@ impl DrawableBoard {
 
                 }
     
-            }
-            
-            if !piece_selected {
-                for i in 0..38 {
-                    self.boardstate.data[i] = 0;
-
-                }
-
-                for (snap_pos_idx, snap_pos) in self.piece_snap_positions.iter().enumerate() {
-                    for piece_idx in 0..12 {
-                        let piece = self.pieces[piece_idx].clone();
-
-                        if &piece.pos == snap_pos {
-                            if piece.piece_type == PieceType::One {
-                                self.boardstate.data[snap_pos_idx] = 1
-
-                            } else if piece.piece_type == PieceType::Two {
-                                self.boardstate.data[snap_pos_idx] = 2
-
-                            } else if piece.piece_type == PieceType::Three {
-                                 self.boardstate.data[snap_pos_idx] = 3
-
-                            }
-
-                        }
-
-                    }
-
-                }
-
             }
 
         }
@@ -400,7 +419,6 @@ async fn main() {
     let (board_sender, board_reciver): (Sender<SearchInput>, Receiver<SearchInput>) = mpsc::channel();
     let (stop_sender, stop_reciver): (Sender<bool>, Receiver<bool>) = mpsc::channel();
     let (results_sender, results_reciver): (Sender<SearchData>, Receiver<SearchData>) = mpsc::channel();
-
     thread::spawn(move || {
         let mut engine = Engine::new(board_reciver, stop_reciver, results_sender);
         engine.start();
@@ -411,9 +429,9 @@ async fn main() {
     let mut previous_board_state: BoardState = BoardState::new();
     loop {
         clear_background(BEIGE);
-
+        
         drawable_board.update();
-        drawable_board.draw();
+        drawable_board.draw_boardstate();
 
         drawable_board.draw_move(current_best_search.best_move);
 
@@ -461,16 +479,21 @@ async fn main() {
         }
         previous_board_state = current_board;
         
-        let results = results_reciver.try_recv();
-        match results {
-            Ok(_) => {
-                let unwraped = results.unwrap();
-                current_best_search = unwraped;
-                
-            },
-            Err(TryRecvError::Disconnected) => {},
-            Err(TryRecvError::Empty) => {}
+        loop {
+            let results = results_reciver.try_recv();
+            match results {
+                Ok(_) => {
+                    let unwraped = results.unwrap();
+                    current_best_search = unwraped;
+                    
+                },
+                Err(TryRecvError::Disconnected) => {},
+                Err(TryRecvError::Empty) => {
+                    break;
+                }
 
+            }
+        
         }
         
         next_frame().await

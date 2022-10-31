@@ -44,8 +44,15 @@ pub const ZOBRIST_HASH_DATA: [[u64; 3]; 38] = [
     [7054350867458227860, 11345351116617134848, 9031423155747243325]
 ];
 
-pub fn get_hash(board: &mut BoardState) -> u64 {
+pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
     let mut hash = 0;
+
+    if current_player == 1.0 {
+        hash ^= PLAYER_1_HASH;
+    } else {
+        hash ^= PLAYER_2_HASH;
+
+    }
 
     for i in 0..36 {
         if board.data[i] != 0 {
