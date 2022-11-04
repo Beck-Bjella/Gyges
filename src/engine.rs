@@ -12,7 +12,7 @@ pub const MAX_SEARCH_PLY: usize = 99;
 
 pub struct Engine {
     pub root_node_moves: Vec<Move>,
-    pub stop: bool,
+    pub stop_search: bool,
 
     pub search_data: SearchData,
 
@@ -29,7 +29,7 @@ impl Engine {
     pub fn new(datain: Receiver<SearchInput>, stopin: Receiver<bool>, dataout: Sender<SearchData>) -> Engine {
         return Engine {
             root_node_moves: vec![],
-            stop: false,
+            stop_search: false,
 
             search_data: SearchData::new(),
 
@@ -73,11 +73,11 @@ impl Engine {
         let quit = self.stopin.try_recv();
         match quit {
             Ok(true) => {
-                self.stop = true;
+                self.stop_search = true;
 
             },
             Ok(false) => {
-                self.stop = false;
+                self.stop_search = false;
 
             },
             Err(TryRecvError::Disconnected) => {},
@@ -102,7 +102,7 @@ impl Engine {
 
         }
         
-        self.stop = false;
+        self.stop_search = false;
         self.root_node_moves = vec![];
         self.transposition_table = TranspositionTable::new();
         self.eval_table = EvaluationTable::new();
@@ -149,7 +149,7 @@ impl Engine {
             'depth: loop {
                 let search_data = self.search_at_ply(board, current_ply);
 
-                if self.stop {
+                if self.stop_search {
                     break 'depth;
 
                 }
@@ -216,7 +216,7 @@ impl Engine {
         self.search_data.nodes += 1;
 
         if !root_node {
-            if self.stop {
+            if self.stop_search {
                 return 0.0;
 
             } else {
@@ -231,18 +231,9 @@ impl Engine {
         if depth == 0 {
             self.search_data.leafs += 1;
             
-            // let look_up = self.eval_table.get(&board_hash);
-            // if look_up.is_some() {
-            //     return *look_up.unwrap();
-
-            // } else {
                 let score = get_evalulation(board) * player;
                 
-                // self.eval_table.insert(board_hash, score);
-
                 return score;
-
-            // }
 
         }
 
