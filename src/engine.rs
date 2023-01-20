@@ -130,7 +130,10 @@ impl Engine {
     
         });
         
-        self.search_data.best_move = self.search_data.root_node_evals[0];
+        if self.search_data.root_node_evals.len() > 0 {
+            self.search_data.best_move = self.search_data.root_node_evals[0];
+    
+        }
 
     }
 
@@ -226,51 +229,51 @@ impl Engine {
 
         }
 
-        let board_hash = get_hash(board, player);
+        // let board_hash = get_hash(board, player);
 
         if depth == 0 {
             self.search_data.leafs += 1;
             
-                let score = get_evalulation(board) * player;
-                
-                return score;
+            let score = get_evalulation(board) * player;
+            
+            return score;
 
         }
 
-        let original_alpha = alpha;
+        // let original_alpha = alpha;
 
-        let look_up = self.transposition_table.get(&board_hash);
-        if look_up.is_some() {
-            let entry = look_up.unwrap();
-            if entry.depth >= depth {
-                self.search_data.tt_hits += 1;
-                if entry.flag == TTEntryType::ExactValue {
-                    self.search_data.tt_exacts += 1;
-                    return entry.value;
+        // let look_up = self.transposition_table.get(&board_hash);
+        // if look_up.is_some() {
+        //     let entry = look_up.unwrap();
+        //     if entry.depth >= depth {
+        //         self.search_data.tt_hits += 1;
+        //         if entry.flag == TTEntryType::ExactValue {
+        //             self.search_data.tt_exacts += 1;
+        //             return entry.value;
 
-                } else if entry.flag == TTEntryType::LowerBound {
-                    if entry.value > alpha {
-                        alpha = entry.value;
+        //         } else if entry.flag == TTEntryType::LowerBound {
+        //             if entry.value > alpha {
+        //                 alpha = entry.value;
 
-                    }
+        //             }
 
-                } else if entry.flag == TTEntryType::UpperBound {
-                    if entry.value < beta {
-                        beta = entry.value;
+        //         } else if entry.flag == TTEntryType::UpperBound {
+        //             if entry.value < beta {
+        //                 beta = entry.value;
 
-                    }
+        //             }
 
-                }
-                    
-                if alpha >= beta {
-                    self.search_data.tt_cuts += 1;
-                    return entry.value;
+        //         }
 
-                }
+        //         if alpha >= beta {
+        //             self.search_data.tt_cuts += 1;
+        //             return entry.value;
 
-            }
+        //         }
 
-        }
+        //     }
+
+        // }
 
         let current_player_moves: Vec<Move>;
         if root_node {
@@ -326,20 +329,20 @@ impl Engine {
 
         }
 
-        let mut entry = TTEntry {value: best_score, flag: TTEntryType::None, depth: depth};
+        // let mut entry = TTEntry {value: best_score, flag: TTEntryType::None, depth: depth};
 
-        if best_score <= original_alpha {
-            entry.flag = TTEntryType::UpperBound;
+        // if best_score <= original_alpha {
+        //     entry.flag = TTEntryType::UpperBound;
 
-        } else if best_score >= beta {
-            entry.flag = TTEntryType::LowerBound;
+        // } else if best_score >= beta {
+        //     entry.flag = TTEntryType::LowerBound;
 
-        } else {
-            entry.flag = TTEntryType::ExactValue;
+        // } else {
+        //     entry.flag = TTEntryType::ExactValue;
 
-        }
+        // }
 
-        self.transposition_table.insert(board_hash, entry);
+        // self.transposition_table.insert(board_hash, entry);
 
         if root_node {
             self.search_data.root_node_evals = root_node_evals;

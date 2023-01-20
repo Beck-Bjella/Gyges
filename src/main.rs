@@ -20,6 +20,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 // ====================== GUI ======================
 
+use macroquad::miniquad::gl::GL_RGB;
 use macroquad::prelude::*;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
@@ -59,11 +60,43 @@ pub fn draw_one_piece(x: f32, y: f32, radius: f32) {
 
 }
 
-pub fn draw_statisitics(data: Vec<(&str, String)>) {
+pub fn draw_statisitics(search_data: &SearchData) {
     let vertical_spacing = 60;
     let horizontal_position = 725.0;
     let vertical_position = 50.0;
     let font_size = 25.0;
+
+    let depth_text = search_data.depth.to_string();
+    let gameover_text = search_data.game_over.to_string();
+    let winner_text = search_data.winner.to_string();
+    let time_searched_text = search_data.search_time.to_string();
+    let average_branching_factor_text = search_data.average_branching_factor.to_string();
+    let nodes_text = search_data.nodes.to_string();
+    let leafs_text = search_data.leafs.to_string();
+    let nps_text = search_data.nps.to_string();
+    let lps_text = search_data.lps.to_string();
+    let tt_hits_text = search_data.tt_hits.to_string();
+    let tt_exacts_text = search_data.tt_exacts.to_string();
+    let tt_cuts_text = search_data.tt_cuts.to_string();
+    let alphabeta_cuts_text = search_data.beta_cuts.to_string();
+
+    let data = vec![
+        ("Depth", depth_text),
+        ("GAMEOVER", gameover_text),
+        ("WINNER", winner_text),
+        ("_____________________", String::from("")),
+        ("Time Searched", time_searched_text),
+        ("Average Branching Factor", average_branching_factor_text),
+        ("Nodes Searched", nodes_text),
+        ("NPS", nps_text),
+        ("Leafs Searched", leafs_text),
+        ("LPS", lps_text),
+        ("TT Hits", tt_hits_text),
+        ("TT Exacts", tt_exacts_text),
+        ("TT Cuts", tt_cuts_text),
+        ("Alphabeta Cuts", alphabeta_cuts_text),
+        
+    ];
 
     let mut count = 0;
     for stat in data {
@@ -99,7 +132,7 @@ impl Piece {
         return Piece {
             pos: (x, y),
             radus: 30.0,
-            piece_type: piece_type,
+            piece_type,
             being_dragged: false,
             being_dropped: false
     
@@ -189,12 +222,12 @@ impl DrawableBoard {
         piece_snap_positions.push((x + 350.0, y + 75.0));
 
         return DrawableBoard {
-            boardstate: boardstate,
+            boardstate,
 
-            pieces: pieces,
-            piece_snap_positions: piece_snap_positions,
+            pieces,
+            piece_snap_positions,
             pos: (x, y),
-            board_pos: board_pos,
+            board_pos,
             held_piece_idx: usize::MAX,
             is_still: true
 
@@ -222,24 +255,24 @@ impl DrawableBoard {
 
     }
 
-    pub fn draw_move(&mut self, mv: Move) {
+    pub fn draw_move(&mut self, mv: &Move, color: Color) {
         if mv.flag == MoveType::Bounce {
-            self.draw_arrow(mv.data[1], mv.data[3]);
+            self.draw_arrow(mv.data[1], mv.data[3], color);
 
         } else if mv.flag == MoveType::Drop {
-            self.draw_arrow(mv.data[1], mv.data[3]);
-            self.draw_arrow(mv.data[3], mv.data[5]);
+            self.draw_arrow(mv.data[1], mv.data[3], color);
+            self.draw_arrow(mv.data[3], mv.data[5], color);
             
         }
 
     }
 
-    fn draw_arrow(&mut self, boardpos_1: usize, boardpos_2: usize) {
+    fn draw_arrow(&mut self, boardpos_1: usize, boardpos_2: usize, color: Color) {
         let xy_pos_1 = self.piece_snap_positions[boardpos_1];
         let xy_pos_2 = self.piece_snap_positions[boardpos_2];
 
-        draw_line(xy_pos_1.0, xy_pos_1.1, xy_pos_2.0, xy_pos_2.1, 2.5, BLACK);
-        draw_circle(xy_pos_2.0, xy_pos_2.1, 5.0, BLACK)
+        draw_line(xy_pos_1.0, xy_pos_1.1, xy_pos_2.0, xy_pos_2.1, 2.5, color);
+        draw_circle(xy_pos_2.0, xy_pos_2.1, 5.0, color)
 
     }
 
@@ -432,43 +465,11 @@ async fn main() {
         
         drawable_board.update();
         drawable_board.draw_boardstate();
+        draw_statisitics(&current_best_search);
 
-        drawable_board.draw_move(current_best_search.best_move);
-
-        let depth_text = current_best_search.depth.to_string();
-        let gameover_text = current_best_search.game_over.to_string();
-        let winner_text = current_best_search.winner.to_string();
-        let time_searched_text = current_best_search.search_time.to_string();
-        let average_branching_factor_text = current_best_search.average_branching_factor.to_string();
-        let nodes_text = current_best_search.nodes.to_string();
-        let leafs_text = current_best_search.leafs.to_string();
-        let nps_text = current_best_search.nps.to_string();
-        let lps_text = current_best_search.lps.to_string();
-        let tt_hits_text = current_best_search.tt_hits.to_string();
-        let tt_exacts_text = current_best_search.tt_exacts.to_string();
-        let tt_cuts_text = current_best_search.tt_cuts.to_string();
-        let alphabeta_cuts_text = current_best_search.beta_cuts.to_string();
-
-        let data = vec![
-            ("Depth", depth_text),
-            ("GAMEOVER", gameover_text),
-            ("WINNER", winner_text),
-            ("_____________________", String::from("")),
-            ("Time Searched", time_searched_text),
-            ("Average Branching Factor", average_branching_factor_text),
-            ("Nodes Searched", nodes_text),
-            ("NPS", nps_text),
-            ("Leafs Searched", leafs_text),
-            ("LPS", lps_text),
-            ("TT Hits", tt_hits_text),
-            ("TT Exacts", tt_exacts_text),
-            ("TT Cuts", tt_cuts_text),
-            ("Alphabeta Cuts", alphabeta_cuts_text),
-            
-        ];
-
-        draw_statisitics(data);
-
+        let color = Color::from_rgba(255, 255, 255, 255);
+        drawable_board.draw_move(&current_best_search.best_move, color);
+       
         let current_board = drawable_board.boardstate.clone();
         if current_board != previous_board_state {            
             current_best_search = SearchData::new();
@@ -479,21 +480,16 @@ async fn main() {
         }
         previous_board_state = current_board;
         
-        loop {
-            let results = results_reciver.try_recv();
-            match results {
-                Ok(_) => {
-                    let unwraped = results.unwrap();
-                    current_best_search = unwraped;
-                    
-                },
-                Err(TryRecvError::Disconnected) => {},
-                Err(TryRecvError::Empty) => {
-                    break;
-                }
+        let results = results_reciver.try_recv();
+        match results {
+            Ok(_) => {
+                let unwraped = results.unwrap();
+                current_best_search = unwraped;
+                
+            },
+            Err(TryRecvError::Disconnected) => {},
+            Err(TryRecvError::Empty) => {}
 
-            }
-        
         }
         
         next_frame().await
