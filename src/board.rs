@@ -1,4 +1,4 @@
-use crate::move_generation::*;
+use crate::move_gen::*;
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct BoardState {
