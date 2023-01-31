@@ -7,6 +7,11 @@ pub struct BitBoard(pub u64);
 impl_bit_ops!(BitBoard, u64);
 
 impl BitBoard {
+    pub fn new(set_bit: usize) -> BitBoard {
+        return BitBoard(0 << set_bit);
+
+    }
+
     pub fn print(&self) {
         println!("{:#b}", self.0);
 

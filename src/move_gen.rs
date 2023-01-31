@@ -308,7 +308,7 @@ pub fn valid_moves(board: &mut BoardState, player: f64) -> Vec<Move> {
 
     if player == 1.0 {
         let mut player_1_drops: Vec<usize> = board.get_drops(active_lines, 1);
-        let mut player_1_moves: Vec<Move> = vec![];
+        let mut player_1_moves: Vec<Move> = Vec::with_capacity(30000);
 
         for x in 0..6 {
             if board.data[active_lines[0] + x] != 0 {
@@ -333,7 +333,7 @@ pub fn valid_moves(board: &mut BoardState, player: f64) -> Vec<Move> {
 
     } else {
         let mut player_2_drops: Vec<usize> = board.get_drops(active_lines, 2);
-        let mut player_2_moves: Vec<Move> = vec![];
+        let mut player_2_moves: Vec<Move> = Vec::with_capacity(30000);
 
         for x in 0..6 {
             if board.data[active_lines[1] + x] != 0 {
@@ -354,13 +354,14 @@ pub fn valid_moves(board: &mut BoardState, player: f64) -> Vec<Move> {
 
         }
 
+
         return player_2_moves;
 
     }
 
 }
 
-pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut banned_positions: [bool; 36], current_piece: usize, current_piece_type: usize, starting_piece: usize, starting_piece_type: usize, player: i8, current_player_drops: &Vec<usize>, mut final_moves: &mut Vec<Move>) {
+pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut banned_positions: [bool; 36], current_piece: usize, current_piece_type: usize, starting_piece: usize, starting_piece_type: usize, player: i8, current_player_drops: &Vec<usize>, final_moves: &mut Vec<Move>) {
     if current_piece_type == ONE_PIECE {
         for (path_idx, path) in ONE_PATHS[current_piece].iter().enumerate() {
             if path[0] == NULL {
@@ -383,11 +384,11 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
             } 
 
             if end == PLAYER_1_GOAL {
-                // final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
             } else if end == PLAYER_2_GOAL {
-                // final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
             }
@@ -399,11 +400,11 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
                     backtrack_board ^= backtrack_path;
 
                     for drop_pos in current_player_drops.iter() {
-                        // final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
+                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
 
                     }
                     
-                    get_piece_moves(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops, &mut final_moves);
+                    get_piece_moves(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops, final_moves);
 
                     banned_positions[end] = false;
 
@@ -412,7 +413,7 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
                 }
                 
             } else {
-                // final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
+                final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
 
             }
 
@@ -445,11 +446,11 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
             } 
 
             if end == PLAYER_1_GOAL {
-                // final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
             } else if end == PLAYER_2_GOAL {
-                // final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
             }
@@ -461,11 +462,11 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
                     backtrack_board ^= backtrack_path;
                     
                     for drop_pos in current_player_drops.iter() {
-                        // final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
+                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
 
                     }
                     
-                    get_piece_moves(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops, &mut final_moves);
+                    get_piece_moves(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops, final_moves);
                     
                     banned_positions[end] = false;
 
@@ -474,7 +475,7 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
                 }
                 
             } else {
-                // final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
+                final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
 
             }
 
@@ -510,11 +511,11 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
             } 
 
             if end == PLAYER_1_GOAL {
-                // final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
             } else if end == PLAYER_2_GOAL {
-                // final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
             }
@@ -526,11 +527,11 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
                     backtrack_board ^= backtrack_path;
 
                     for drop_pos in current_player_drops.iter() {
-                        // final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
+                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
 
                     }
                     
-                    get_piece_moves(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops, &mut final_moves);
+                    get_piece_moves(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops, final_moves);
 
                     banned_positions[end] = false;
 
@@ -539,7 +540,7 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
                 }
                 
             } else {
-                // final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
+                final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
 
             }
 

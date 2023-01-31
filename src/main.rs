@@ -4,6 +4,7 @@ mod board;
 mod bitboard;
 mod bit_twiddles;
 mod move_gen;
+mod bitmove;
 
 use crate::board::*;
 use crate::move_gen::*;
