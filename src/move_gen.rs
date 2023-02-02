@@ -1,6 +1,5 @@
 use crate::board::*;
 use crate::bitboard::*;
-use crate::bitboard::*;
 
 pub const ONE_PIECE: usize = 1;
 pub const TWO_PIECE: usize = 2;
@@ -249,7 +248,6 @@ pub const ONE_PATH_BACKTRACK_CHECKS: [[BitBoard; 5]; 36]  = [
     [BitBoard(0b100000000000000000000000000000000000000000000000000000000000), BitBoard(0b000000000000000000000000000000000000000000000000000000000000), BitBoard(0b000001000000000000000000000000000000000000000000000000000000), NULL_BB, NULL_BB],
 ];
 
-
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum MoveType {
     Drop,
@@ -378,16 +376,17 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
 
             }
 
-            if end == PLAYER_2_GOAL && player == 2 || end == PLAYER_1_GOAL && player == 1 {
-                continue;
-
-            } 
-
             if end == PLAYER_1_GOAL {
+                if player == 1 {
+                    continue;
+                }
                 final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
             } else if end == PLAYER_2_GOAL {
+                if player == 2 {
+                    continue;
+                }
                 final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
@@ -440,16 +439,17 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
 
             }
 
-            if end == PLAYER_2_GOAL && player == 2 || end == PLAYER_1_GOAL && player == 1 {
-                continue;
-
-            } 
-
             if end == PLAYER_1_GOAL {
+                if player == 1 {
+                    continue;
+                }
                 final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
             } else if end == PLAYER_2_GOAL {
+                if player == 2 {
+                    continue;
+                }
                 final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
@@ -505,16 +505,17 @@ pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut ba
 
             }
 
-            if end == PLAYER_2_GOAL && player == 2 || end == PLAYER_1_GOAL && player == 1 {
-                continue;
-
-            } 
-
             if end == PLAYER_1_GOAL {
+                if player == 1 {
+                    continue;
+                }
                 final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
             } else if end == PLAYER_2_GOAL {
+                if player == 2 {
+                    continue;
+                }
                 final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
                 continue;
 
