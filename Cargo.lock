@@ -13,7 +13,6 @@ name = "gyges_engine"
 version = "0.1.0"
 dependencies = [
  "mimalloc",
- "tinyvec",
 ]
 
 [[package]]
@@ -33,9 +32,3 @@ checksum = "2f64ad83c969af2e732e907564deb0d0ed393cec4af80776f77dd77a1a427698"
 dependencies = [
  "libmimalloc-sys",
 ]
-
-[[package]]
-name = "tinyvec"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87cc5ceb3875bb20c2890005a4e226a4651264a5c75edb2421b52861a0a0cb50"

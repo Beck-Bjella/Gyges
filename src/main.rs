@@ -26,16 +26,24 @@ fn main() {
                 [3, 2, 1, 1, 2, 3], 
                 [0, 0]);
 
+    // board.set(  [0, 0, 0, 0, 0, 0], 
+    //             [0, 0, 0, 0, 0, 0], 
+    //             [0, 0, 0, 0, 0, 0], 
+    //             [0, 0, 0, 1, 1, 1], 
+    //             [0, 0, 0, 1, 0, 1], 
+    //             [0, 0, 1, 1, 0, 0], 
+    //             [0, 0]);
+    
     benchmark_movegen(&mut board);
 
 }
 
 fn benchmark_movegen(board: &mut BoardState) {
     let mut average_time: Duration = Default::default();
-    for i in 0..100_000 {
+    for i in 0..1000000 {
         let now = Instant::now();
-    
-        valid_moves(board, 1.0);
+        
+        unsafe {valid_moves(board, 1.0)};
 
         let elapsed = now.elapsed();
 
@@ -43,6 +51,6 @@ fn benchmark_movegen(board: &mut BoardState) {
 
     }
     println!("{:?} / iter", average_time);
-    println!("move_count: {}", valid_moves(board, 1.0).len());
+    println!("move_count: {}", unsafe {valid_moves(board, 1.0)}.len());
 
 }
