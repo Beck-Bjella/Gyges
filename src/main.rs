@@ -4,19 +4,18 @@ mod board;
 mod bitboard;
 mod bit_twiddles;
 mod move_gen;
-mod bitmove;
 
 use crate::board::*;
 use crate::move_gen::*;
 
 use std::time::{Duration, Instant};
-
     
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn main() {
-    let mut board = BoardState::new();
+    
+let mut board = BoardState::new();
 
     board.set(  [3, 2, 1, 1, 2, 3], 
                 [0, 0, 0, 0, 0, 0], 
@@ -25,32 +24,57 @@ fn main() {
                 [0, 0, 3, 0, 0, 0], 
                 [3, 2, 1, 1, 2, 3], 
                 [0, 0]);
-
-    // board.set(  [0, 0, 0, 0, 0, 0], 
-    //             [0, 0, 0, 0, 0, 0], 
-    //             [0, 0, 0, 0, 0, 0], 
-    //             [0, 0, 0, 1, 1, 1], 
-    //             [0, 0, 0, 1, 0, 1], 
-    //             [0, 0, 1, 1, 0, 0], 
-    //             [0, 0]);
     
     benchmark_movegen(&mut board);
 
 }
 
 fn benchmark_movegen(board: &mut BoardState) {
-    let mut average_time: Duration = Default::default();
-    for i in 0..1000000 {
-        let now = Instant::now();
+    let iters = 100_000;
+    let test_iters = 1000;
+
+    let mut sum: Duration = Duration::from_secs(0);
+    let mut lowest: Duration = Duration::from_secs(1);
+    let mut highest: Duration = Duration::from_secs(0);
+
+    for i in 0..iters {
+        let start = Instant::now();
         
-        unsafe {valid_moves(board, 1.0)};
+        unsafe {valid_moves(board, PLAYER_1)};
 
-        let elapsed = now.elapsed();
+        let elapsed = start.elapsed();
 
-        average_time = (average_time + elapsed) / 2;
+        if i > test_iters {
+            sum += elapsed;
+
+            if elapsed < lowest {
+                lowest = elapsed
+    
+            }
+    
+            if elapsed > highest {
+                highest = elapsed
+    
+            }
+
+        }
+
+        
 
     }
-    println!("{:?} / iter", average_time);
-    println!("move_count: {}", unsafe {valid_moves(board, 1.0)}.len());
+    
+    println!("+---------------------------------+");
+    println!("");
+    println!("highest: {:?} / iter", highest);
+    println!("");
+    println!("+---------------------------------+");
+    println!("");
+    println!("average: {:?} / iter" , sum/(iters - test_iters));
+    println!("");
+    println!("+---------------------------------+");
+    println!("");
+    println!("lowest: {:?} / iter", lowest);
+    println!("");
+    println!("+---------------------------------+");
 
 }

@@ -8,7 +8,19 @@ impl_bit_ops!(BitBoard, u64);
 
 impl BitBoard {
     pub fn new(set_bit: usize) -> BitBoard {
-        return BitBoard(0 << set_bit);
+        BitBoard(0 << set_bit)
+
+    }
+
+    pub fn get_data(&mut self) -> Vec<usize> {
+        let mut indexs = vec![];
+
+        while self.0 != 0 {
+            indexs.push(self.pop_lsb());
+
+        }
+
+        return indexs;
 
     }
 
@@ -18,7 +30,7 @@ impl BitBoard {
     }
 
     pub fn bit_scan_forward(&self) -> usize {
-        return bit_scan_forward(self.0);
+        bit_scan_forward(self.0)
 
     }
 

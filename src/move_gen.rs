@@ -5,11 +5,14 @@ pub const ONE_PIECE: usize = 1;
 pub const TWO_PIECE: usize = 2;
 pub const THREE_PIECE: usize = 3;
 
+pub const PLAYER_1: f64 = 1.0;
+pub const PLAYER_2: f64 = -1.0;
+
 pub const PLAYER_1_GOAL: usize = 36;
 pub const PLAYER_2_GOAL: usize = 37;
 
 pub const NULL: usize = 100;
-const NULL_BB: BitBoard = BitBoard(u64::MAX);
+pub const NULL_BB: BitBoard = BitBoard(u64::MAX);
 
 pub const THREE_PATHS: [[[usize; 4]; 40]; 36] = [
     [[0, 6, 12, 18], [0, 1, 2, 3], [0, 6, 12, 13], [0, 6, 7, 13], [0, 1, 7, 13], [0, 6, 7, 8], [0, 1, 7, 8], [0, 1, 2, 8], [0, 1, 2, 36], [0, 1, 7, 6], [0, 6, 7, 1], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4]],
@@ -248,128 +251,101 @@ pub const ONE_PATH_BACKTRACK_CHECKS: [[BitBoard; 5]; 36]  = [
     [BitBoard(0b100000000000000000000000000000000000000000000000000000000000), BitBoard(0b000000000000000000000000000000000000000000000000000000000000), BitBoard(0b000001000000000000000000000000000000000000000000000000000000), NULL_BB, NULL_BB],
 ];
 
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub enum MoveType {
-    Drop,
-    Bounce,
-    None
+pub struct MoveList {
+    drop_positions: BitBoard,
+    start_indexs: Vec<usize>,
+    start_positions: [(usize, usize); 6],
+    end_positions: [BitBoard; 6],
+    pickup_positions: [BitBoard; 6],
 
 }
 
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub struct Move {
-    pub data: [usize; 6],
-    pub flag: MoveType,
-    pub score: f64
-
-}
-
-impl Move {
-    pub fn new(data: [usize; 6], flag: MoveType, score: f64) -> Move {
-        return Move {
-            data: data,
-            flag: flag,
-            score: score
-
-        };
-
-    }
-
-    pub fn new_null() -> Move {
-        return Move {
-            data: [NULL; 6],
-            flag: MoveType::None,
-            score: f64::NEG_INFINITY
-
-        };
-
-    }
-
-    pub fn is_null(&self) -> bool {
-        if self.data == [NULL; 6] && self.flag == MoveType::None  && self.score == f64::NEG_INFINITY {
-            return true;
-
-        } else {
-            return false;
+impl MoveList {
+    pub fn new(drop_positions: BitBoard) -> MoveList {
+        MoveList {
+            drop_positions,
+            start_indexs: vec![],
+            start_positions: [(NULL, NULL); 6],
+            end_positions: [BitBoard(0); 6],
+            pickup_positions: [BitBoard(0); 6],
 
         }
 
     }
 
+    pub fn add_start_index(&mut self, index: usize) {
+        self.start_indexs.push(index);
+
+    }
+
+    pub fn set_start(&mut self, active_line_idx: usize, start_pos: usize, start_piece_type: usize) {
+        self.start_positions[active_line_idx] = (start_pos, start_piece_type);
+
+    }
+
+    pub fn set_end_position(&mut self, active_line_idx: usize, end_position: usize) {
+        self.end_positions[active_line_idx].set_bit(end_position);
+
+    }
+
+    pub fn set_pickup_position(&mut self, active_line_idx: usize, pickup_position: usize) {
+        self.pickup_positions[active_line_idx].set_bit(pickup_position);
+
+    }
+
+    pub fn merge_data(&self) {
+        let mut all_ends = BitBoard(0);
+        for data in self.end_positions {
+            all_ends |= data;
+
+        }
+
+        all_ends.print();
+        println!("{:#?}", all_ends.get_data());
+
+    }
+
 }
 
-static mut STACK_BUFFER: Vec<(BitBoard, [bool; 36], usize, usize, usize, usize, i8)> = Vec::new();
+static mut STACK_BUFFER: Vec<(BitBoard, BitBoard, usize, usize, usize, usize, usize, f64)> = Vec::new();
 
-pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> Vec<Move> {
+pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> MoveList {
     let active_lines = board.get_active_lines();
+    let mut move_list: MoveList = MoveList::new(board.get_drops(active_lines, player));
 
-    if player == 1.0 {
-        let mut player_1_drops: Vec<usize> = board.get_drops(active_lines, 1);
-        let mut player_1_moves: Vec<Move> = Vec::with_capacity(6000);
-        
+    for x in 0..6 {
+        if board.data[active_lines[0] + x] != 0 {
+            let starting_piece: usize = active_lines[0] + x;
+            let starting_piece_type: usize = board.data[starting_piece];
 
-        for x in 0..6 {
-            if board.data[active_lines[0] + x] != 0 {
-                let starting_piece: usize = active_lines[0] + x;
-                let starting_piece_type: usize = board.data[starting_piece];
+            move_list.add_start_index(x);
+            move_list.set_start(x, starting_piece, starting_piece_type);
 
-                player_1_drops.push(starting_piece);
+            board.data[starting_piece] = 0;
 
-                board.data[starting_piece] = 0;
+            STACK_BUFFER.push((BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            get_piece_moves_nonrec(board, &mut move_list);
 
-                STACK_BUFFER.push((BitBoard::new(0), [false; 36], starting_piece, starting_piece_type, starting_piece, starting_piece_type, 1));
-                get_piece_moves_nonrec(board, &player_1_drops, &mut player_1_moves);
-
-                board.data[starting_piece] = starting_piece_type;
-
-                player_1_drops.pop();
-
-            }
+            board.data[starting_piece] = starting_piece_type;
 
         }
-
-        return player_1_moves;
-
-    } else {
-        let mut player_2_drops: Vec<usize> = board.get_drops(active_lines, 2);
-        let mut player_2_moves: Vec<Move> = Vec::with_capacity(6000);
-
-        for x in 0..6 {
-            if board.data[active_lines[1] + x] != 0 {
-                let starting_piece: usize = active_lines[1] + x;
-                let starting_piece_type: usize = board.data[starting_piece];
-
-                player_2_drops.push(starting_piece);
-
-                board.data[starting_piece] = 0;
-
-                STACK_BUFFER.push((BitBoard::new(0), [false; 36], starting_piece, starting_piece_type, starting_piece, starting_piece_type, 2));
-                get_piece_moves_nonrec(board, &player_2_drops, &mut player_2_moves);
-
-                board.data[starting_piece] = starting_piece_type;
-
-                player_2_drops.pop();
-
-            }
-
-        }
-
-
-        return player_2_moves;
 
     }
 
+    move_list
+
 }
 
-pub unsafe fn get_piece_moves_nonrec(board: &BoardState, current_player_drops: &Vec<usize>, final_moves: &mut Vec<Move>) {
+pub unsafe fn get_piece_moves_nonrec(board: &BoardState, move_list: &mut MoveList) {
     while let Some(data) = STACK_BUFFER.pop() {
-        let mut backtrack_board: BitBoard = data.0;
-        let mut banned_positions: [bool; 36] = data.1;
+        let backtrack_board: BitBoard = data.0;
+        let banned_positions: BitBoard = data.1;
         let current_piece: usize = data.2;
         let current_piece_type: usize = data.3;
         let starting_piece: usize = data.4;
         let starting_piece_type: usize = data.5;
-        let player: i8 = data.6;
+        let active_line_idx: usize = data.6;
+        let player: f64 = data.7;
 
         // ============================================================================================
 
@@ -379,7 +355,7 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, current_player_drops: &
                     if path[0] == NULL {
                         break;
 
-                    }
+                    } 
 
                     let end = path[1];
                     let end_piece = board.data[end];
@@ -391,42 +367,37 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, current_player_drops: &
                     }
 
                     if end == PLAYER_1_GOAL {
-                        if player == 1 {
+                        if player == PLAYER_1 {
                             continue;
+
                         }
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                        move_list.set_end_position(active_line_idx, PLAYER_1_GOAL);
                         continue;
 
                     } else if end == PLAYER_2_GOAL {
-                        if player == 2 {
+                        if player == PLAYER_2 {
                             continue;
+
                         }
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                        move_list.set_end_position(active_line_idx, PLAYER_2_GOAL);
                         continue;
 
                     }
 
                     if board.data[end] != 0 {
-                        if !banned_positions[end] {
-                            banned_positions[end] = true;
-
-                            backtrack_board ^= backtrack_path;
-
-                            for drop_pos in current_player_drops.iter() {
-                                final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
-
-                            }
+                        let end_bit = 1 << end;
+                        if (banned_positions & end_bit).is_empty() {
+                            let new_banned_positions = banned_positions ^ end_bit;
+                            let new_backtrack_board = backtrack_board ^ backtrack_path;
                             
-                            STACK_BUFFER.push((backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player));
-
-                            banned_positions[end] = false;
-
-                            backtrack_board ^= backtrack_path;
+                            move_list.set_pickup_position(active_line_idx, end);
+                            
+                            STACK_BUFFER.push((new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
 
                         }
                         
                     } else {
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
+                        move_list.set_end_position(active_line_idx, end);
 
                     }
 
@@ -442,7 +413,7 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, current_player_drops: &
         
                     let end = path[2];
                     let end_piece = board.data[end];
-        
+                    
                     if board.data[path[1]] != 0 {
                         continue;
         
@@ -455,47 +426,39 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, current_player_drops: &
                     }
         
                     if end == PLAYER_1_GOAL {
-                        if player == 1 {
+                        if player == PLAYER_1 {
                             continue;
                         }
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                        move_list.set_end_position(active_line_idx, PLAYER_1_GOAL);
                         continue;
         
                     } else if end == PLAYER_2_GOAL {
-                        if player == 2 {
+                        if player == PLAYER_2 {
                             continue;
                         }
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                        move_list.set_end_position(active_line_idx, PLAYER_2_GOAL);
                         continue;
         
                     }
-        
+
                     if board.data[end] != 0 {
-                        if !banned_positions[end] {
-                            banned_positions[end] = true;
-        
-                            backtrack_board ^= backtrack_path;
+                        let end_bit = 1 << end;
+                        if (banned_positions & end_bit).is_empty() {
+                            let new_banned_positions = banned_positions ^ end_bit;
+                            let new_backtrack_board = backtrack_board ^ backtrack_path;
                             
-                            for drop_pos in current_player_drops.iter() {
-                                final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
-        
-                            }
+                            move_list.set_pickup_position(active_line_idx, end);
                             
-                            STACK_BUFFER.push((backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player));
-                            
-                            banned_positions[end] = false;
-        
-                            backtrack_board ^= backtrack_path;
-                    
+                            STACK_BUFFER.push((new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
+
                         }
                         
                     } else {
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
+                        move_list.set_end_position(active_line_idx, end);
         
                     }
         
                 }
-
 
             },
             THREE_PIECE => {
@@ -507,7 +470,7 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, current_player_drops: &
         
                     let end = path[3];
                     let end_piece = board.data[end];
-        
+
                     if board.data[path[1]] != 0 {
                         continue;
                         
@@ -523,42 +486,36 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, current_player_drops: &
                     }
         
                     if end == PLAYER_1_GOAL {
-                        if player == 1 {
+                        if player == PLAYER_1 {
                             continue;
                         }
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                        move_list.set_end_position(active_line_idx, PLAYER_1_GOAL);
                         continue;
         
                     } else if end == PLAYER_2_GOAL {
-                        if player == 2 {
+                        if player == PLAYER_2 {
                             continue;
                         }
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
+                        move_list.set_end_position(active_line_idx, PLAYER_2_GOAL);
                         continue;
         
                     }
         
                     if board.data[end] != 0 {
-                        if !banned_positions[end] {
-                            banned_positions[end] = true;
-        
-                            backtrack_board ^= backtrack_path;
-        
-                            for drop_pos in current_player_drops.iter() {
-                                final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
-        
-                            }
+                        let end_bit = 1 << end;
+                        if (banned_positions & end_bit).is_empty() {
+                            let new_banned_positions = banned_positions ^ end_bit;
+                            let new_backtrack_board = backtrack_board ^ backtrack_path;
                             
-                            STACK_BUFFER.push((backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player));
-        
-                            banned_positions[end] = false;
-        
-                            backtrack_board ^= backtrack_path;
-                    
+                            
+                            move_list.set_pickup_position(active_line_idx, end);
+                            
+                            STACK_BUFFER.push((new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
+
                         }
                         
                     } else {
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
+                        move_list.set_end_position(active_line_idx, end);
         
                     }
         
@@ -566,198 +523,6 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, current_player_drops: &
 
             },
             _ => {panic!("INVALID VAILD PIECE TYPE")}
-
-        }
-
-    }
-
-}
-
-pub fn get_piece_moves(board: &BoardState, mut backtrack_board: BitBoard, mut banned_positions: [bool; 36], current_piece: usize, current_piece_type: usize, starting_piece: usize, starting_piece_type: usize, player: i8, current_player_drops: &Vec<usize>, final_moves: &mut Vec<Move>) {
-    if current_piece_type == ONE_PIECE {
-        for (path_idx, path) in ONE_PATHS[current_piece].iter().enumerate() {
-            if path[0] == NULL {
-                break;
-
-            }
-
-            let end = path[1];
-            let end_piece = board.data[end];
-
-            let backtrack_path = ONE_PATH_BACKTRACK_CHECKS[current_piece][path_idx];
-            if (backtrack_board & backtrack_path).is_not_empty() {
-                continue;
-
-            }
-
-            if end == PLAYER_1_GOAL {
-                if player == 1 {
-                    continue;
-                }
-                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
-                continue;
-
-            } else if end == PLAYER_2_GOAL {
-                if player == 2 {
-                    continue;
-                }
-                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
-                continue;
-
-            }
-
-            if board.data[end] != 0 {
-                if !banned_positions[end] {
-                    banned_positions[end] = true;
-
-                    backtrack_board ^= backtrack_path;
-
-                    for drop_pos in current_player_drops.iter() {
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
-
-                    }
-                    
-                    get_piece_moves(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops, final_moves);
-
-                    banned_positions[end] = false;
-
-                    backtrack_board ^= backtrack_path;
-
-                }
-                
-            } else {
-                final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
-
-            }
-
-        }
-
-    } if current_piece_type == TWO_PIECE {
-        for (path_idx, path) in TWO_PATHS[current_piece].iter().enumerate() {
-            if path[0] == NULL {
-                break;
-
-            }
-
-            let end = path[2];
-            let end_piece = board.data[end];
-
-            if board.data[path[1]] != 0 {
-                continue;
-
-            }
-
-            let backtrack_path = TWO_PATH_BACKTRACK_CHECKS[current_piece][path_idx];
-            if (backtrack_board & backtrack_path).is_not_empty() {
-                continue;
-
-            }
-
-            if end == PLAYER_1_GOAL {
-                if player == 1 {
-                    continue;
-                }
-                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
-                continue;
-
-            } else if end == PLAYER_2_GOAL {
-                if player == 2 {
-                    continue;
-                }
-                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
-                continue;
-
-            }
-
-            if board.data[end] != 0 {
-                if !banned_positions[end] {
-                    banned_positions[end] = true;
-
-                    backtrack_board ^= backtrack_path;
-                    
-                    for drop_pos in current_player_drops.iter() {
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
-
-                    }
-                    
-                    get_piece_moves(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops, final_moves);
-                    
-                    banned_positions[end] = false;
-
-                    backtrack_board ^= backtrack_path;
-            
-                }
-                
-            } else {
-                final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
-
-            }
-
-        }
-
-    } else if current_piece_type == THREE_PIECE {
-        for (path_idx, path ) in THREE_PATHS[current_piece].iter().enumerate() {
-            if path[0] == NULL {
-                break;
-
-            }
-
-            let end = path[3];
-            let end_piece = board.data[end];
-
-            if board.data[path[1]] != 0 {
-                continue;
-                
-            } else if board.data[path[2]] != 0 {
-                continue;
-                
-            }
-            
-            let backtrack_path = THREE_PATH_BACKTRACK_CHECKS[current_piece][path_idx];
-            if (backtrack_board & backtrack_path).is_not_empty() {
-                continue;
-
-            }
-
-            if end == PLAYER_1_GOAL {
-                if player == 1 {
-                    continue;
-                }
-                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_1_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
-                continue;
-
-            } else if end == PLAYER_2_GOAL {
-                if player == 2 {
-                    continue;
-                }
-                final_moves.push(Move::new([0, starting_piece, starting_piece_type, PLAYER_2_GOAL, NULL, NULL], MoveType::Bounce, 0.0));
-                continue;
-
-            }
-
-            if board.data[end] != 0 {
-                if !banned_positions[end] {
-                    banned_positions[end] = true;
-
-                    backtrack_board ^= backtrack_path;
-
-                    for drop_pos in current_player_drops.iter() {
-                        final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, end_piece, *drop_pos], MoveType::Drop, 0.0));
-
-                    }
-                    
-                    get_piece_moves(board, backtrack_board, banned_positions, end, end_piece, starting_piece, starting_piece_type, player, current_player_drops, final_moves);
-
-                    banned_positions[end] = false;
-
-                    backtrack_board ^= backtrack_path;
-            
-                }
-                
-            } else {
-                final_moves.push(Move::new([0, starting_piece, starting_piece_type, end, NULL, NULL], MoveType::Bounce, 0.0));
-
-            }
 
         }
 
