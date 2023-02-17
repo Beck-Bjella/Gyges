@@ -20,7 +20,7 @@ impl BitBoard {
 
         }
 
-        return indexs;
+        indexs
 
     }
 

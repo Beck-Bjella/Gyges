@@ -72,6 +72,42 @@ impl BoardState {
     
     }
 
+    pub fn make_move(&mut self, mv: &[usize; 6]) {
+        let step1 = [mv[0], mv[1]];
+        let step2 = [mv[2], mv[3]];
+        let step3 = [mv[4], mv[5]];
+        
+        if mv[5] != NULL {
+            self.data[step1[1]] = step1[0];
+            self.data[step2[1]] = step2[0];
+            self.data[step3[1]] = step3[0];
+
+        } else if mv[5] == NULL {
+            self.data[step2[1]] = step2[0];
+            self.data[step1[1]] = 0;
+
+        }
+
+    }
+
+    pub fn undo_move(&mut self, mv: &[usize; 6]) {
+        let step1 = [mv[0], mv[1]];
+        let step2 = [mv[2], mv[3]];
+        let step3 = [mv[4], mv[5]];
+
+        if mv[5] != NULL {
+            self.data[step3[1]] = step1[0];
+            self.data[step2[1]] = step3[0];
+            self.data[step1[1]] = step2[0];
+            
+        } else if mv[5] == NULL {
+            self.data[step2[1]] = 0;
+            self.data[step1[1]] = step2[0];
+
+        }
+
+    }
+
     pub fn get_active_lines(&self) -> [usize; 2] {
         let mut player_1_set = false;
     
