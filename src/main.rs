@@ -1,21 +1,26 @@
 #[macro_use]
-
 mod macros;
+
 mod board;
 mod bitboard;
 mod bit_twiddles;
-mod move_gen;
+mod move_generation;
+mod evaluation;
+mod engine;
 
 use crate::board::*;
-use crate::move_gen::*;
+use crate::engine::*;
+use crate::move_generation::*;
 
-use std::time::{Duration, Instant};
-    
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::thread;
+
+
 fn main() {
-    
     let mut board = BoardState::new();
     board.set(  [3, 2, 1, 1, 2, 3], 
                 [0, 0, 0, 0, 0, 0], 
@@ -25,51 +30,37 @@ fn main() {
                 [3, 2, 1, 1, 2, 3], 
                 [0, 0]);
 
-    let mut move_list = unsafe {valid_moves(&mut board, PLAYER_1)};
-    println!("{:?}", move_list.gen(&board).len());
-    
-    benchmark_movegen(&mut board);
+    let search_input = SearchInput::new(board, MAX_SEARCH_PLY);
 
-
-
-}
-
-fn benchmark_movegen(board: &mut BoardState) {
-    let iters = 100_000;
-
-    let mut sum: Duration = Duration::from_secs(0);
-    let mut lowest: Duration = Duration::from_secs(1);
-    let mut highest: Duration = Duration::from_secs(0);
-
-    for _ in 0..iters {
-        let start = Instant::now();
+    let (board_sender, board_reciver): (Sender<SearchInput>, Receiver<SearchInput>) = mpsc::channel();
+    let (stop_sender, stop_reciver): (Sender<bool>, Receiver<bool>) = mpsc::channel();
+    let (results_sender, results_reciver): (Sender<SearchData>, Receiver<SearchData>) = mpsc::channel();
+    thread::spawn(move || {
+        let mut engine = Engine::new(board_reciver, stop_reciver, results_sender);
+        engine.start();
         
-        unsafe {valid_moves(board, PLAYER_1)};
+    });
 
-        let elapsed = start.elapsed();
+    _ = board_sender.send(search_input);
 
-        sum += elapsed;
-
-        if elapsed < lowest {
-            lowest = elapsed
-
-        }
-
-        if elapsed > highest {
-            highest = elapsed
+    loop {
+        // _ = stop_sender.send(true);
+        
+        let results = results_reciver.try_recv();
+        match results {
+            Ok(_) => {
+                let final_results = results.unwrap();
+                println!("Depth: {:?}", final_results.depth);
+                println!("  - {:?}", final_results.best_move);
+                println!("  - {:?}", final_results.search_time);
+                println!("");
+                
+            },
+            Err(TryRecvError::Disconnected) => {},
+            Err(TryRecvError::Empty) => {}
 
         }
 
     }
-    
-    println!("+---------------------------------+");
-    println!("");
-    println!("highest: {:?} / iter", highest);
-    println!("");
-    println!("average: {:?} / iter" , sum/iters);
-    println!("");
-    println!("lowest: {:?} / iter", lowest);
-    println!("");
-    println!("+---------------------------------+");
-    
+
 }
