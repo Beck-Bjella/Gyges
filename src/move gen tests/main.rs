@@ -25,12 +25,7 @@ fn main() {
                 [3, 2, 1, 1, 2, 3], 
                 [0, 0]);
 
-    let mut move_list = unsafe {valid_moves(&mut board, PLAYER_1)};
-    println!("{:?}", move_list.gen(&board).len());
-    
     benchmark_movegen(&mut board);
-
-
 
 }
 

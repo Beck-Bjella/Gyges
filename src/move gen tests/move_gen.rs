@@ -1,8 +1,6 @@
 use crate::board::*;
 use crate::bitboard::*;
 
-use genawaiter::{stack::let_gen, yield_};
-
 pub const ONE_PIECE: usize = 1;
 pub const TWO_PIECE: usize = 2;
 pub const THREE_PIECE: usize = 3;
@@ -15,7 +13,6 @@ pub const PLAYER_2_GOAL: usize = 37;
 
 pub const NULL: usize = 100;
 pub const NULL_BB: BitBoard = BitBoard(u64::MAX);
-
 
 pub const THREE_PATHS: [[[usize; 4]; 40]; 36] = [
     [[0, 6, 12, 18], [0, 1, 2, 3], [0, 6, 12, 13], [0, 6, 7, 13], [0, 1, 7, 13], [0, 6, 7, 8], [0, 1, 7, 8], [0, 1, 2, 8], [0, 1, 2, 36], [0, 1, 7, 6], [0, 6, 7, 1], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4]],
@@ -94,6 +91,45 @@ pub const THREE_PATH_BACKTRACK_CHECKS: [[BitBoard; 40]; 36] = [
     [BitBoard(0b001110000000000000000000000000000000000000000000000000000000), BitBoard(0b000000010000000000100000000001000000000000000000000000000000), BitBoard(0b001100000000000000000000000000000000000000000000000000000000), BitBoard(0b110000000000000000000000000000000000000000000000000000000000), BitBoard(0b110001000000000000000000000000000000000000000000000000000000), BitBoard(0b010000100001000000000000000000000000000000000000000000000000), BitBoard(0b000000010001100000000000000000000000000000000000000000000000), BitBoard(0b010000100000000001000000000000000000000000000000000000000000), BitBoard(0b000000010000100001000000000000000000000000000000000000000000), BitBoard(0b000000010000000000100001000000000000000000000000000000000000), BitBoard(0b000000010000000000100000100000000000000000000000000000000000), BitBoard(0b000000010000010000010000000000000000000000000000000000000000), BitBoard(0b001000001000000000010000000000000000000000000000000000000000), BitBoard(0b000000010000011000000000000000000000000000000000000000000000), BitBoard(0b001000001000001000000000000000000000000000000000000000000000), BitBoard(0b001100000100000000000000000000000000000000000000000000000000), BitBoard(0b000000011000010000000000000000000000000000000000000000000000), BitBoard(0b000000110000100000000000000000000000000000000000000000000000), BitBoard(0b010000100000100000000000000000000000000000000000000000000000), BitBoard(0b001000001000010000000000000000000000000000000000000000000000), NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB],
     [BitBoard(0b011100000000000000000000000000000000000000000000000000000000), BitBoard(0b000000100000000001000000000010000000000000000000000000000000), BitBoard(0b011000000000000000000000000000000000000000000000000000000000), BitBoard(0b100001000000000010000000000000000000000000000000000000000000), BitBoard(0b000000100001000010000000000000000000000000000000000000000000), BitBoard(0b000000100000000001000010000000000000000000000000000000000000), BitBoard(0b000000100000000001000001000000000000000000000000000000000000), BitBoard(0b000000100000100000100000000000000000000000000000000000000000), BitBoard(0b010000010000000000100000000000000000000000000000000000000000), BitBoard(0b000000100000110000000000000000000000000000000000000000000000), BitBoard(0b010000010000010000000000000000000000000000000000000000000000), BitBoard(0b011000001000000000000000000000000000000000000000000000000000), BitBoard(0b000000110000100000000000000000000000000000000000000000000000), BitBoard(0b000001100001000000000000000000000000000000000000000000000000), BitBoard(0b100001000001000000000000000000000000000000000000000000000000), BitBoard(0b010000010000100000000000000000000000000000000000000000000000), NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB],
     [BitBoard(0b111000000000000000000000000000000000000000000000000000000000), BitBoard(0b000001000000000010000000000100000000000000000000000000000000), BitBoard(0b110000000000000000000000000000000000000000000000000000000000), BitBoard(0b000001000000000010000010000000000000000000000000000000000000), BitBoard(0b000001000001000001000000000000000000000000000000000000000000), BitBoard(0b100000100000000001000000000000000000000000000000000000000000), BitBoard(0b000001000001100000000000000000000000000000000000000000000000), BitBoard(0b100000100000100000000000000000000000000000000000000000000000), BitBoard(0b110000010000000000000000000000000000000000000000000000000000), BitBoard(0b000001100001000000000000000000000000000000000000000000000000), BitBoard(0b100000100001000000000000000000000000000000000000000000000000), NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB],
+];
+
+pub const THREE_PATH_LENGTHS: [usize; 36] = [
+    11,
+    16,
+    20,
+    20,
+    16,
+    11,
+    17,
+    26,
+    32,
+    32,
+    26,
+    17,
+    19,
+    29,
+    35,
+    35,
+    29,
+    19,
+    19,
+    29,
+    35,
+    35,
+    29,
+    19,
+    17,
+    26,
+    32,
+    32,
+    26,
+    17,
+    11,
+    16,
+    20,
+    20,
+    16,
+    11
 ];
 
 pub const TWO_PATHS: [[[usize; 3]; 15]; 36] = [
@@ -175,6 +211,45 @@ pub const TWO_PATH_BACKTRACK_CHECKS: [[BitBoard; 15]; 36] = [
     [BitBoard(0b110000000000000000000000000000000000000000000000000000000000), BitBoard(0b100000000000000000000000000000000000000000000000000000000000), BitBoard(0b000001000000000010000000000000000000000000000000000000000000), BitBoard(0b000001000001000000000000000000000000000000000000000000000000), BitBoard(0b100000100000000000000000000000000000000000000000000000000000), NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB, NULL_BB],
 ];
 
+pub const TWO_PATH_LENGTHS: [usize; 36] = [
+    5,
+    8,
+    9,
+    9,
+    8,
+    5,
+    7,
+    11,
+    12,
+    12,
+    11,
+    7,
+    7,
+    11,
+    12,
+    12,
+    11,
+    7,
+    7,
+    11,
+    12,
+    12,
+    11,
+    7,
+    7,
+    11,
+    12,
+    12,
+    11,
+    7,
+    5,
+    8,
+    9,
+    9,
+    8,
+    5
+];
+
 pub const ONE_PATHS: [[[usize; 2]; 4]; 36] = [
     [[0, 6], [0, 1], [0, 36], [NULL; 2]],
     [[1, 0], [1, 7], [1, 2], [1, 36]],
@@ -254,6 +329,45 @@ pub const ONE_PATH_BACKTRACK_CHECKS: [[BitBoard; 5]; 36]  = [
     [BitBoard(0b100000000000000000000000000000000000000000000000000000000000), BitBoard(0b000000000000000000000000000000000000000000000000000000000000), BitBoard(0b000001000000000000000000000000000000000000000000000000000000), NULL_BB, NULL_BB],
 ];
 
+pub const ONE_PATH_LEGNTHS: [usize; 36] = [
+    3,
+    4,
+    4,
+    4,
+    4,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    3,
+    3,
+    4,
+    4,
+    4,
+    4,
+    3
+];
+
 #[derive(Clone)]
 pub struct MoveList {
     drop_positions: BitBoard,
@@ -297,7 +411,7 @@ impl MoveList {
 
     }
 
-    pub fn gen(&mut self, board: &BoardState) -> Vec<[usize; 6]> {
+    pub fn moves(&mut self, board: &BoardState) -> Vec<[usize; 6]> {
         let mut moves: Vec<[usize; 6]> = Vec::with_capacity(2048);
 
         let drop_positions = self.drop_positions.get_data();
@@ -326,54 +440,101 @@ impl MoveList {
 
     }
 
+    pub fn move_count(&mut self) -> usize {
+        let mut count = 0;
+
+        let drop_count = self.drop_positions.get_data().len();
+        
+        for idx in self.start_indexs.iter() {
+            
+            let end_pos_count = self.end_positions[*idx].get_data().len();
+            let pickup_pos_count = self.pickup_positions[*idx].get_data().len();
+            count += ((drop_count + 1) * pickup_pos_count) + end_pos_count;
+        
+        }
+
+        return count;
+
+    }
+
+    pub fn has_threat(&mut self) -> bool {
+        for idx in self.start_indexs.iter() {
+            if (self.end_positions[*idx] & (1 << 37)).is_not_empty() {
+                return true;
+
+            } else if (self.end_positions[*idx] & (1 << 36)).is_not_empty() {
+                return true;
+
+            }
+        
+        }
+
+        return false;
+
+    }
+
 }
 
-static mut STACK_BUFFER: Vec<(BitBoard, BitBoard, usize, usize, usize, usize, usize, f64)> = Vec::new();
+#[derive(PartialEq)]
+enum Action {
+    Gen,
+    Start,
+    End
+}
+
+static mut STACK_BUFFER: Vec<(Action, BitBoard, BitBoard, usize, usize, usize, usize, usize, f64)> = Vec::new();
 
 pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> MoveList {
     let active_lines = board.get_active_lines();
     let mut move_list: MoveList = MoveList::new(board.get_drops(active_lines, player));
 
+    let active_line: usize;
+    if player == PLAYER_1 {
+        active_line = active_lines[0];
+
+    } else {
+        active_line = active_lines[1];
+
+    }
+
     for x in 0..6 {
-        if board.data[active_lines[0] + x] != 0 {
-            let starting_piece: usize = active_lines[0] + x;
+        if board.data[active_line + x] != 0 {
+            let starting_piece: usize = active_line + x;
             let starting_piece_type: usize = board.data[starting_piece];
 
             move_list.add_start_index(x);
             move_list.set_start(x, starting_piece, starting_piece_type);
 
-            board.data[starting_piece] = 0;
-
-            STACK_BUFFER.push((BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
-            get_piece_moves_nonrec(board, &mut move_list);
-
-            board.data[starting_piece] = starting_piece_type;
+            STACK_BUFFER.push((Action::End, BitBoard(0), BitBoard(0), 0, 0, 0, 0, 0, 0.0));
+            STACK_BUFFER.push((Action::Gen, BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            STACK_BUFFER.push((Action::Start, BitBoard(0), BitBoard(0), 0, 0, 0, 0, 0, 0.0));
 
         }
 
     }
 
-    move_list
-
-}
-
-pub unsafe fn get_piece_moves_nonrec(board: &BoardState, move_list: &mut MoveList) {
     while let Some(data) = STACK_BUFFER.pop() {
-        let backtrack_board: BitBoard = data.0;
-        let banned_positions: BitBoard = data.1;
-        let current_piece: usize = data.2;
-        let current_piece_type: usize = data.3;
-        let starting_piece: usize = data.4;
-        let starting_piece_type: usize = data.5;
-        let active_line_idx: usize = data.6;
-        let player: f64 = data.7;
+        let action = data.0;
+        let backtrack_board: BitBoard = data.1;
+        let banned_positions: BitBoard = data.2;
+        let current_piece: usize = data.3;
+        let current_piece_type: usize = data.4;
+        let starting_piece: usize = data.5;
+        let starting_piece_type: usize = data.6;
+        let active_line_idx: usize = data.7;
+        let player: f64 = data.8;
+
+        if action == Action::Start {
+            board.data[starting_piece] = 0;
+
+        } else if action == Action::End {
+            board.data[starting_piece] = starting_piece_type;
+
+        }
 
         if current_piece_type == ONE_PIECE {
-            for (path_idx, path) in ONE_PATHS[current_piece].iter().enumerate() {
-                if path[0] == NULL {
-                    break;
-
-                } 
+            for path_idx in 0..ONE_PATH_LEGNTHS[current_piece] {
+                let path = ONE_PATHS[current_piece][path_idx];
 
                 let backtrack_path = ONE_PATH_BACKTRACK_CHECKS[current_piece][path_idx];
                 if (backtrack_board & backtrack_path).is_not_empty() {
@@ -410,7 +571,7 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, move_list: &mut MoveLis
                         
                         move_list.set_pickup_position(active_line_idx, end);
                         
-                        STACK_BUFFER.push((new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
+                        STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
 
                     }
                     
@@ -422,9 +583,12 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, move_list: &mut MoveLis
             }
 
         } else if current_piece_type == TWO_PIECE {
-            for (path_idx, path) in TWO_PATHS[current_piece].iter().enumerate() {
-                if path[0] == NULL {
-                    break;
+            for path_idx in 0..TWO_PATH_LENGTHS[current_piece] {
+                let path = TWO_PATHS[current_piece][path_idx];
+
+                let backtrack_path = TWO_PATH_BACKTRACK_CHECKS[current_piece][path_idx];
+                if (backtrack_board & backtrack_path).is_not_empty() {
+                    continue;
     
                 }
     
@@ -433,12 +597,6 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, move_list: &mut MoveLis
     
                 }
     
-                let backtrack_path = TWO_PATH_BACKTRACK_CHECKS[current_piece][path_idx];
-                if (backtrack_board & backtrack_path).is_not_empty() {
-                    continue;
-    
-                }
-
                 let end = path[2];
     
                 if end == PLAYER_1_GOAL {
@@ -466,7 +624,7 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, move_list: &mut MoveLis
                         
                         move_list.set_pickup_position(active_line_idx, end);
                         
-                        STACK_BUFFER.push((new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
+                        STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
 
                     }
                     
@@ -478,9 +636,12 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, move_list: &mut MoveLis
             }
 
         } else if current_piece_type == THREE_PIECE {
-            for (path_idx, path ) in THREE_PATHS[current_piece].iter().enumerate() {
-                if path[0] == NULL {
-                    break;
+            for path_idx in 0..THREE_PATH_LENGTHS[current_piece] {
+                let path = THREE_PATHS[current_piece][path_idx];
+
+                let backtrack_path = THREE_PATH_BACKTRACK_CHECKS[current_piece][path_idx];
+                if (backtrack_board & backtrack_path).is_not_empty() {
+                    continue;
     
                 }
 
@@ -492,12 +653,6 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, move_list: &mut MoveLis
                     
                 }
                 
-                let backtrack_path = THREE_PATH_BACKTRACK_CHECKS[current_piece][path_idx];
-                if (backtrack_board & backtrack_path).is_not_empty() {
-                    continue;
-    
-                }
-
                 let end = path[3];
                
                 if end == PLAYER_1_GOAL {
@@ -523,10 +678,9 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, move_list: &mut MoveLis
                         let new_banned_positions = banned_positions ^ end_bit;
                         let new_backtrack_board = backtrack_board ^ backtrack_path;
                         
-                        
                         move_list.set_pickup_position(active_line_idx, end);
                         
-                        STACK_BUFFER.push((new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
+                        STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
 
                     }
                     
@@ -541,4 +695,7 @@ pub unsafe fn get_piece_moves_nonrec(board: &BoardState, move_list: &mut MoveLis
 
     }
 
+    return move_list;
+
 }
+
