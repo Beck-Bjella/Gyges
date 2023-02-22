@@ -1,5 +1,5 @@
 use crate::board::*;
-use crate::move_generation::*;
+use crate::move_gen::*;
 
 fn in_bounds(pos: usize) -> bool {
     if pos <= 35 {
@@ -231,8 +231,8 @@ pub fn get_evalulation(board: &mut BoardState) -> f64 {
     
     let mut move_score: f64 = 0.0;
 
-    let player_1_move_count = valid_move_count(board, 1.0) as f64;
-    let player_2_moves_count = valid_move_count(board, -1.0) as f64;
+    let player_1_move_count = unsafe{valid_move_count(board, PLAYER_1)} as f64;
+    let player_2_moves_count = unsafe{valid_move_count(board, PLAYER_2)} as f64;
 
     move_score += player_1_move_count;
     move_score -= player_2_moves_count;

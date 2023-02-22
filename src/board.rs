@@ -1,4 +1,5 @@
-use crate::move_generation::*;
+use crate::move_gen::*;
+use crate::bitboard::*;
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct BoardState {
@@ -8,16 +9,16 @@ pub struct BoardState {
 
 impl BoardState {
     pub fn new() -> BoardState {
-        return BoardState {
+        BoardState {
             data: [0; 38],
 
-        };
+        }
         
     }
 
     pub fn set(&mut self, rank5: [usize; 6], rank4: [usize; 6], rank3: [usize; 6], rank2: [usize; 6], rank1: [usize; 6], rank0: [usize; 6], goal_data: [usize; 2]) {
         for x in 0..6 {
-            self.data[x + 0] = rank0[x];
+            self.data[x] = rank0[x];
             self.data[x + 6] = rank1[x];
             self.data[x + 12] = rank2[x];
             self.data[x + 18] = rank3[x];
@@ -76,12 +77,12 @@ impl BoardState {
         let step2 = [mv.data[2], mv.data[3]];
         let step3 = [mv.data[4], mv.data[5]];
         
-        if mv.flag == MoveType::Drop {
+        if mv.data[5] != NULL {
             self.data[step1[1]] = step1[0];
             self.data[step2[1]] = step2[0];
             self.data[step3[1]] = step3[0];
 
-        } else if mv.flag == MoveType::Bounce {
+        } else if mv.data[5] == NULL {
             self.data[step2[1]] = step2[0];
             self.data[step1[1]] = 0;
 
@@ -94,12 +95,12 @@ impl BoardState {
         let step2 = [mv.data[2], mv.data[3]];
         let step3 = [mv.data[4], mv.data[5]];
 
-        if mv.flag == MoveType::Drop {
+        if mv.data[5] != NULL {
             self.data[step3[1]] = step1[0];
             self.data[step2[1]] = step3[0];
             self.data[step1[1]] = step2[0];
             
-        } else if mv.flag == MoveType::Bounce {
+        } else if mv.data[5] == NULL {
             self.data[step2[1]] = 0;
             self.data[step1[1]] = step2[0];
 
@@ -127,17 +128,17 @@ impl BoardState {
             }
         }
     
-        return [player_1_active_line * 6, player_2_active_line * 6];
+        [player_1_active_line * 6, player_2_active_line * 6]
     
     }
 
-    pub fn get_drops(&self, active_lines: [usize; 2], player: i8) -> Vec<usize> {
-        let mut current_player_drops: Vec<usize> = vec![];
+    pub fn get_drops(&self, active_lines: [usize; 2], player: f64) -> BitBoard {
+        let mut current_player_drops: BitBoard = BitBoard(0);
 
-        if player == 2 {
+        if player == -1.0 {
             for i in active_lines[0]..36 {
                 if self.data[i] == 0 {
-                    current_player_drops.push(i);
+                    current_player_drops.set_bit(i);
 
                 }
     
@@ -146,7 +147,7 @@ impl BoardState {
         } else {
             for i in 0..active_lines[1] + 6 {
                 if self.data[i] == 0 {
-                    current_player_drops.push(i);
+                    current_player_drops.set_bit(i);
 
                 }
                 
@@ -154,7 +155,7 @@ impl BoardState {
 
         }
 
-        return current_player_drops;
+        current_player_drops
 
     }
 
