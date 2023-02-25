@@ -185,6 +185,16 @@ impl BoardState {
         }
 
     }
+
+    pub fn key(&self) -> u128 {
+        let mut board_str: String = self.data.into_iter().map(|i| i.to_string()).collect::<String>();
+        board_str.insert(0, '1');
+
+        let key = board_str.parse::<u128>().unwrap();
+
+        return key;
+
+    }
     
     pub fn flip(&mut self) {
         let mut temp_data: [usize; 38] = [0 ,0 ,0 ,0, 0, 0,

@@ -1,4 +1,6 @@
-pub const TRANSPOSITION_TABLE_SIZE: usize = 2_usize.pow(30);
+use crate::move_gen::*;
+
+pub const TRANSPOSITION_TABLE_SIZE: usize = 2_usize.pow(24) + 2;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum TTEntryType {
@@ -14,6 +16,7 @@ pub enum TTEntryType {
 pub struct TTEntry {
     pub key: u64,
     pub value: f64,
+    pub bestmove: Move,
     pub flag: TTEntryType,
     pub depth: i8,
     pub empty: bool
@@ -25,6 +28,7 @@ impl TTEntry {
         return TTEntry {
             key: 0,
             value: 0.0,
+            bestmove: Move::new_null(),
             flag: TTEntryType::None,
             depth: 0,
             empty: true
@@ -65,12 +69,12 @@ impl TranspositionTable {
             self.table[index] = new_entry;
 
         } else {
-            if new_entry.depth >= entry.depth {
+            // if new_entry.depth >= entry.depth {
                 unsafe{REPLACEMENTS+=1};
 
                 self.table[index] = new_entry;
 
-            }
+            // }
 
         }
 

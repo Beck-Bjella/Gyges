@@ -31,6 +31,9 @@ fn main() {
                 [3, 2, 1, 1, 2, 3], 
                 [0, 0]);
 
+
+    board.print();
+
     let search_input = SearchInput::new(board, 5);
 
     let (board_sender, board_reciver): (Sender<SearchInput>, Receiver<SearchInput>) = mpsc::channel();
@@ -51,6 +54,7 @@ fn main() {
         match results {
             Ok(_) => {
                 let final_results = results.unwrap();
+
                 println!("Depth: {:?}", final_results.depth);
                 println!("  - Move: {:?}", final_results.best_move);
                 println!("  - Time: {:?}", final_results.search_time);
@@ -62,6 +66,10 @@ fn main() {
                 println!("  - TT Cuts: {:?}", final_results.tt_cuts);
                 println!("    TT Replacements: {}", unsafe{REPLACEMENTS});
                 println!("    TT Collisions: {}", unsafe{COLLISIONS});
+                println!("");
+                println!("");
+                println!("");
+                println!("");
                 println!("");
                 
             },

@@ -7,6 +7,7 @@ use crate::move_gen::*;
 use crate::evaluation::*;
 use crate::transposition_table::*;
 use crate::zobrist::*;
+use crate::move_gen::*;
 
 pub struct Engine {
     pub root_node_moves: Vec<Move>,
@@ -15,7 +16,7 @@ pub struct Engine {
     pub search_data: SearchData,
     pub tt: TranspositionTable,
 
-    pub zobrist: ZobristHasher,
+    // pub zobrist: ZobristHasher,
     
     pub datain: Receiver<SearchInput>,
     pub stopin: Receiver<bool>,
@@ -31,8 +32,6 @@ impl Engine {
 
             search_data: SearchData::new(),
             tt: TranspositionTable::new(),
-
-            zobrist: ZobristHasher::new(),
 
             datain: datain,
             stopin: stopin,
@@ -52,7 +51,7 @@ impl Engine {
                     let max_ply = search_input.max_ply;
                     
                     self.iterative_deepening_search(&mut board, max_ply);
-
+           
                 },
                 Err(TryRecvError::Disconnected) => {
                     println!("QUITING");
@@ -113,7 +112,7 @@ impl Engine {
         // self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
         // self.search_data.average_branching_factor = (self.search_data.nodes as f64).powf(1.0 / self.search_data.depth as f64);
             
-        self.search_data.root_node_evals.sort_unstable_by(|a, b| {
+        self.search_data.root_node_evals.sort_by(|a, b| {
             if a.score > b.score {
                 Ordering::Less
                 
@@ -148,6 +147,8 @@ impl Engine {
             let mut current_ply = 1;
             'depth: loop {
                 self.search_at_ply(board, current_ply);
+
+                self.get_pv(board.clone(), current_ply);
 
                 if self.stop_search {
                     break 'depth;
@@ -232,7 +233,7 @@ impl Engine {
 
         let original_alpha = alpha;
         
-        let board_hash = self.zobrist.get_hash(board, player);
+        let board_hash = get_hash(board, player);
         let probed = self.tt.probe(board_hash);
         if probed.is_some() {
             let entry = probed.unwrap();
@@ -284,6 +285,7 @@ impl Engine {
         }
 
         let mut best_score = f64::NEG_INFINITY;
+        let mut best_move = Move::new_null();
         let mut root_node_evals = vec![];
         for mv in current_player_moves.iter() {
             board.make_move(&mv);
@@ -301,6 +303,7 @@ impl Engine {
             
             if score > best_score {
                 best_score = score;
+                best_move = *mv;
 
             }
 
@@ -320,6 +323,7 @@ impl Engine {
         let mut entry = TTEntry {
             key: board_hash,
             value: best_score, 
+            bestmove: best_move,
             flag: TTEntryType::ExactValue, 
             depth, 
             empty: false
@@ -339,12 +343,45 @@ impl Engine {
         self.tt.insert(board_hash, entry);
 
         if root_node {
-            self.search_data.root_node_evals = root_node_evals;
+            self.search_data.root_node_evals = root_node_evals.clone();
 
         }
 
         return best_score;
 
+    }
+
+    pub fn get_pv(&self, mut board: BoardState, depth: usize) {
+        let mut current_player = 1.0;
+
+        let mut pv = vec![];
+
+        for x in 0..depth {
+            let board_hash = get_hash(&mut board, current_player);
+            let probed = self.tt.probe(board_hash);
+            
+            if probed.is_some() {
+                let entry = probed.unwrap();
+ 
+                board.make_move(&entry.bestmove);
+                current_player *= -1.0;
+
+                println!("{}: {:?}", x, &entry.bestmove);
+
+                pv.push(entry.bestmove);
+
+            } else {
+                break;
+
+            }
+
+        }
+            
+                        
+
+        board.print();
+
+       
     }
 
 }
