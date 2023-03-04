@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 mimalloc = { version = "*", default-features = false}
-rand = "0.8.5"
+primes = "0.3.0"
 
 [profile.release]
 lto = true

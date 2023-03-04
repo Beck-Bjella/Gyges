@@ -7,7 +7,6 @@ use crate::move_gen::*;
 use crate::evaluation::*;
 use crate::transposition_table::*;
 use crate::zobrist::*;
-use crate::move_gen::*;
 
 pub struct Engine {
     pub root_node_moves: Vec<Move>,
@@ -16,8 +15,6 @@ pub struct Engine {
     pub search_data: SearchData,
     pub tt: TranspositionTable,
 
-    // pub zobrist: ZobristHasher,
-    
     pub datain: Receiver<SearchInput>,
     pub stopin: Receiver<bool>,
     pub dataout: Sender<SearchData>,
@@ -31,7 +28,7 @@ impl Engine {
             stop_search: false,
 
             search_data: SearchData::new(),
-            tt: TranspositionTable::new(),
+            tt: TranspositionTable::new_from_mb(TRANSPOSTION_TABLE_DEFAULT_SIZE_MB),
 
             datain: datain,
             stopin: stopin,
@@ -101,16 +98,16 @@ impl Engine {
         
         self.stop_search = false;
         self.root_node_moves = vec![];
-        self.tt = TranspositionTable::new();
+        self.tt = TranspositionTable::new_from_mb(TRANSPOSTION_TABLE_DEFAULT_SIZE_MB);
         self.search_data = SearchData::new();
 
     }
 
     pub fn update_search_stats(&mut self) {
         self.search_data.search_time = self.search_data.start_time.elapsed().as_secs_f64();
-        // self.search_data.nps = (self.search_data.nodes as f64 / self.search_data.search_time) as usize;
-        // self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
-        // self.search_data.average_branching_factor = (self.search_data.nodes as f64).powf(1.0 / self.search_data.depth as f64);
+        self.search_data.bps = (self.search_data.branches as f64 / self.search_data.search_time) as usize;
+        self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
+        self.search_data.average_branching_factor = ((self.search_data.branches + self.search_data.leafs) as f64).powf(1.0 / self.search_data.depth as f64);
             
         self.search_data.root_node_evals.sort_by(|a, b| {
             if a.score > b.score {
@@ -222,10 +219,14 @@ impl Engine {
 
         }
 
+        let board_hash = get_hash(board, player);
+
         if depth == 0 {
             self.search_data.leafs += 1;
+
+            let eval = get_evalulation(board) * player;
             
-            return get_evalulation(board) * player;
+            return eval;
 
         }
 
@@ -233,7 +234,6 @@ impl Engine {
 
         let original_alpha = alpha;
         
-        let board_hash = get_hash(board, player);
         let probed = self.tt.probe(board_hash);
         if probed.is_some() {
             let entry = probed.unwrap();
@@ -266,7 +266,6 @@ impl Engine {
             }
         
         }
-
 
         let current_player_moves: Vec<Move>;
         if root_node {
@@ -327,6 +326,7 @@ impl Engine {
             flag: TTEntryType::ExactValue, 
             depth, 
             empty: false
+
         };
 
         if best_score <= original_alpha {
@@ -351,7 +351,44 @@ impl Engine {
 
     }
 
-    pub fn get_pv(&self, mut board: BoardState, depth: usize) {
+    // pub fn tt_order_moves(&mut self, moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<Move> {
+    //     let mut moves_to_sort: Vec<(Move, f64)> = Vec::with_capacity(moves.len());
+    //     let mut ordered_moves: Vec<Move> = Vec::with_capacity(moves.len());
+        
+    //     for mv in moves {
+    //         let mut sort_val: f64 = 0.0;
+
+    //         board.make_move(&mv);
+
+    //         let board_hash = get_hash(board, player);
+
+    //         let probed = self.tt.probe(board_hash);
+    //         if probed.is_some() {
+    //             let entry = probed.unwrap();
+
+    //             sort_val = f64::MAX - (entry.value * entry.depth as f64);
+            
+    //         }
+           
+    //         board.undo_move(&mv);
+    
+    //         moves_to_sort.push((mv, sort_val));
+            
+    //     }
+    
+    //     moves_to_sort.sort_by_cached_key(|m| m.1 as usize);
+    
+    //     for item in &moves_to_sort {
+    //         ordered_moves.push(item.0);
+            
+    //     }
+    
+    //     return ordered_moves;
+     
+    // }
+    
+
+    pub fn get_pv(&mut self, mut board: BoardState, depth: usize) {
         let mut current_player = 1.0;
 
         let mut pv = vec![];
@@ -366,8 +403,6 @@ impl Engine {
                 board.make_move(&entry.bestmove);
                 current_player *= -1.0;
 
-                println!("{}: {:?}", x, &entry.bestmove);
-
                 pv.push(entry.bestmove);
 
             } else {
@@ -377,11 +412,8 @@ impl Engine {
 
         }
             
-                        
+        self.search_data.pv = pv;
 
-        board.print();
-
-       
     }
 
 }
@@ -408,6 +440,8 @@ impl SearchInput {
 #[derive(Debug, Clone)]
 pub struct SearchData {
     pub best_move: Move,
+    pub pv: Vec<Move>,
+
     pub root_node_evals: Vec<Move>,
 
     pub start_time: Instant,
@@ -415,10 +449,10 @@ pub struct SearchData {
 
     pub branches: usize,
     pub leafs: usize,
-    // pub average_branching_factor: f64,
+    pub average_branching_factor: f64,
 
-    // pub lps: usize,
-    // pub nps: usize,
+    pub lps: usize,
+    pub bps: usize,
 
     pub tt_hits: usize,
     pub tt_exacts: usize,
@@ -437,6 +471,8 @@ impl SearchData {
     pub fn new() -> SearchData {
         return SearchData {
             best_move: Move::new_null(),
+            pv: vec![],
+
             root_node_evals: vec![],
 
             start_time: std::time::Instant::now(),
@@ -444,10 +480,10 @@ impl SearchData {
 
             branches: 0,
             leafs: 0,
-            // average_branching_factor: 0.0,
+            average_branching_factor: 0.0,
 
-            // nps: 0,
-            // lps: 0,
+            lps: 0,
+            bps: 0,
 
             tt_hits: 0,
             tt_exacts: 0,
