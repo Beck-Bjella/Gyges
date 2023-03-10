@@ -220,22 +220,11 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 
 }
 
-pub fn get_evalulation(board: &mut BoardState) -> f64 {
-    if board.data[PLAYER_2_GOAL] != 0 {
-        return f64::INFINITY;
-
-    } else if board.data[PLAYER_1_GOAL] != 0 {
-        return f64::NEG_INFINITY;
-
-    }
-    
+pub fn get_evalulation(board: &mut BoardState, player: f64) -> f64 {
     let mut move_score: f64 = 0.0;
 
-    let player_1_move_count = unsafe{valid_move_count(board, PLAYER_1)} as f64;
-    let player_2_moves_count = unsafe{valid_move_count(board, PLAYER_2)} as f64;
-
-    move_score += player_1_move_count;
-    move_score -= player_2_moves_count;
+    move_score += unsafe{valid_move_count(board, player)} as f64;
+    move_score -= unsafe{valid_move_count(board, -player)} as f64;
 
     return move_score;
 

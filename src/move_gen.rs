@@ -492,22 +492,22 @@ impl MoveList {
 
     }
 
-    // pub fn move_count(&mut self) -> usize {
-    //     let mut count = 0;
+    pub fn move_count(&mut self) -> usize {
+        let mut count = 0;
 
-    //     let drop_count = self.drop_positions.get_data().len();
+        let drop_count = self.drop_positions.get_data().len();
         
-    //     for idx in self.start_indexs.iter() {
+        for idx in self.start_indexs.iter() {
             
-    //         let end_pos_count = self.end_positions[*idx].get_data().len();
-    //         let pickup_pos_count = self.pickup_positions[*idx].get_data().len();
-    //         count += ((drop_count + 1) * pickup_pos_count) + end_pos_count;
+            let end_pos_count = self.end_positions[*idx].get_data().len();
+            let pickup_pos_count = self.pickup_positions[*idx].get_data().len();
+            count += ((drop_count + 1) * pickup_pos_count) + end_pos_count;
         
-    //     }
+        }
 
-    //     return count;
+        return count;
 
-    // }
+    }
 
     pub fn has_threat(&mut self) -> bool {
         for idx in self.start_indexs.iter() {

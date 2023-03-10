@@ -139,13 +139,11 @@ impl Engine {
         self.reset();
 
         if board.data[PLAYER_2_GOAL] == 0 && board.data[PLAYER_1_GOAL] == 0 {
-            self.root_node_moves = order_moves(unsafe{valid_moves(board, 1.0).moves(board)}, board, 1.0);
+            self.root_node_moves = order_moves(unsafe{valid_moves(board, PLAYER_1).moves(board)}, board, PLAYER_1);
             
             let mut current_ply = 1;
             'depth: loop {
                 self.search_at_ply(board, current_ply);
-
-                self.get_pv(board.clone(), current_ply);
 
                 if self.stop_search {
                     break 'depth;
@@ -224,7 +222,7 @@ impl Engine {
         if depth == 0 {
             self.search_data.leafs += 1;
 
-            let eval = get_evalulation(board) * player;
+            let eval = get_evalulation(board, player);
             
             return eval;
 
@@ -235,8 +233,8 @@ impl Engine {
         let original_alpha = alpha;
         
         let probed = self.tt.probe(board_hash);
-        if probed.is_some() {
-            let entry = probed.unwrap();
+
+        if let Some(entry) = probed {
             if entry.depth >= depth {
                 self.search_data.tt_hits += 1;
                 if entry.flag == TTEntryType::ExactValue {
@@ -262,23 +260,32 @@ impl Engine {
                     return entry.value;
 
                 }
-
+            
             }
-        
         }
-
+     
         let current_player_moves: Vec<Move>;
         if root_node {
+            let mut move_list = unsafe{valid_moves(board, player)};
+            for mut mv in move_list.moves(board) {
+                if mv.data[3] == PLAYER_2_GOAL {
+                    mv.score = f64::INFINITY;
+                    self.search_data.root_node_evals = vec![mv];
+
+                    return f64::INFINITY;
+    
+                }
+    
+            }
+
             current_player_moves = self.root_node_moves.clone();
 
         } else {
             let mut move_list = unsafe{valid_moves(board, player)};
-
             if move_list.has_threat() {
                 return f64::INFINITY;
         
             }
-
             current_player_moves = order_moves(move_list.moves(board), board, player);
 
         }
@@ -387,35 +394,6 @@ impl Engine {
      
     // }
     
-
-    pub fn get_pv(&mut self, mut board: BoardState, depth: usize) {
-        let mut current_player = 1.0;
-
-        let mut pv = vec![];
-
-        for x in 0..depth {
-            let board_hash = get_hash(&mut board, current_player);
-            let probed = self.tt.probe(board_hash);
-            
-            if probed.is_some() {
-                let entry = probed.unwrap();
- 
-                board.make_move(&entry.bestmove);
-                current_player *= -1.0;
-
-                pv.push(entry.bestmove);
-
-            } else {
-                break;
-
-            }
-
-        }
-            
-        self.search_data.pv = pv;
-
-    }
-
 }
 
 #[derive(Clone)]
@@ -440,7 +418,6 @@ impl SearchInput {
 #[derive(Debug, Clone)]
 pub struct SearchData {
     pub best_move: Move,
-    pub pv: Vec<Move>,
 
     pub root_node_evals: Vec<Move>,
 
@@ -471,7 +448,6 @@ impl SearchData {
     pub fn new() -> SearchData {
         return SearchData {
             best_move: Move::new_null(),
-            pv: vec![],
 
             root_node_evals: vec![],
 

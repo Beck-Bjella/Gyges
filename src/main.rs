@@ -7,7 +7,6 @@ mod board;
 mod evaluation;
 mod move_gen;
 mod transposition_table;
-
 mod engine;
 mod zobrist;
 
@@ -15,8 +14,8 @@ use crate::board::*;
 use crate::engine::*;
 use crate::transposition_table::*;
 
-#[global_allocator]
-static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+// #[global_allocator]
+// static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
@@ -34,7 +33,7 @@ fn main() {
 
     );
     
-    let search_input = SearchInput::new(board, 5);
+    let search_input = SearchInput::new(board, 11);
 
     let (board_sender, board_reciver): (Sender<SearchInput>, Receiver<SearchInput>) = mpsc::channel();
     let (stop_sender, stop_reciver): (Sender<bool>, Receiver<bool>) = mpsc::channel();
@@ -74,12 +73,6 @@ fn main() {
                 println!("      - EMPTY INSERTS: {}", unsafe { TT_EMPTY_INSERTS });
                 println!("      - SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS });
                 println!("      - UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS });
-                println!("");
-                println!("  - PV:");
-                for (i, mv) in final_results.pv.iter().enumerate() {
-                    println!("      - {}: {:?}", i, mv);
-
-                }
                 println!("");
 
             }
