@@ -18,6 +18,8 @@ pub struct Engine {
     pub datain: Receiver<SearchInput>,
     pub stopin: Receiver<bool>,
     pub dataout: Sender<SearchData>,
+
+    pub player_to_move: f64
     
 }
 
@@ -34,11 +36,15 @@ impl Engine {
             stopin: stopin,
             dataout: dataout,
 
+            player_to_move: 0.0,
+
         };
 
     }
 
     pub fn start(&mut self) {
+        println!("ENGINE STARTED");
+
         loop {
             let recived = self.datain.try_recv();
             match recived {
@@ -46,12 +52,14 @@ impl Engine {
                     let search_input = recived.unwrap();
                     let mut board = search_input.board.clone();
                     let max_ply = search_input.max_ply;
-                    
+
+                    self.player_to_move = search_input.player;
+
                     self.iterative_deepening_search(&mut board, max_ply);
            
                 },
                 Err(TryRecvError::Disconnected) => {
-                    println!("QUITING");
+                    println!("ENGINE QUITING");
                     break;
                     
                 },
@@ -221,8 +229,14 @@ impl Engine {
 
         if depth == 0 {
             self.search_data.leafs += 1;
-
-            let eval = get_evalulation(board, player);
+            
+            let eval: f64;
+            if self.player_to_move == 1.0 {
+                eval = get_evalulation(board, player);
+            } else {
+                eval = get_evalulation(board, player);
+            }
+            
             
             return eval;
 
@@ -400,15 +414,16 @@ impl Engine {
 pub struct SearchInput {
     pub board: BoardState,
     pub max_ply: usize,
+    pub player: f64
 
 }
 
 impl SearchInput {
-    pub fn new(board: BoardState, max_ply: usize) -> SearchInput {
+    pub fn new(board: BoardState, max_ply: usize, player: f64) -> SearchInput {
         return SearchInput {
-            board: board,
-            max_ply: max_ply,
-
+            board: board.clone(),
+            max_ply,
+            player
         }
 
     }

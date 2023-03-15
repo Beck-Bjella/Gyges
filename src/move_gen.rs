@@ -547,19 +547,16 @@ pub fn sort_moves_highest_score_first(mut moves: Vec<Move>) -> Vec<Move> {
 }
 
 pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<Move> {
-    let mut moves_to_sort: Vec<(Move, f64)> = Vec::with_capacity(moves.len());
-    let mut ordered_moves: Vec<Move> = Vec::with_capacity(moves.len());
-    
-    for mv in moves {
+    let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
         board.make_move(&mv);
 
         let predicted_score: f64 = unsafe{valid_move_count(board, -player)} as f64;
        
         board.undo_move(&mv);
 
-        moves_to_sort.push((mv, predicted_score));
-        
-    }
+        return (mv, predicted_score);
+
+    }).collect();
 
     moves_to_sort.sort_unstable_by(|a, b| {
         if a.1 < b.1 {
@@ -575,10 +572,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec
 
     });
 
-    for item in &moves_to_sort {
-        ordered_moves.push(item.0);
-        
-    }
+    let ordered_moves: Vec<Move> = moves_to_sort.into_iter().map(|x| x.0).collect();
 
     return ordered_moves;
  

@@ -229,3 +229,13 @@ pub fn get_evalulation(board: &mut BoardState, player: f64) -> f64 {
     return move_score;
 
 }  
+
+pub fn get_evalulation_2(board: &mut BoardState, player: f64) -> f64 {
+    let mut move_score: f64 = 0.0;
+
+    move_score += unsafe{valid_move_count(board, player)} as f64;
+    move_score -= 2.0 * unsafe{valid_move_count(board, -player)} as f64;
+
+    return move_score;
+
+}  
