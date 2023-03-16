@@ -1,3 +1,5 @@
+use std::f32::consts::E;
+
 use crate::board::*;
 use crate::move_gen::*;
 
@@ -223,19 +225,40 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 pub fn get_evalulation(board: &mut BoardState, player: f64) -> f64 {
     let mut move_score: f64 = 0.0;
 
-    move_score += unsafe{valid_move_count(board, player)} as f64;
+    // move_score += unsafe{valid_move_count(board, player)} as f64;
     move_score -= unsafe{valid_move_count(board, -player)} as f64;
 
     return move_score;
 
 }  
 
-pub fn get_evalulation_2(board: &mut BoardState, player: f64) -> f64 {
-    let mut move_score: f64 = 0.0;
+pub fn is_quiet(board: &mut BoardState, player: f64) -> bool {
+    let orignal_opp_eval = unsafe{valid_move_count(board, -player)} as f64;
 
-    move_score += unsafe{valid_move_count(board, player)} as f64;
-    move_score -= 2.0 * unsafe{valid_move_count(board, -player)} as f64;
+    let mut move_list = unsafe{valid_moves(board, player)};
+    let current_player_moves = move_list.moves(board);
 
-    return move_score;
+    let mut opp_lowest_eval = f64::INFINITY;
+    for mv in current_player_moves.iter() {
+        board.make_move(&mv);
 
-}  
+        let opp_eval = unsafe{valid_move_count(board, -player)} as f64;
+        
+        board.undo_move(&mv);
+
+        if opp_eval < opp_lowest_eval {
+            opp_lowest_eval = opp_eval;
+
+        }
+
+    }
+
+    if (opp_lowest_eval as f64 / orignal_opp_eval as f64) <= 0.01 {
+        return false;
+
+    } else {
+        return true;
+
+    }
+
+}

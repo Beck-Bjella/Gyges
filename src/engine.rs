@@ -8,6 +8,13 @@ use crate::evaluation::*;
 use crate::transposition_table::*;
 use crate::zobrist::*;
 
+#[derive(Clone, PartialEq)]
+pub enum EvalType {
+    One,
+    Two
+
+}
+
 pub struct Engine {
     pub root_node_moves: Vec<Move>,
     pub stop_search: bool,
@@ -19,7 +26,7 @@ pub struct Engine {
     pub stopin: Receiver<bool>,
     pub dataout: Sender<SearchData>,
 
-    pub player_to_move: f64
+    pub eval_type: EvalType
     
 }
 
@@ -36,7 +43,7 @@ impl Engine {
             stopin: stopin,
             dataout: dataout,
 
-            player_to_move: 0.0,
+            eval_type: EvalType::One,
 
         };
 
@@ -53,7 +60,7 @@ impl Engine {
                     let mut board = search_input.board.clone();
                     let max_ply = search_input.max_ply;
 
-                    self.player_to_move = search_input.player;
+                    self.eval_type = search_input.eval_type;
 
                     self.iterative_deepening_search(&mut board, max_ply);
            
@@ -213,6 +220,38 @@ impl Engine {
     
     }
 
+    fn quiesence_search(&mut self, board: &mut BoardState, player: f64, depth: i8) -> f64 {
+        
+
+        if is_quiet(board, player) || depth == 0 {
+            return get_evalulation(board, player);
+
+        }
+
+        self.search_data.quiescence_nodes += 1;
+
+        let mut move_list = unsafe{valid_moves(board, player)};
+        let current_player_moves = move_list.moves(board);
+        
+        let mut best_score = f64::NEG_INFINITY;
+        for mv in current_player_moves.iter() {
+            board.make_move(&mv);
+
+            let score = -self.quiesence_search(board, -player, depth - 1);
+            
+            board.undo_move(&mv);
+
+            if score > best_score {
+                best_score = score;
+
+            }
+
+        }
+
+        return best_score;
+    
+    }
+
     fn negamax(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, root_node: bool) -> f64 {
         if !root_node {
             if self.stop_search {
@@ -229,14 +268,8 @@ impl Engine {
 
         if depth == 0 {
             self.search_data.leafs += 1;
-            
-            let eval: f64;
-            if self.player_to_move == 1.0 {
-                eval = get_evalulation(board, player);
-            } else {
-                eval = get_evalulation(board, player);
-            }
-            
+
+            let eval = self.quiesence_search(board, player, 1);
             
             return eval;
 
@@ -414,16 +447,16 @@ impl Engine {
 pub struct SearchInput {
     pub board: BoardState,
     pub max_ply: usize,
-    pub player: f64
+    pub eval_type: EvalType
 
 }
 
 impl SearchInput {
-    pub fn new(board: BoardState, max_ply: usize, player: f64) -> SearchInput {
+    pub fn new(board: BoardState, max_ply: usize, eval_type: EvalType) -> SearchInput {
         return SearchInput {
             board: board.clone(),
             max_ply,
-            player
+            eval_type
         }
 
     }
@@ -441,6 +474,7 @@ pub struct SearchData {
 
     pub branches: usize,
     pub leafs: usize,
+    pub quiescence_nodes: usize,
     pub average_branching_factor: f64,
 
     pub lps: usize,
@@ -471,6 +505,7 @@ impl SearchData {
 
             branches: 0,
             leafs: 0,
+            quiescence_nodes: 0,
             average_branching_factor: 0.0,
 
             lps: 0,
