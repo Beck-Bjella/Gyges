@@ -14,11 +14,13 @@ use crate::transposition_table::*;
 use crate::board::*;
 use crate::engine::*;
 use crate::evaluation::*;
+use crate::zobrist::*;
 use crate::move_gen::*;
+
+
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
-use std::vec;
 
 fn main() {
     let (board_sender, board_reciver): (Sender<SearchInput>, Receiver<SearchInput>) = mpsc::channel();
@@ -39,10 +41,28 @@ fn main() {
         [0, 0, 0, 0, 0, 0],
         [3, 2, 1, 1, 2, 3],
         [0, 0],
+        PLAYER_1,
 
     );
 
-    // println!("{}", is_quiet(&mut board, PLAYER_1));
+    // let mv1 = Move::new([0, 2, 1, 4, 2, 27], MoveType::Drop, 0.0);
+    // let mv2 = Move::new([0, 5, 3, 4, 2, 8], MoveType::Drop, 0.0);
+    // let mv3 = Move::new([0, 1, 2, 6, NULL, NULL], MoveType::Bounce, 0.0);
+    // let mv4 = Move::new([0, 0, 3, 1, 2, 0], MoveType::Bounce, 0.0);
+
+    // println!("{}", board.hash);
+    // println!("{}", get_hash(&mut board, PLAYER_1));
+
+    // board.make_move(&mv4);
+
+    // println!("{}", board.hash);
+    // println!("{}", get_hash(&mut board, PLAYER_1));
+
+    // board.undo_move(&mv4);
+
+    // println!("{}", board.hash);
+    // println!("{}", get_hash(&mut board, PLAYER_1));
+
 
 
     // let boards = vec![board];
@@ -63,7 +83,6 @@ fn main() {
     //     }
         
     // }
-
     // let win_rates = (p1_wins / board_count, p2_wins / board_count);
     // println!("WIN PERCENTS: ");
     // println!("  - P1: {}", win_rates.0);
@@ -71,7 +90,7 @@ fn main() {
 
 
 
-    let search_input = SearchInput::new(board, 99, EvalType::One);
+    let search_input = SearchInput::new(board, 99, EvalType::Standard);
     _ = board_sender.send(search_input);
 
     loop {
@@ -91,8 +110,8 @@ fn main() {
                 println!("");
                 println!("  - Leafs: {}", final_results.leafs);
                 println!("  - Lps: {}", final_results.lps);
-                println!("");
-                println!("  - Quiesence Nodes: {}", final_results.quiescence_nodes);
+                // println!("");
+                // println!("  - Quiesence Nodes: {}", final_results.quiescence_nodes);
                 println!("");
                 println!("  - TT:");
                 println!("      - HITS: {:?}", final_results.tt_hits);
@@ -116,77 +135,77 @@ fn main() {
 }
 
 
-fn simulate_games(boards: Vec<BoardState>, board_sender: Sender<SearchInput>, stop_sender: Sender<bool>, results_reciver: Receiver<SearchData>) -> Vec<(i32, f64)> {
-    let max_ply = 3;
+// fn simulate_games(boards: Vec<BoardState>, board_sender: Sender<SearchInput>, stop_sender: Sender<bool>, results_reciver: Receiver<SearchData>) -> Vec<(i32, f64)> {
+//     let max_ply = 3;
 
-    let mut outcomes = vec![];
+//     let mut outcomes = vec![];
 
-    for mut board in boards {
-        let mut current_player = PLAYER_1;
-        let mut game_depth = 1;
+//     for mut board in boards {
+//         let mut current_player = PLAYER_1;
+//         let mut game_depth = 1;
     
-        loop {
-            println!("========================");
+//         loop {
+//             println!("========================");
             
-            let mut best_move = Move::new_null();
-            _ = stop_sender.send(true);
+//             let mut best_move = Move::new_null();
+//             _ = stop_sender.send(true);
 
-            let eval_type: EvalType;
-            if current_player == 1.0 {
-                eval_type = EvalType::Two;
-            } else {
-                eval_type = EvalType::One;
-            }
-            _ = board_sender.send(SearchInput{board, max_ply, eval_type});
+//             let eval_type: EvalType;
+//             if current_player == 1.0 {
+//                 eval_type = EvalType::Two;
+//             } else {
+//                 eval_type = EvalType::One;
+//             }
+//             _ = board_sender.send(SearchInput{board, max_ply, eval_type});
 
-            loop {
-                let results = results_reciver.try_recv();
-                match results {
-                    Ok(_) => {
-                        let final_results = results.unwrap();
-                        if final_results.depth >= max_ply {
-                            best_move = final_results.best_move;
-                            break;
+//             loop {
+//                 let results = results_reciver.try_recv();
+//                 match results {
+//                     Ok(_) => {
+//                         let final_results = results.unwrap();
+//                         if final_results.depth >= max_ply {
+//                             best_move = final_results.best_move;
+//                             break;
     
-                        }
+//                         }
     
-                    }
-                    Err(TryRecvError::Disconnected) => {}
-                    Err(TryRecvError::Empty) => {}
+//                     }
+//                     Err(TryRecvError::Disconnected) => {}
+//                     Err(TryRecvError::Empty) => {}
     
-                }
+//                 }
     
-            }
+//             }
             
-            println!("{:?}: {}", best_move, current_player);
-            board.print();
+//             println!("{:?}: {}", best_move, current_player);
+//             board.print();
     
-            if !best_move.is_null() {
-                if best_move.score == f64::INFINITY {
-                    outcomes.push((game_depth, current_player));
-                    break;
+//             if !best_move.is_null() {
+//                 if best_move.score == f64::INFINITY {
+//                     outcomes.push((game_depth, current_player));
+//                     break;
     
-                } else if best_move.score == f64::NEG_INFINITY {
-                    outcomes.push((game_depth, -current_player));
-                    break;
+//                 } else if best_move.score == f64::NEG_INFINITY {
+//                     outcomes.push((game_depth, -current_player));
+//                     break;
     
-                }
+//                 }
     
-                board.make_move(&best_move);
+//                 board.make_move(&best_move);
     
-            } else {
-                panic!("TRIED TO MAKE A NULL MOVE!");
+//             } else {
+//                 panic!("TRIED TO MAKE A NULL MOVE!");
     
-            }
+//             }
     
-            board.flip();
-            current_player *= -1.0;
-            game_depth += 1;
+//             board.flip();
+//             current_player *= -1.0;
+//             game_depth += 1;
     
-        }
+//         }
 
-    }
+//     }
 
-    return outcomes;
+//     return outcomes;
 
-}
+// }

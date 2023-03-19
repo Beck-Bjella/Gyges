@@ -1,9 +1,12 @@
 use crate::move_gen::*;
 use crate::bitboard::*;
+use crate::zobrist::*;
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct BoardState {
     pub data: [usize; 38],
+    pub player: f64,
+    hash: u64
 
 }
 
@@ -11,12 +14,14 @@ impl BoardState {
     pub fn new() -> BoardState {
         BoardState {
             data: [0; 38],
+            player: 0.0,
+            hash: 0
 
         }
         
     }
 
-    pub fn set(&mut self, rank5: [usize; 6], rank4: [usize; 6], rank3: [usize; 6], rank2: [usize; 6], rank1: [usize; 6], rank0: [usize; 6], goal_data: [usize; 2]) {
+    pub fn set(&mut self, rank5: [usize; 6], rank4: [usize; 6], rank3: [usize; 6], rank2: [usize; 6], rank1: [usize; 6], rank0: [usize; 6], goal_data: [usize; 2], player: f64) {
         for x in 0..6 {
             self.data[x] = rank0[x];
             self.data[x + 6] = rank1[x];
@@ -29,6 +34,10 @@ impl BoardState {
         
         self.data[PLAYER_1_GOAL] = goal_data[0];
         self.data[PLAYER_2_GOAL] = goal_data[1];
+
+        self.hash = get_uni_hash(self);
+
+        self.player = player;
 
     }
 
@@ -78,13 +87,27 @@ impl BoardState {
         let step3 = [mv.data[4], mv.data[5]];
         
         if mv.data[5] != NULL {
-            self.data[step1[1]] = step1[0];
-            self.data[step2[1]] = step2[0];
-            self.data[step3[1]] = step3[0];
+            self.hash ^= ZOBRIST_HASH_DATA[step1[1]][self.data[step1[1]]];
 
-        } else if mv.data[5] == NULL {
+            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][self.data[step2[1]]];
+            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][step2[0]];
+
+            self.hash ^= ZOBRIST_HASH_DATA[step3[1]][step3[0]];
+
+            self.data[step1[1]] = step1[0];
+
             self.data[step2[1]] = step2[0];
-            self.data[step1[1]] = 0;
+        
+            self.data[step3[1]] = step3[0];
+            
+        } else if mv.data[5] == NULL {
+            self.hash ^= ZOBRIST_HASH_DATA[step1[1]][self.data[step1[1]]];
+
+            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][step2[0]];
+
+            self.data[step1[1]] = step1[0];
+
+            self.data[step2[1]] = step2[0];
 
         }
 
@@ -96,12 +119,26 @@ impl BoardState {
         let step3 = [mv.data[4], mv.data[5]];
 
         if mv.data[5] != NULL {
+            self.hash ^= ZOBRIST_HASH_DATA[step3[1]][self.data[step3[1]]];
+
+            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][self.data[step2[1]]];
+            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][step3[0]];
+
+            self.hash ^= ZOBRIST_HASH_DATA[step1[1]][step2[0]];
+
             self.data[step3[1]] = step1[0];
+
             self.data[step2[1]] = step3[0];
+
             self.data[step1[1]] = step2[0];
-            
+
         } else if mv.data[5] == NULL {
-            self.data[step2[1]] = 0;
+            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][self.data[step2[1]]];
+
+            self.hash ^= ZOBRIST_HASH_DATA[step1[1]][step2[0]];
+            
+            self.data[step2[1]] = step1[0];
+
             self.data[step1[1]] = step2[0];
 
         }
@@ -185,17 +222,19 @@ impl BoardState {
         }
 
     }
+    
+    pub fn hash(&self, player: f64) -> u64 {
+        if player == PLAYER_1 {
+            return self.hash ^ PLAYER_1_HASH;
 
-    pub fn key(&self) -> u128 {
-        let mut board_str: String = self.data.into_iter().map(|i| i.to_string()).collect::<String>();
-        board_str.insert(0, '1');
+        } else {
+            return self.hash ^ PLAYER_2_HASH;
 
-        let key = board_str.parse::<u128>().unwrap();
-
-        return key;
+        }
+        
 
     }
-    
+
     pub fn flip(&mut self) {
         let mut temp_data: [usize; 38] = [0 ,0 ,0 ,0, 0, 0,
                                             0 ,0 ,0 ,0, 0, 0,

@@ -10,8 +10,7 @@ use crate::zobrist::*;
 
 #[derive(Clone, PartialEq)]
 pub enum EvalType {
-    One,
-    Two
+    Standard,
 
 }
 
@@ -43,7 +42,7 @@ impl Engine {
             stopin: stopin,
             dataout: dataout,
 
-            eval_type: EvalType::One,
+            eval_type: EvalType::Standard,
 
         };
 
@@ -220,37 +219,37 @@ impl Engine {
     
     }
 
-    fn quiesence_search(&mut self, board: &mut BoardState, player: f64, depth: i8) -> f64 {
+    // fn quiesence_search(&mut self, board: &mut BoardState, player: f64, depth: i8) -> f64 {
         
 
-        if is_quiet(board, player) || depth == 0 {
-            return get_evalulation(board, player);
+    //     if is_quiet(board, player) || depth == 0 {
+    //         return get_evalulation(board, player);
 
-        }
+    //     }
 
-        self.search_data.quiescence_nodes += 1;
+    //     self.search_data.quiescence_nodes += 1;
 
-        let mut move_list = unsafe{valid_moves(board, player)};
-        let current_player_moves = move_list.moves(board);
+    //     let mut move_list = unsafe{valid_moves(board, player)};
+    //     let current_player_moves = move_list.moves(board);
         
-        let mut best_score = f64::NEG_INFINITY;
-        for mv in current_player_moves.iter() {
-            board.make_move(&mv);
+    //     let mut best_score = f64::NEG_INFINITY;
+    //     for mv in current_player_moves.iter() {
+    //         board.make_move(&mv);
 
-            let score = -self.quiesence_search(board, -player, depth - 1);
+    //         let score = -self.quiesence_search(board, -player, depth - 1);
             
-            board.undo_move(&mv);
+    //         board.undo_move(&mv);
 
-            if score > best_score {
-                best_score = score;
+    //         if score > best_score {
+    //             best_score = score;
 
-            }
+    //         }
 
-        }
+    //     }
 
-        return best_score;
+    //     return best_score;
     
-    }
+    // }
 
     fn negamax(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, root_node: bool) -> f64 {
         if !root_node {
@@ -264,12 +263,18 @@ impl Engine {
 
         }
 
-        let board_hash = get_hash(board, player);
+        // let board_hash = get_hash(board, player);
+        // if board_hash != board.hash(player) {
+        //     board.print();
+        //     println!("{} {}", board.player, player);
+        //     panic!();
+
+        // }
 
         if depth == 0 {
             self.search_data.leafs += 1;
 
-            let eval = self.quiesence_search(board, player, 1);
+            let eval = get_standered_evalulation(board, player);
             
             return eval;
 
@@ -279,7 +284,7 @@ impl Engine {
 
         let original_alpha = alpha;
         
-        let probed = self.tt.probe(board_hash);
+        let probed = self.tt.probe(board.hash(player));
 
         if let Some(entry) = probed {
             if entry.depth >= depth {
@@ -374,7 +379,7 @@ impl Engine {
         }
         
         let mut entry = TTEntry {
-            key: board_hash,
+            key: board.hash(player),
             value: best_score, 
             bestmove: best_move,
             flag: TTEntryType::ExactValue, 
@@ -394,7 +399,7 @@ impl Engine {
 
         }
 
-        self.tt.insert(board_hash, entry);
+        self.tt.insert(board.hash(player), entry);
 
         if root_node {
             self.search_data.root_node_evals = root_node_evals.clone();
