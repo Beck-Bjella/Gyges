@@ -13,7 +13,7 @@ pub const PLAYER_2: f64 = -1.0;
 pub const PLAYER_1_GOAL: usize = 36;
 pub const PLAYER_2_GOAL: usize = 37;
 
-pub const NULL: usize = 100;
+pub const  NULL: usize = 100;
 pub const NULL_BB: BitBoard = BitBoard(u64::MAX);
 
 pub const THREE_PATHS: [[[usize; 4]; 40]; 36] = [
@@ -548,11 +548,9 @@ pub fn sort_moves_highest_score_first(mut moves: Vec<Move>) -> Vec<Move> {
 
 pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<Move> {
     let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
-        board.make_move(&mv);
+        let mut new_board = board.make_move(&mv);
 
-        let predicted_score: f64 = unsafe{valid_move_count(board, -player)} as f64;
-       
-        board.undo_move(&mv);
+        let predicted_score: f64 = unsafe{valid_move_count(&mut new_board, -player)} as f64;
 
         return (mv, predicted_score);
 
@@ -1022,7 +1020,6 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
     return count;
 
 }
-
 
 
 pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {

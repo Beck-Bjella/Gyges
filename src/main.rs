@@ -10,6 +10,9 @@ mod transposition_table;
 mod engine;
 mod zobrist;
 
+mod tt;
+mod consts;
+
 use crate::transposition_table::*;
 use crate::board::*;
 use crate::engine::*;
@@ -17,12 +20,50 @@ use crate::evaluation::*;
 use crate::zobrist::*;
 use crate::move_gen::*;
 
-
-
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
 
+use rand::Rng;
+
 fn main() {
+    // let mut rng = rand::thread_rng();
+
+    // let mut keys = vec![];
+    // let mut threads = vec![];
+
+    // let tt = TranspositionTable::new_from_mb(100);
+
+    // for i in 0..2 {
+    //     let mut tt_clone = tt.clone();
+    //     let key: u64 = rng.gen();
+
+    //     let t = thread::spawn(move || {
+    //         tt_clone.insert(key, TTEntry { key: key, value: 1.0, flag: TTEntryType::ExactValue, depth: 1, empty: false });
+    //         let data = tt_clone.probe(key);
+
+    //         println!("{:?}", data);
+    //     });
+
+    //     keys.push(key);
+    //     threads.push(t);
+
+    // }
+
+    // for t in threads {
+    //     let _ = t.join().unwrap();
+
+    // }
+
+    // println!("{:?}", keys);
+    // println!("LOOKUP COLLISIONS: {}", unsafe { TT_LOOKUP_COLLISIONS });
+    // println!("EMPTY INSERTS: {}", unsafe { TT_EMPTY_INSERTS });
+    // println!("SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS });
+    // println!("UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS });
+
+    // let data = tt.probe(keys[0]);
+
+    // println!("{:?}", data);
+
     let (board_sender, board_reciver): (Sender<SearchInput>, Receiver<SearchInput>) = mpsc::channel();
     let (stop_sender, stop_reciver): (Sender<bool>, Receiver<bool>) = mpsc::channel();
     let (results_sender, results_reciver): (Sender<SearchData>, Receiver<SearchData>) = mpsc::channel();
@@ -110,8 +151,6 @@ fn main() {
                 println!("");
                 println!("  - Leafs: {}", final_results.leafs);
                 println!("  - Lps: {}", final_results.lps);
-                // println!("");
-                // println!("  - Quiesence Nodes: {}", final_results.quiescence_nodes);
                 println!("");
                 println!("  - TT:");
                 println!("      - HITS: {:?}", final_results.tt_hits);

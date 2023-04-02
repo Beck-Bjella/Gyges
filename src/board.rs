@@ -81,67 +81,48 @@ impl BoardState {
     
     }
 
-    pub fn make_move(&mut self, mv: &Move) {
+    pub fn make_move(self, mv: &Move) -> BoardState {
+        let mut data = self.data.clone();
+        let mut hash = self.hash.clone();
+        let player = self.player * -1.0;
+
         let step1 = [mv.data[0], mv.data[1]];
         let step2 = [mv.data[2], mv.data[3]];
         let step3 = [mv.data[4], mv.data[5]];
         
-        if mv.data[5] != NULL {
-            self.hash ^= ZOBRIST_HASH_DATA[step1[1]][self.data[step1[1]]];
+        if mv.flag == MoveType::Drop {
+            hash ^= ZOBRIST_HASH_DATA[step1[1]][self.data[step1[1]]];
 
-            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][self.data[step2[1]]];
-            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][step2[0]];
+            hash ^= ZOBRIST_HASH_DATA[step2[1]][self.data[step2[1]]];
+            hash ^= ZOBRIST_HASH_DATA[step2[1]][step2[0]];
 
-            self.hash ^= ZOBRIST_HASH_DATA[step3[1]][step3[0]];
+            hash ^= ZOBRIST_HASH_DATA[step3[1]][step3[0]];
+            
+            data[step1[1]] = step1[0];
 
-            self.data[step1[1]] = step1[0];
-
-            self.data[step2[1]] = step2[0];
+            data[step2[1]] = step2[0];
         
-            self.data[step3[1]] = step3[0];
+            data[step3[1]] = step3[0];
             
-        } else if mv.data[5] == NULL {
-            self.hash ^= ZOBRIST_HASH_DATA[step1[1]][self.data[step1[1]]];
+        } else if mv.flag == MoveType::Bounce {
+           
+            hash ^= ZOBRIST_HASH_DATA[step1[1]][self.data[step1[1]]];
 
-            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][step2[0]];
+            hash ^= ZOBRIST_HASH_DATA[step2[1]][step2[0]];
+            
+            data[step1[1]] = step1[0];
 
-            self.data[step1[1]] = step1[0];
+            data[step2[1]] = step2[0];
 
-            self.data[step2[1]] = step2[0];
+        }
+        
+        return BoardState {
+            data,
+            player,
+            hash
 
         }
 
-    }
-
-    pub fn undo_move(&mut self, mv: &Move) {
-        let step1 = [mv.data[0], mv.data[1]];
-        let step2 = [mv.data[2], mv.data[3]];
-        let step3 = [mv.data[4], mv.data[5]];
-
-        if mv.data[5] != NULL {
-            self.hash ^= ZOBRIST_HASH_DATA[step3[1]][self.data[step3[1]]];
-
-            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][self.data[step2[1]]];
-            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][step3[0]];
-
-            self.hash ^= ZOBRIST_HASH_DATA[step1[1]][step2[0]];
-
-            self.data[step3[1]] = step1[0];
-
-            self.data[step2[1]] = step3[0];
-
-            self.data[step1[1]] = step2[0];
-
-        } else if mv.data[5] == NULL {
-            self.hash ^= ZOBRIST_HASH_DATA[step2[1]][self.data[step2[1]]];
-
-            self.hash ^= ZOBRIST_HASH_DATA[step1[1]][step2[0]];
-            
-            self.data[step2[1]] = step1[0];
-
-            self.data[step1[1]] = step2[0];
-
-        }
 
     }
 
@@ -223,8 +204,8 @@ impl BoardState {
 
     }
     
-    pub fn hash(&self, player: f64) -> u64 {
-        if player == PLAYER_1 {
+    pub fn hash(&self) -> u64 {
+        if self.player == PLAYER_1 {
             return self.hash ^ PLAYER_1_HASH;
 
         } else {

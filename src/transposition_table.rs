@@ -2,7 +2,7 @@ use crate::move_gen::*;
 
 use primes::{Sieve, PrimeSet};
 
-pub const TRANSPOSTION_TABLE_DEFAULT_SIZE_MB: usize = 1000;
+pub const TRANSPOSTION_TABLE_DEFAULT_SIZE_MB: usize = 8000;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum TTEntryType {
@@ -16,7 +16,6 @@ pub enum TTEntryType {
 pub struct TTEntry {
     pub key: u64,
     pub value: f64,
-    pub bestmove: Move,
     pub flag: TTEntryType,
     pub depth: i8,
     pub empty: bool,
@@ -28,7 +27,6 @@ impl TTEntry {
         return TTEntry {
             key: 0,
             value: 0.0,
-            bestmove: Move::new_null(),
             flag: TTEntryType::None,
             depth: 0,
             empty: true,

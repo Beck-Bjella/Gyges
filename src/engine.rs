@@ -263,14 +263,6 @@ impl Engine {
 
         }
 
-        // let board_hash = get_hash(board, player);
-        // if board_hash != board.hash(player) {
-        //     board.print();
-        //     println!("{} {}", board.player, player);
-        //     panic!();
-
-        // }
-
         if depth == 0 {
             self.search_data.leafs += 1;
 
@@ -280,11 +272,13 @@ impl Engine {
 
         }
 
+        let board_hash = board.hash();
+
         self.search_data.branches += 1;
 
         let original_alpha = alpha;
         
-        let probed = self.tt.probe(board.hash(player));
+        let probed = self.tt.probe(board_hash);
 
         if let Some(entry) = probed {
             if entry.depth >= depth {
@@ -343,14 +337,11 @@ impl Engine {
         }
 
         let mut best_score = f64::NEG_INFINITY;
-        let mut best_move = Move::new_null();
         let mut root_node_evals = vec![];
         for mv in current_player_moves.iter() {
-            board.make_move(&mv);
+            let mut new_board = board.make_move(&mv);
 
-            let score = -self.negamax(board, -beta, -alpha, -player, depth - 1, false);
-            
-            board.undo_move(&mv);
+            let score = -self.negamax(&mut new_board, -beta, -alpha, -player, depth - 1, false);
 
             if root_node {
                 let mut scored_move = mv.clone();
@@ -361,7 +352,6 @@ impl Engine {
             
             if score > best_score {
                 best_score = score;
-                best_move = *mv;
 
             }
 
@@ -379,9 +369,8 @@ impl Engine {
         }
         
         let mut entry = TTEntry {
-            key: board.hash(player),
+            key: board_hash,
             value: best_score, 
-            bestmove: best_move,
             flag: TTEntryType::ExactValue, 
             depth, 
             empty: false
@@ -399,7 +388,7 @@ impl Engine {
 
         }
 
-        self.tt.insert(board.hash(player), entry);
+        self.tt.insert(board_hash, entry);
 
         if root_node {
             self.search_data.root_node_evals = root_node_evals.clone();
