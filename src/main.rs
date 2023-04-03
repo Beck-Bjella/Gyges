@@ -85,7 +85,6 @@ fn main() {
                 println!("      - CUTS: {:?}", final_results.tt_cuts);
                 println!("");
                 println!("      - EMPTY INSERTS: {}", unsafe { TT_EMPTY_INSERTS });
-                println!("      - SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS });
                 println!("      - UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS });
                 println!("");
 

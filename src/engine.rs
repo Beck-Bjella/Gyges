@@ -381,7 +381,7 @@ impl Engine {
         }
 
         let (result, entry) = unsafe{ tt().insert(board_hash) };
-        // if result  {
+        // if result {
             entry.replace(new_entry);
 
         // }

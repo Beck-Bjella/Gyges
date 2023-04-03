@@ -11,7 +11,6 @@ const BYTES_PER_MB: f64 = BYTES_PER_KB * 1000.0;
 const BYTES_PER_GB: f64 = BYTES_PER_MB * 1000.0;
 
 pub static mut TT_EMPTY_INSERTS: usize = 0;
-pub static mut TT_SAFE_INSERTS: usize = 0;
 pub static mut TT_UNSAFE_INSERTS: usize = 0;
 
 // #[derive(PartialEq, Debug)]

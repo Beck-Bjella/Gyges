@@ -89,7 +89,7 @@ pub fn get_uni_hash(board: &mut BoardState) -> u64 {
     for i in 0..36 {
         if board.data[i] != 0 {
             let piece_type = board.data[i];
-            hash ^= unsafe{ZOBRIST_HASH_DATA[i][piece_type]};
+            hash ^= ZOBRIST_HASH_DATA[i][piece_type];
 
         }
 
@@ -98,4 +98,3 @@ pub fn get_uni_hash(board: &mut BoardState) -> u64 {
     return hash;
 
 }
-
