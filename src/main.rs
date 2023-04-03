@@ -6,19 +6,19 @@ mod bitboard;
 mod board;
 mod evaluation;
 mod move_gen;
-mod transposition_table;
 mod engine;
 mod zobrist;
 
 mod tt;
 mod consts;
 
-use crate::transposition_table::*;
 use crate::board::*;
 use crate::engine::*;
 use crate::evaluation::*;
 use crate::zobrist::*;
 use crate::move_gen::*;
+use crate::consts::*;
+use crate::tt::*;
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
@@ -26,43 +26,15 @@ use std::thread;
 use rand::Rng;
 
 fn main() {
-    // let mut rng = rand::thread_rng();
+    init_tt();
 
-    // let mut keys = vec![];
-    // let mut threads = vec![];
+    unsafe {
+        println!("GB: {}", tt().size_gigabytes());
+        println!("Clusters: {}", tt().num_clusters());
+        println!("Entries: {}", tt().num_entrys());
+        println!("");
 
-    // let tt = TranspositionTable::new_from_mb(100);
-
-    // for i in 0..2 {
-    //     let mut tt_clone = tt.clone();
-    //     let key: u64 = rng.gen();
-
-    //     let t = thread::spawn(move || {
-    //         tt_clone.insert(key, TTEntry { key: key, value: 1.0, flag: TTEntryType::ExactValue, depth: 1, empty: false });
-    //         let data = tt_clone.probe(key);
-
-    //         println!("{:?}", data);
-    //     });
-
-    //     keys.push(key);
-    //     threads.push(t);
-
-    // }
-
-    // for t in threads {
-    //     let _ = t.join().unwrap();
-
-    // }
-
-    // println!("{:?}", keys);
-    // println!("LOOKUP COLLISIONS: {}", unsafe { TT_LOOKUP_COLLISIONS });
-    // println!("EMPTY INSERTS: {}", unsafe { TT_EMPTY_INSERTS });
-    // println!("SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS });
-    // println!("UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS });
-
-    // let data = tt.probe(keys[0]);
-
-    // println!("{:?}", data);
+    }
 
     let (board_sender, board_reciver): (Sender<SearchInput>, Receiver<SearchInput>) = mpsc::channel();
     let (stop_sender, stop_reciver): (Sender<bool>, Receiver<bool>) = mpsc::channel();
@@ -85,51 +57,6 @@ fn main() {
         PLAYER_1,
 
     );
-
-    // let mv1 = Move::new([0, 2, 1, 4, 2, 27], MoveType::Drop, 0.0);
-    // let mv2 = Move::new([0, 5, 3, 4, 2, 8], MoveType::Drop, 0.0);
-    // let mv3 = Move::new([0, 1, 2, 6, NULL, NULL], MoveType::Bounce, 0.0);
-    // let mv4 = Move::new([0, 0, 3, 1, 2, 0], MoveType::Bounce, 0.0);
-
-    // println!("{}", board.hash);
-    // println!("{}", get_hash(&mut board, PLAYER_1));
-
-    // board.make_move(&mv4);
-
-    // println!("{}", board.hash);
-    // println!("{}", get_hash(&mut board, PLAYER_1));
-
-    // board.undo_move(&mv4);
-
-    // println!("{}", board.hash);
-    // println!("{}", get_hash(&mut board, PLAYER_1));
-
-
-
-    // let boards = vec![board];
-    // let board_count = boards.len();
-
-    // let results = simulate_games(boards, board_sender, stop_sender, results_reciver);
-    // println!("{:?}", results);
-
-    // let mut p1_wins = 0;
-    // let mut p2_wins = 0;
-    // for data in results {
-    //     if data.1 == PLAYER_1 {
-    //         p1_wins += 1;
-
-    //     } else if data.1 == PLAYER_2 {
-    //         p2_wins += 1;
-
-    //     }
-        
-    // }
-    // let win_rates = (p1_wins / board_count, p2_wins / board_count);
-    // println!("WIN PERCENTS: ");
-    // println!("  - P1: {}", win_rates.0);
-    // println!("  - P2: {}", win_rates.1);
-
-
 
     let search_input = SearchInput::new(board, 99, EvalType::Standard);
     _ = board_sender.send(search_input);
@@ -157,7 +84,6 @@ fn main() {
                 println!("      - EXACTS: {:?}", final_results.tt_exacts);
                 println!("      - CUTS: {:?}", final_results.tt_cuts);
                 println!("");
-                println!("      - LOOKUP COLLISIONS: {}", unsafe { TT_LOOKUP_COLLISIONS });
                 println!("      - EMPTY INSERTS: {}", unsafe { TT_EMPTY_INSERTS });
                 println!("      - SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS });
                 println!("      - UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS });
@@ -170,6 +96,29 @@ fn main() {
         }
 
     }
+
+    // let boards = vec![board];
+    // let board_count = boards.len();
+
+    // let results = simulate_games(boards, board_sender, stop_sender, results_reciver);
+    // println!("{:?}", results);
+
+    // let mut p1_wins = 0;
+    // let mut p2_wins = 0;
+    // for data in results {
+    //     if data.1 == PLAYER_1 {
+    //         p1_wins += 1;
+
+    //     } else if data.1 == PLAYER_2 {
+    //         p2_wins += 1;
+
+    //     }
+        
+    // }
+    // let win_rates = (p1_wins / board_count, p2_wins / board_count);
+    // println!("WIN PERCENTS: ");
+    // println!("  - P1: {}", win_rates.0);
+    // println!("  - P2: {}", win_rates.1);
 
 }
 

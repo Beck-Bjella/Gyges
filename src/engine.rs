@@ -5,8 +5,9 @@ use std::time::Instant;
 use crate::board::*;
 use crate::move_gen::*;
 use crate::evaluation::*;
-use crate::transposition_table::*;
 use crate::zobrist::*;
+use crate::consts::*;
+use crate::tt::*;
 
 #[derive(Clone, PartialEq)]
 pub enum EvalType {
@@ -19,7 +20,6 @@ pub struct Engine {
     pub stop_search: bool,
 
     pub search_data: SearchData,
-    pub tt: TranspositionTable,
 
     pub datain: Receiver<SearchInput>,
     pub stopin: Receiver<bool>,
@@ -36,7 +36,6 @@ impl Engine {
             stop_search: false,
 
             search_data: SearchData::new(),
-            tt: TranspositionTable::new_from_mb(TRANSPOSTION_TABLE_DEFAULT_SIZE_MB),
 
             datain: datain,
             stopin: stopin,
@@ -112,7 +111,7 @@ impl Engine {
         
         self.stop_search = false;
         self.root_node_moves = vec![];
-        self.tt = TranspositionTable::new_from_mb(TRANSPOSTION_TABLE_DEFAULT_SIZE_MB);
+        init_tt();
         self.search_data = SearchData::new();
 
     }
@@ -278,24 +277,23 @@ impl Engine {
 
         let original_alpha = alpha;
         
-        let probed = self.tt.probe(board_hash);
-
-        if let Some(entry) = probed {
+        let (result, entry) = unsafe{ tt().probe(board_hash) };
+        if result {
             if entry.depth >= depth {
                 self.search_data.tt_hits += 1;
                 if entry.flag == TTEntryType::ExactValue {
                     self.search_data.tt_exacts += 1;
-                    return entry.value;
+                    return entry.score;
 
                 } else if entry.flag == TTEntryType::LowerBound {
-                    if entry.value > alpha {
-                        alpha = entry.value;
+                    if entry.score > alpha {
+                        alpha = entry.score;
 
                     }
 
                 } else if entry.flag == TTEntryType::UpperBound {
-                    if entry.value < beta {
-                        beta = entry.value;
+                    if entry.score < beta {
+                        beta = entry.score;
 
                     }
 
@@ -303,11 +301,12 @@ impl Engine {
                     
                 if alpha >= beta {
                     self.search_data.tt_cuts += 1;
-                    return entry.value;
+                    return entry.score;
 
                 }
             
             }
+
         }
      
         let current_player_moves: Vec<Move>;
@@ -368,27 +367,24 @@ impl Engine {
 
         }
         
-        let mut entry = TTEntry {
-            key: board_hash,
-            value: best_score, 
-            flag: TTEntryType::ExactValue, 
-            depth, 
-            empty: false
-
-        };
-
+        let mut new_entry = Entry::new(board_hash, best_score, depth, TTEntryType::ExactValue);
+      
         if best_score <= original_alpha {
-            entry.flag = TTEntryType::UpperBound;
+            new_entry.flag = TTEntryType::UpperBound;
 
         } else if best_score >= beta {
-            entry.flag = TTEntryType::LowerBound;
+            new_entry.flag = TTEntryType::LowerBound;
 
         } else {
-            entry.flag = TTEntryType::ExactValue;
+            new_entry.flag = TTEntryType::ExactValue;
 
         }
 
-        self.tt.insert(board_hash, entry);
+        let (result, entry) = unsafe{ tt().insert(board_hash) };
+        // if result  {
+            entry.replace(new_entry);
+
+        // }
 
         if root_node {
             self.search_data.root_node_evals = root_node_evals.clone();
