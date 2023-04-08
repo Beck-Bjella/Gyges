@@ -60,28 +60,28 @@ pub const ZOBRIST_HASH_DATA: [[u64; 4]; 38] = [
 
 // }
 
-// pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
-//     let mut hash = 0;
+pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
+    let mut hash = 0;
 
-//     if current_player == 1.0 {
-//         hash ^= PLAYER_1_HASH;
-//     } else {
-//         hash ^= PLAYER_2_HASH;
+    if current_player == 1.0 {
+        hash ^= PLAYER_1_HASH;
+    } else {
+        hash ^= PLAYER_2_HASH;
 
-//     }
+    }
 
-//     for i in 0..36 {
-//         if board.data[i] != 0 {
-//             let piece_type = board.data[i];
-//             unsafe{hash ^= ZOBRIST_HASH_DATA[i][piece_type]};
+    for i in 0..36 {
+        if board.data[i] != 0 {
+            let piece_type = board.data[i];
+            unsafe{hash ^= ZOBRIST_HASH_DATA[i][piece_type]};
 
-//         }
+        }
 
-//     }
+    }
 
-//     return hash;
+    return hash;
 
-// }
+}
 
 pub fn get_uni_hash(board: &mut BoardState) -> u64 {
     let mut hash = 0;

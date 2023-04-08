@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use crate::board::*;
 use crate::bitboard::*;
+use crate::evaluation::get_evalulation;
 
 pub const ONE_PIECE: usize = 1;
 pub const TWO_PIECE: usize = 2;
@@ -492,6 +493,42 @@ impl MoveList {
 
     }
 
+    pub fn defensive_moves(&mut self, board: &BoardState) -> Vec<Move> {
+        let mut moves: Vec<Move> = Vec::with_capacity(1000);
+
+        let drop_positions = self.drop_positions.get_data();
+
+        for idx in self.start_indexs.iter() {
+            let start_position = self.start_positions[*idx];
+            if start_position.0 <= 6 {
+                for end_pos in self.end_positions[*idx].get_data() {
+                    if end_pos <= 11 {
+                        moves.push(Move::new([0, start_position.0, start_position.1, end_pos, NULL, NULL], MoveType::Bounce, 0.0));
+    
+                    }
+                    
+                }
+    
+                for pick_up_pos in self.pickup_positions[*idx].get_data() {
+                    moves.push(Move::new([0, start_position.0, start_position.1, pick_up_pos, board.data[pick_up_pos], start_position.0], MoveType::Drop, 0.0));
+    
+                    for drop_pos in drop_positions.iter() {
+                        if *drop_pos <= 11 {
+                            moves.push(Move::new([0, start_position.0, start_position.1, pick_up_pos, board.data[pick_up_pos], *drop_pos], MoveType::Drop, 0.0));
+                        }
+    
+                    }
+            
+                }
+
+            }
+            
+        }
+
+        return moves;
+
+    }
+
     pub fn move_count(&mut self) -> usize {
         let mut count = 0;
 
@@ -583,10 +620,9 @@ enum Action {
     End
 }
 
-static mut STACK_BUFFER: Vec<(Action, BitBoard, BitBoard, usize, usize, usize, usize, usize, f64)> = Vec::new();
-
-
 pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> MoveList {
+    let mut STACK_BUFFER: Vec<(Action, BitBoard, BitBoard, usize, usize, usize, usize, usize, f64)> = Vec::new();
+
     let active_lines = board.get_active_lines();
     let mut move_list: MoveList = MoveList::new(board.get_drops(active_lines, player));
 
@@ -806,6 +842,8 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> MoveList {
 
 
 pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
+    let mut STACK_BUFFER: Vec<(Action, BitBoard, BitBoard, usize, usize, usize, usize, usize, f64)> = Vec::new();
+
     let mut count = 0;
 
     let active_lines = board.get_active_lines();
@@ -1023,6 +1061,8 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
 
 
 pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
+    let mut STACK_BUFFER: Vec<(Action, BitBoard, BitBoard, usize, usize, usize, usize, usize, f64)> = Vec::new();
+
     let mut count = 0;
 
     let active_lines = board.get_active_lines();
