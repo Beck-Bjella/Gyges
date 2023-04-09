@@ -1,15 +1,12 @@
 use std::cmp::Ordering;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::Sender;
 use std::time::Instant;
 
 use crate::board::*;
 use crate::move_gen::*;
 use crate::evaluation::*;
 use crate::zobrist::*;
-use crate::consts::*;
 use crate::tt::*;
-
 
 pub struct Worker {
     pub root_node_moves: Vec<Move>,
@@ -77,10 +74,18 @@ impl Worker {
 
     pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) {
         self.root_node_moves = unsafe{ valid_moves(board, PLAYER_1).moves(board) };
-        
+
         let mut current_ply = 1;
         while !self.search_data.game_over {
-            self.search_at_ply(board, current_ply);
+            self.search_data = SearchData::new();
+            self.search_data.depth = current_ply;
+            self.search_data.search_id = self.id;
+            self.search_data.start_time = std::time::Instant::now();
+            
+            self.root_negamax(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, current_ply as i8);
+            self.update_search_stats();
+
+            self.output_search_data();
         
             self.root_node_moves = sort_moves_highest_score_first(self.search_data.root_node_evals.clone());
 
@@ -94,25 +99,11 @@ impl Worker {
     
     }
 
-    pub fn search_at_ply(&mut self, board: &mut BoardState, depth: usize) {
-        self.search_data = SearchData::new();
-        self.search_data.depth = depth;
-        self.search_data.search_id = self.id;
-        self.search_data.start_time = std::time::Instant::now();
-
-        self.root_negamax(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, depth as i8);
-
-        self.update_search_stats();
-
-        self.output_search_data();
-
-    }
-
     fn root_negamax(&mut self, board: &mut BoardState, mut alpha: f64, beta: f64, player: f64, depth: i8) -> f64 {
         self.search_data.branches += 1;
-       
-        let current_player_moves = self.root_node_moves.clone();
         
+        let current_player_moves = self.root_node_moves.clone();
+
         let mut best_score = f64::NEG_INFINITY;
         let mut root_node_evals = vec![];
         for mv in current_player_moves.iter() {
@@ -152,7 +143,7 @@ impl Worker {
         if depth == 0 {
             self.search_data.leafs += 1;
 
-            let eval = old_evalulation(board, player);
+            let eval = get_evalulation(board) * player;
             
             return eval;
 
@@ -263,7 +254,6 @@ pub struct SearchData {
 
     pub branches: usize,
     pub leafs: usize,
-    pub quiescence_nodes: usize,
     pub average_branching_factor: f64,
 
     pub lps: usize,
@@ -296,7 +286,6 @@ impl SearchData {
 
             branches: 0,
             leafs: 0,
-            quiescence_nodes: 0,
             average_branching_factor: 0.0,
 
             lps: 0,

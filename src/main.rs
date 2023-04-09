@@ -51,12 +51,12 @@ fn main() {
 
         let mut board = BoardState::new();
         board.set(
-            [3, 2, 1, 1, 2, 3],
+            [0, 3, 0, 1, 2, 3],
+            [0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 2, 0, 0],
             [0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0],
-            [3, 2, 1, 1, 2, 3],
+            [0, 0, 0, 3, 3, 0],
+            [2, 0, 2, 1, 1, 0],
             [0, 0],
             PLAYER_1,
     
@@ -64,7 +64,7 @@ fn main() {
 
         thread::spawn(move || {
             let mut worker = Worker::new(worker_results_sender, i);
-            worker.iterative_deepening_search(&mut board, 5);
+            worker.iterative_deepening_search(&mut board, 99);
 
         });
 

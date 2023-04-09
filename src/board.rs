@@ -217,14 +217,7 @@ impl BoardState {
     }
 
     pub fn flip(&mut self) {
-        let mut temp_data: [usize; 38] = [0 ,0 ,0 ,0, 0, 0,
-                                            0 ,0 ,0 ,0, 0, 0,
-                                            0 ,0 ,0 ,0, 0, 0,
-                                            0 ,0 ,0 ,0, 0, 0,
-                                            0 ,0 ,0 ,0, 0, 0, 
-                                            0 ,0 ,0 ,0, 0, 0,
-                                            
-                                            0, 0];
+        let mut temp_data: [usize; 38] = [0; 38];
     
         for y in 0..6 {
             for x in 0..6 {
