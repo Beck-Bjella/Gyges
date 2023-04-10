@@ -14,21 +14,11 @@ mod consts;
 
 use crate::board::*;
 use crate::engine::*;
-use crate::evaluation::*;
-use crate::zobrist::*;
 use crate::move_gen::*;
-use crate::consts::*;
 use crate::tt::*;
 
-use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
-use std::time::Duration;
-
-use rand::Rng;
-use rayon::vec;
-
 
 fn main() {
     init_tt();
@@ -76,9 +66,8 @@ fn main() {
             match results {
                 Ok(_) => {
                     let final_results = results.unwrap();
-                    
-                    println!("ID: {:?}", final_results.search_id);
-                    println!("  - Depth: {:?}", final_results.depth);
+                  
+                    println!("Depth: {:?}", final_results.depth);
                     println!("  - Best: {:?}", final_results.best_move);
                     println!("  - Time: {:?}", final_results.search_time);
                     println!("");
@@ -95,8 +84,14 @@ fn main() {
                     println!("      - EXACTS: {:?}", final_results.tt_exacts);
                     println!("      - CUTS: {:?}", final_results.tt_cuts);
                     println!("");
-                    println!("      - EMPTY INSERTS: {}", unsafe { TT_EMPTY_INSERTS });
+                    println!("      - SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS });
                     println!("      - UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS });
+                    println!("");
+                    println!("  - PV");
+                    for (i, mv) in final_results.pv.iter().enumerate() {
+                        println!("      - {}: {:?}", i, mv);
+
+                    }
                     println!("");
 
                 }

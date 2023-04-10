@@ -1,5 +1,6 @@
 use std::alloc::{self, Layout};
 use std::cell::UnsafeCell;
+use std::f32::consts::E;
 use std::fmt::Display;
 use std::mem;
 use std::ptr::NonNull;
@@ -8,13 +9,13 @@ use std::ptr;
 use crate::move_gen::*;
 use crate::consts::*;
 
-const CLUSTER_SIZE: usize = 1;
+const CLUSTER_SIZE: usize = 3;
 
 const BYTES_PER_KB: f64 = 1000.0;
 const BYTES_PER_MB: f64 = BYTES_PER_KB * 1000.0;
 const BYTES_PER_GB: f64 = BYTES_PER_MB * 1000.0;
 
-pub static mut TT_EMPTY_INSERTS: usize = 0;
+pub static mut TT_SAFE_INSERTS: usize = 0;
 pub static mut TT_UNSAFE_INSERTS: usize = 0;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -119,10 +120,8 @@ impl TranspositionTable {
         let index = key as usize % self.num_clusters();
 
         let cluster = self.get_cluster(index);
-        let init_entry = cluster_first_entry(cluster);
-
         for entry_idx in 0..CLUSTER_SIZE {
-            let entry_ptr = init_entry.add(entry_idx);
+            let entry_ptr = get_entry(cluster, entry_idx);
 
             let entry = &mut (*entry_ptr);
 
@@ -133,32 +132,39 @@ impl TranspositionTable {
 
         }
 
-        (false, &mut (*init_entry))
+        (false, &mut (*cluster_first_entry(cluster)))
 
     }
 
-    pub unsafe fn insert(&self, key: u64) -> (bool, &mut Entry) {
-        let index = key as usize % self.num_clusters();
+    pub unsafe fn insert(&self, new_entry: Entry) -> bool {
+        let index = new_entry.key as usize % self.num_clusters();
 
         let cluster = self.get_cluster(index);
-        let init_entry = cluster_first_entry(cluster);
 
         for entry_idx in 0..CLUSTER_SIZE {
-            let entry_ptr = init_entry.add(entry_idx);
+            let entry_ptr = get_entry(cluster, entry_idx);
 
             let entry = &mut (*entry_ptr);
 
-            if !entry.used {
-                TT_EMPTY_INSERTS += 1;
-                return (true, entry);
+            if !entry.used  {
+                TT_SAFE_INSERTS += 1;
+                entry.replace(new_entry);
+                return true;
     
+            }
+
+            if entry.key == new_entry.key && new_entry.depth >= entry.depth {
+                TT_SAFE_INSERTS += 1;
+                entry.replace(new_entry);
+                return true;
+                
             }
 
         }
 
         let mut replacement_ptr = cluster_first_entry(cluster);
         for entry_idx in 0..CLUSTER_SIZE {
-            let entry_ptr = replacement_ptr.add(entry_idx);
+            let entry_ptr = get_entry(cluster, entry_idx);
 
             if (*entry_ptr).depth <= (*replacement_ptr).depth {
                 replacement_ptr = entry_ptr;
@@ -167,8 +173,11 @@ impl TranspositionTable {
 
         }
 
+        let replacement_entry = &mut (*replacement_ptr);
+
         TT_UNSAFE_INSERTS += 1;
-        return (false, &mut (*replacement_ptr));
+        replacement_entry.replace(new_entry);
+        return false;
 
     }
 

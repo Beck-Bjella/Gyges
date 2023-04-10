@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use crate::board::*;
 use crate::bitboard::*;
 use crate::evaluation::get_evalulation;
+use crate::tt::*;
 
 pub const ONE_PIECE: usize = 1;
 pub const TWO_PIECE: usize = 2;

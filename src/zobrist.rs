@@ -73,7 +73,7 @@ pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
     for i in 0..36 {
         if board.data[i] != 0 {
             let piece_type = board.data[i];
-            unsafe{hash ^= ZOBRIST_HASH_DATA[i][piece_type]};
+           hash ^= ZOBRIST_HASH_DATA[i][piece_type];
 
         }
 
