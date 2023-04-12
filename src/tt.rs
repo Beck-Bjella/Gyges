@@ -1,13 +1,11 @@
 use std::alloc::{self, Layout};
 use std::cell::UnsafeCell;
-use std::f32::consts::E;
 use std::fmt::Display;
 use std::mem;
-use std::ptr::NonNull;
-use std::ptr;
+use std::ptr::{self, NonNull};
 
-use crate::move_gen::*;
 use crate::consts::*;
+use crate::moves::*;
 
 const CLUSTER_SIZE: usize = 3;
 
@@ -19,12 +17,11 @@ pub static mut TT_SAFE_INSERTS: usize = 0;
 pub static mut TT_UNSAFE_INSERTS: usize = 0;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub enum TTEntryType {
+pub enum EntryType {
     ExactValue,
     UpperBound,
     LowerBound,
     None,
-
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -33,23 +30,20 @@ pub struct Entry {
     pub score: f64,
     pub bestmove: Move,
     pub depth: i8,
-    pub flag: TTEntryType,
-    pub used: bool
-
+    pub flag: EntryType,
+    pub used: bool,
 }
 
 impl Entry {
-    pub fn new(key: u64, score: f64, depth: i8, bestmove: Move, flag: TTEntryType) -> Entry {
+    pub fn new(key: u64, score: f64, depth: i8, bestmove: Move, flag: EntryType) -> Entry {
         return Entry {
             key,
             score,
             bestmove,
             depth,
             flag,
-            used: true
-            
+            used: true,
         };
-
     }
 
     pub fn replace(&mut self, entry: Entry) {
@@ -59,61 +53,49 @@ impl Entry {
         self.depth = entry.depth;
         self.flag = entry.flag;
         self.used = entry.used;
-
     }
-
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Cluster {
     pub entrys: [Entry; CLUSTER_SIZE],
-
 }
 
 pub struct TranspositionTable {
     pub clusters: UnsafeCell<NonNull<Cluster>>,
     pub cap: UnsafeCell<usize>,
-
 }
 
 impl TranspositionTable {
     pub fn new(size: usize) -> TranspositionTable {
         return TranspositionTable {
             clusters: UnsafeCell::new(alloc_room(size)),
-            cap: UnsafeCell::new(size)
-
+            cap: UnsafeCell::new(size),
         };
-        
     }
-    
+
     pub fn size_kilobytes(&self) -> f64 {
         return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_KB;
-        
     }
 
     pub fn size_megabytes(&self) -> f64 {
         return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_MB;
-
     }
 
     pub fn size_gigabytes(&self) -> f64 {
         return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_GB;
-
     }
 
     pub fn num_clusters(&self) -> usize {
-        return unsafe{ *self.cap.get() };
-
+        return unsafe { *self.cap.get() };
     }
 
     pub unsafe fn num_entrys(&self) -> usize {
         return self.num_clusters() * CLUSTER_SIZE;
-
     }
 
     unsafe fn get_cluster(&self, i: usize) -> *mut Cluster {
         return (*self.clusters.get()).as_ptr().add(i);
-
     }
 
     pub unsafe fn probe(&self, key: u64) -> (bool, &mut Entry) {
@@ -127,13 +109,10 @@ impl TranspositionTable {
 
             if entry.key == key {
                 return (true, entry);
-
             }
-
         }
 
         (false, &mut (*cluster_first_entry(cluster)))
-
     }
 
     pub unsafe fn insert(&self, new_entry: Entry) -> bool {
@@ -146,20 +125,17 @@ impl TranspositionTable {
 
             let entry = &mut (*entry_ptr);
 
-            if !entry.used  {
+            if !entry.used {
                 TT_SAFE_INSERTS += 1;
                 entry.replace(new_entry);
                 return true;
-    
             }
 
             if entry.key == new_entry.key && new_entry.depth >= entry.depth {
                 TT_SAFE_INSERTS += 1;
                 entry.replace(new_entry);
                 return true;
-                
             }
-
         }
 
         let mut replacement_ptr = cluster_first_entry(cluster);
@@ -168,9 +144,7 @@ impl TranspositionTable {
 
             if (*entry_ptr).depth <= (*replacement_ptr).depth {
                 replacement_ptr = entry_ptr;
-
             }
-
         }
 
         let replacement_entry = &mut (*replacement_ptr);
@@ -178,9 +152,7 @@ impl TranspositionTable {
         TT_UNSAFE_INSERTS += 1;
         replacement_entry.replace(new_entry);
         return false;
-
     }
-
 }
 
 impl Display for TranspositionTable {
@@ -189,37 +161,28 @@ impl Display for TranspositionTable {
             for cluster_idx in 0..self.num_clusters() {
                 let cluster = self.get_cluster(cluster_idx);
                 println!("cluster {}", cluster_idx);
-    
+
                 for entry_idx in 0..CLUSTER_SIZE {
                     let entry = get_entry(cluster, entry_idx);
-    
+
                     if (*entry).used {
                         writeln!(f, "  - {:?}", *entry)?;
-                        
                     } else {
                         writeln!(f, "  - NONE")?;
-                        
                     }
-                
                 }
-    
             }
-
         }
-        
+
         return Result::Ok(());
-
     }
-
 }
 
-unsafe impl Sync for TranspositionTable {
-}
+unsafe impl Sync for TranspositionTable {}
 
 unsafe fn get_entry(cluster: *mut Cluster, i: usize) -> *mut Entry {
-    return  ((*cluster).entrys).as_ptr().add(i) as *mut Entry;
-
-} 
+    return ((*cluster).entrys).as_ptr().add(i) as *mut Entry;
+}
 
 unsafe fn cluster_first_entry(cluster: *mut Cluster) -> *mut Entry {
     (*cluster).entrys.get_unchecked_mut(0) as *mut Entry
@@ -235,21 +198,16 @@ fn alloc_room(size: usize) -> NonNull<Cluster> {
         let new_ptr: *mut Cluster = ptr.cast();
 
         return NonNull::new(new_ptr).unwrap();
-
     }
-
 }
 
 pub fn tt() -> &'static TranspositionTable {
     return unsafe { &*(&mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable) };
-
 }
 
 pub fn init_tt() {
     unsafe {
         let tt = &mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable;
         ptr::write(tt, TranspositionTable::new(2usize.pow(24)));
-
     }
-
 }

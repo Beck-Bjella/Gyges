@@ -1,5 +1,4 @@
-use std::f32::consts::E;
-
+use crate::consts::*;
 use crate::board::*;
 use crate::move_gen::*;
 

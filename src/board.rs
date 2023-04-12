@@ -1,6 +1,7 @@
-use crate::move_gen::*;
+use crate::consts::*;
 use crate::bitboard::*;
 use crate::zobrist::*;
+use crate::moves::*;
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct BoardState {
