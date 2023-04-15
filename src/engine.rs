@@ -10,6 +10,10 @@ use crate::moves::*;
 use crate::tt::*;
 
 pub struct Searcher {
+    pub best_move: RootMove,
+    pub pv: Vec<Entry>,
+    pub current_ply: usize,
+
     pub search_data: SearchData,
     pub root_moves: RootMoveList,
 
@@ -20,6 +24,10 @@ pub struct Searcher {
 impl Searcher {
     pub fn new(dataout: Sender<SearchData>) -> Searcher {
         return Searcher {
+            best_move: RootMove::new_null(),
+            pv: vec![],
+            current_ply: 0,
+
             search_data: SearchData::new(0),
             root_moves: RootMoveList::new(),
 
@@ -33,13 +41,11 @@ impl Searcher {
         self.dataout.send(self.search_data.clone()).unwrap();
     }
 
-    pub fn update_search_stats(&mut self) {
+    pub fn update_search_stats(&mut self, board: &mut BoardState) {
         self.search_data.search_time = self.search_data.start_time.elapsed().as_secs_f64();
         self.search_data.bps =(self.search_data.branches as f64 / self.search_data.search_time) as usize;
         self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
         self.search_data.average_branching_factor = ((self.search_data.branches + self.search_data.leafs) as f64).powf(1.0 / self.search_data.depth as f64);
-
-        self.root_moves.sort();
 
         self.search_data.best_move = self.root_moves.first();
 
@@ -53,24 +59,27 @@ impl Searcher {
 
         }
 
-        // self.search_data.pv = calc_pv(board);
+        let pv = calc_pv(board, self.current_ply);
+        self.pv = pv.clone();
+        self.search_data.pv = pv.clone();
 
     }
 
     pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) {
-        self.root_moves.generate(board);
+        self.root_moves = RootMoveList::new();
+        self.root_moves.setup(board);
 
-        let mut current_ply = 1;
+        self.current_ply = 1;
         while !self.search_data.game_over {
-            self.search_data = SearchData::new(current_ply);
+            self.search_data = SearchData::new(self.current_ply);
 
-            self.search(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, current_ply);
-            self.update_search_stats();
+            self.search(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply);
+            self.update_search_stats(board);
 
             self.output_search_data();
 
-            current_ply += 2;
-            if current_ply > max_ply {
+            self.current_ply += 2;
+            if self.current_ply > max_ply {
                 break;
 
             }
@@ -97,16 +106,16 @@ impl Searcher {
         if result {
             if entry.depth >= depth as i8 {
                 self.search_data.tt_hits += 1;
-                if entry.flag == EntryType::ExactValue {
+                if entry.bound == NodeBound::ExactValue {
                     self.search_data.tt_exacts += 1;
                     return entry.score;
-                } else if entry.flag == EntryType::LowerBound {
+                } else if entry.bound == NodeBound::None && depth == 0 {
+                    return entry.score;
+                } else if entry.bound == NodeBound::LowerBound {
                     if entry.score > alpha {
                         alpha = entry.score;
-                        
                     }
-
-                } else if entry.flag == EntryType::UpperBound {
+                } else if entry.bound == NodeBound::UpperBound {
                     if entry.score < beta {
                         beta = entry.score;
 
@@ -129,10 +138,17 @@ impl Searcher {
         let mut move_list = unsafe { valid_moves(board, player) };
         if move_list.has_threat() {
             return f64::INFINITY;
-
+            
         }
 
-        let current_player_moves = order_moves(move_list.moves(board), board, player);
+        // let current_player_moves: Vec<Move>;
+        // if is_root {
+        //     current_player_moves = self.root_moves.moves();
+
+        // } else {
+        let current_player_moves = order_moves(move_list.moves(board), board, player, &self.pv);
+
+        // }
 
         let mut best_move = Move::new_null();
         let mut best_score = f64::NEG_INFINITY;
@@ -144,8 +160,7 @@ impl Searcher {
                 score = -self.search(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1);
 
                 if score > alpha && score < beta {
-                    score = -self.search(&mut new_board, -beta, score, -player, depth - 1);
-
+                    score = -self.search(&mut new_board, -beta, -score, -player, depth - 1);
                 }
 
             } else {
@@ -154,9 +169,8 @@ impl Searcher {
             }
 
             if is_root {
-                let root_move = RootMove::new(mv.clone(), score);
-                self.root_moves.store(root_move);
-
+                self.root_moves
+                    .update_move(mv.clone(), score, self.current_ply);
             }
 
             if score > best_score {
@@ -178,29 +192,32 @@ impl Searcher {
 
         }
 
-        let mut new_entry = Entry::new(board_hash, best_score, depth as i8, best_move, EntryType::ExactValue);
-
-        if best_score <= original_alpha {
-            new_entry.flag = EntryType::UpperBound;
+        let node_bound: NodeBound = if best_score <= original_alpha {
+            NodeBound::UpperBound
 
         } else if best_score >= beta {
-            new_entry.flag = EntryType::LowerBound;
+            NodeBound::LowerBound
 
         } else {
-            new_entry.flag = EntryType::ExactValue;
+            NodeBound::ExactValue
 
-        }
+        };
+
+        let new_entry = Entry::new(board_hash, best_score, depth as i8, best_move, node_bound);
 
         unsafe { tt().insert(new_entry) };
 
         return best_score;
+
     }
+
 }
 
 #[derive(Debug, Clone)]
 pub struct SearchData {
     pub best_move: RootMove,
-    // pub pv: Vec<Move>,
+    pub pv: Vec<Entry>,
+
     pub start_time: Instant,
     pub search_time: f64,
 
@@ -228,7 +245,8 @@ impl SearchData {
     pub fn new(depth: usize) -> SearchData {
         return SearchData {
             best_move: RootMove::new_null(),
-            // pv: vec![],
+            pv: vec![],
+
             start_time: std::time::Instant::now(),
             search_time: 0.0,
 
@@ -256,26 +274,26 @@ impl SearchData {
 
 }
 
-// pub fn calc_pv(board: &mut BoardState) -> Vec<Move> {
-//     let mut pv = vec![];
+pub fn calc_pv(board: &mut BoardState, max_ply: usize) -> Vec<Entry> {
+    let mut pv = vec![];
 
-//     let mut temp_board = board.clone();
+    let mut temp_board = board.clone();
 
-//     loop {
-//         let board_hash = temp_board.hash();
-//         let (vaild, entry) = unsafe{ tt().probe(board_hash) };
-//         if vaild {
-//             pv.push(entry.bestmove);
+    for i in 0..max_ply {
+        let board_hash = temp_board.hash();
+        let (vaild, entry) = unsafe { tt().probe(board_hash) };
+        if vaild {
+            pv.push(entry.clone());
 
-//             temp_board = temp_board.make_move(&entry.bestmove);
+            temp_board = temp_board.make_move(&entry.bestmove);
 
-//         } else {
-//             break;
+        } else {
+            break;
 
-//         }
+        }
 
-//     }
+    }
 
-//     return pv;
+    return pv;
 
-// }
+}

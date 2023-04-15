@@ -90,12 +90,12 @@ fn main() {
                 println!("      - SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS });
                 println!("      - UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS });
                 println!("");
-                // println!("  - PV");
-                // for (i, mv) in final_results.pv.iter().enumerate() {
-                //     println!("      - {}: {:?}", i, mv);
+                println!("  - PV");
+                for (i, mv) in final_results.pv.iter().enumerate() {
+                    println!("      - {}: {:?}", i, mv);
 
-                // }
-                // println!("");
+                }
+                println!("");
             }
             Err(TryRecvError::Disconnected) => {}
             Err(TryRecvError::Empty) => {}

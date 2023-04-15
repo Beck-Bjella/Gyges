@@ -17,11 +17,12 @@ pub static mut TT_SAFE_INSERTS: usize = 0;
 pub static mut TT_UNSAFE_INSERTS: usize = 0;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
-pub enum EntryType {
+pub enum NodeBound {
     ExactValue,
     UpperBound,
     LowerBound,
-    None,
+    None
+
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -30,20 +31,23 @@ pub struct Entry {
     pub score: f64,
     pub bestmove: Move,
     pub depth: i8,
-    pub flag: EntryType,
-    pub used: bool,
+    pub bound: NodeBound,
+    pub used: bool
+
 }
 
 impl Entry {
-    pub fn new(key: u64, score: f64, depth: i8, bestmove: Move, flag: EntryType) -> Entry {
+    pub fn new(key: u64, score: f64, depth: i8, bestmove: Move, flag: NodeBound) -> Entry {
         return Entry {
             key,
             score,
             bestmove,
             depth,
-            flag,
-            used: true,
+            bound: flag,
+            used: true
+
         };
+
     }
 
     pub fn replace(&mut self, entry: Entry) {
@@ -51,19 +55,23 @@ impl Entry {
         self.score = entry.score;
         self.bestmove = entry.bestmove;
         self.depth = entry.depth;
-        self.flag = entry.flag;
+        self.bound = entry.bound;
         self.used = entry.used;
+
     }
+
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct Cluster {
     pub entrys: [Entry; CLUSTER_SIZE],
+
 }
 
 pub struct TranspositionTable {
     pub clusters: UnsafeCell<NonNull<Cluster>>,
     pub cap: UnsafeCell<usize>,
+    
 }
 
 impl TranspositionTable {

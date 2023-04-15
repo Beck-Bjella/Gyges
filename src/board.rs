@@ -213,7 +213,6 @@ impl BoardState {
             return self.hash ^ PLAYER_2_HASH;
 
         }
-        
 
     }
 

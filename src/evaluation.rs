@@ -225,22 +225,11 @@ pub fn get_evalulation(board: &mut BoardState) -> f64 {
     let mut eval: f64 = 0.0;
 
     eval += unsafe{ valid_move_count(board, PLAYER_1) } as f64;
-    eval -= 2.0 * unsafe{ valid_move_count(board, PLAYER_2) } as f64;
+    eval -= unsafe{ valid_move_count(board, PLAYER_2) } as f64;
 
     return eval;
 
 } 
-
-pub fn old_evalulation(board: &mut BoardState, player: f64) -> f64 {
-    let mut eval: f64 = 0.0;
-
-    // eval += unsafe{ valid_move_count(board, PLAYER_1) } as f64;
-    eval -= unsafe{ valid_move_count(board, -player) } as f64;
-
-    return eval;
-
-}  
-
 
 // pub fn is_quiet(board: &mut BoardState, player: f64) -> bool {
 //     let orignal_opp_eval = unsafe{valid_move_count(board, -player)} as f64;

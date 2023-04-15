@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::ops::Deref;
 
 use crate::consts::*;
 use crate::board::*;
@@ -12,6 +13,7 @@ pub enum MoveType {
     None
 
 }
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct Move {
     pub data: [usize; 6],
@@ -54,15 +56,19 @@ impl Move {
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct RootMove {
     pub mv: Move,
-    pub score: f64
+    pub score: f64,
+    pub threats: usize,
+    pub ply: usize
 
 }
 
 impl RootMove {
-    pub fn new(mv: Move, score: f64) -> RootMove {
+    pub fn new(mv: Move, score: f64, ply: usize, threats: usize) -> RootMove {
         return RootMove {
             mv,
-            score
+            score,
+            ply,
+            threats
 
         };
 
@@ -72,13 +78,15 @@ impl RootMove {
         return RootMove {
             mv: Move::new_null(),
             score: 0.0,
+            ply: 0,
+            threats: 0
 
         };
 
     }
 
     pub fn is_null(&self) -> bool {
-        if self.mv.is_null() && self.score == 0.0 {
+        if self.mv.is_null() && self.score == 0.0 && self.ply == 0 {
             return true;
 
         } else {
@@ -88,14 +96,31 @@ impl RootMove {
 
     }
 
+    pub fn set_score_and_ply(&mut self, score: f64, ply: usize) {
+        self.score = score;
+        self.ply = ply;
+
+    }
+
 }
 
-pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<Move> {
+pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &Vec<Entry>) -> Vec<Move> {
     let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
+        let predicted_score: f64;
+
         let mut new_board = board.make_move(&mv);
 
-        let predicted_score: f64 = unsafe{valid_move_count(&mut new_board, -player)} as f64;
-        
+        for e in pv {
+            if e.bestmove == mv {
+                predicted_score = -500_000.0;
+                return (mv, predicted_score);
+
+            }
+
+        }
+
+        predicted_score = unsafe{valid_move_count(&mut new_board, -player)} as f64;
+       
         return (mv, predicted_score);
 
     }).collect();
@@ -127,7 +152,7 @@ pub fn tt_order_moves(moves: Vec<Move>, board: &mut BoardState) -> Vec<Move> {
         let new_board = board.make_move(&mv);
         let (vaild, entry) = unsafe{ tt().probe(new_board.hash()) };
         if vaild {
-            sort_val = -entry.score as f64;
+            sort_val = entry.score as f64;
         
         }
 

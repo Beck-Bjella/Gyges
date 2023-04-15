@@ -152,7 +152,6 @@ impl RawMoveList {
 
 pub struct RootMoveList {
     pub moves: Vec<RootMove>,
-    pub updated_moves: Vec<RootMove>
 
 }
 
@@ -160,22 +159,27 @@ impl RootMoveList {
     pub fn new() -> RootMoveList {
         return RootMoveList {
             moves: vec![],
-            updated_moves: vec![]
 
         };
 
     }
 
     pub fn sort(&mut self) {
-        self.moves = self.updated_moves.clone();
-        self.updated_moves.clear();
-
         self.moves.sort_by(|a, b| {
             if a.score > b.score {
                 Ordering::Less
                 
             } else if a.score == b.score {
-                Ordering::Equal
+                if a.threats > b.threats {
+                    Ordering::Less
+
+                } else if a.threats < b.threats {
+                    Ordering::Greater
+
+                } else {
+                    Ordering::Equal
+
+                }
     
             } else {
                 Ordering::Greater
@@ -186,16 +190,27 @@ impl RootMoveList {
     
     }
 
-    pub fn store(&mut self, mv: RootMove) {
-        self.updated_moves.push(mv);
+    pub fn update_move(&mut self, mv: Move, score: f64, ply: usize) {
+        for root_move in self.moves.iter_mut() {
+            if root_move.mv == mv {
+                root_move.set_score_and_ply(score, ply);
+
+            }
+
+        }
+
+        self.sort();
 
     }
 
-    pub fn generate(&mut self, board: &mut BoardState) {
-        let moves = order_moves(unsafe { valid_moves(board, PLAYER_1) }.moves(board), board, PLAYER_1);
+    pub fn setup(&mut self, board: &mut BoardState) {
+        let moves = order_moves(unsafe { valid_moves(board, PLAYER_1) }.moves(board), board, PLAYER_1, &vec![]);
 
         let root_moves: Vec<RootMove> = moves.iter().map( |mv| {
-            return RootMove::new(*mv, 0.0);
+            let mut new_board = board.make_move(&mv);
+            let threats = unsafe { valid_threat_count(&mut new_board, PLAYER_1) };
+
+            return RootMove::new(*mv, 0.0, 0, threats);
 
         }).collect();
 
@@ -205,6 +220,16 @@ impl RootMoveList {
 
     pub fn first(&self) -> RootMove {
         return self.moves[0];
+
+    }
+
+    pub fn moves(&self) -> Vec<Move> {
+        let moves: Vec<Move> = self.moves.clone().into_iter().map( |mv| {
+            return mv.mv;
+
+        }).collect();
+
+        return moves;
 
     }
 
