@@ -190,7 +190,7 @@ impl RootMoveList {
     
     }
 
-    pub fn update_move(&mut self, mv: Move, score: f64, ply: usize) {
+    pub fn update_move(&mut self, mv: Move, score: f64, ply: i8) {
         for root_move in self.moves.iter_mut() {
             if root_move.mv == mv {
                 root_move.set_score_and_ply(score, ply);

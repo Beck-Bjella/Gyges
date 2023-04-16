@@ -9,10 +9,16 @@ use crate::move_list::*;
 use crate::moves::*;
 use crate::tt::*;
 
+// pub const M: usize = 10;
+// pub const C: usize = 2;
+// pub const MULTI_CUT_REDUCTION: i8 = 1;
+
+pub const NULL_MOVE_REDUCTION: i8 = 1;
+
 pub struct Searcher {
     pub best_move: RootMove,
     pub pv: Vec<Entry>,
-    pub current_ply: usize,
+    pub current_ply: i8,
 
     pub search_data: SearchData,
     pub root_moves: RootMoveList,
@@ -39,13 +45,14 @@ impl Searcher {
 
     pub fn output_search_data(&mut self) {
         self.dataout.send(self.search_data.clone()).unwrap();
+        
     }
 
     pub fn update_search_stats(&mut self, board: &mut BoardState) {
         self.search_data.search_time = self.search_data.start_time.elapsed().as_secs_f64();
         self.search_data.bps =(self.search_data.branches as f64 / self.search_data.search_time) as usize;
         self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
-        self.search_data.average_branching_factor = ((self.search_data.branches + self.search_data.leafs) as f64).powf(1.0 / self.search_data.depth as f64);
+        self.search_data.average_branching_factor = ((self.search_data.branches + self.search_data.leafs) as f64).powf(1.0 / self.search_data.ply as f64);
 
         self.search_data.best_move = self.root_moves.first();
 
@@ -65,15 +72,22 @@ impl Searcher {
 
     }
 
-    pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: usize) {
+    pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: i8) {
+        println!("START");
+
         self.root_moves = RootMoveList::new();
         self.root_moves.setup(board);
 
         self.current_ply = 1;
         while !self.search_data.game_over {
+            // for mv in self.root_moves.moves() {
+            //     println!("{:?}", mv);
+
+            // }
+
             self.search_data = SearchData::new(self.current_ply);
 
-            self.search(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply);
+            self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false);
             self.update_search_stats(board);
 
             self.output_search_data();
@@ -87,9 +101,12 @@ impl Searcher {
         }
 
     }
-
-    fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: usize) -> f64 {
-        let is_root = depth == self.search_data.depth;
+    
+    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, cut_node: bool) -> f64 {
+        let is_root = depth == self.search_data.ply;
+        let is_pv = N::is_pv();
+        let original_alpha = alpha;
+        let board_hash = board.hash();
 
         if depth == 0 {
             self.search_data.leafs += 1;
@@ -99,22 +116,22 @@ impl Searcher {
             return eval;
         }
 
-        let original_alpha = alpha;
-        let board_hash = board.hash();
-
-        let (result, entry) = unsafe { tt().probe(board_hash) };
-        if result {
+        let (valid, entry) = unsafe { tt().probe(board_hash) };
+        if valid && !is_pv {
             if entry.depth >= depth as i8 {
                 self.search_data.tt_hits += 1;
                 if entry.bound == NodeBound::ExactValue {
                     self.search_data.tt_exacts += 1;
                     return entry.score;
+
                 } else if entry.bound == NodeBound::None && depth == 0 {
                     return entry.score;
+
                 } else if entry.bound == NodeBound::LowerBound {
                     if entry.score > alpha {
                         alpha = entry.score;
                     }
+                    
                 } else if entry.bound == NodeBound::UpperBound {
                     if entry.score < beta {
                         beta = entry.score;
@@ -146,7 +163,46 @@ impl Searcher {
         //     current_player_moves = self.root_moves.moves();
 
         // } else {
-        let current_player_moves = order_moves(move_list.moves(board), board, player, &self.pv);
+            let mut current_player_moves = move_list.moves(board);
+            current_player_moves = order_moves(current_player_moves, board, player, &self.pv);
+
+        // }
+
+        // Null Move Pruning
+        let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
+        if !is_pv && cut_node && r_depth > 0 {
+            let mut null_move_board = board.make_null();
+            let score = -self.search::<NonPV>(&mut null_move_board, 0.0-beta, 1.0-beta, -player, r_depth, !cut_node);
+            if score >= beta {
+                return beta;
+    
+            }
+
+        }
+        
+        // Multi Cut
+        // let r_depth = depth - 1 - MULTI_CUT_REDUCTION;
+        // if r_depth > 0 && cut_node {
+        //     let mut cuts = 0;
+
+        //     'test: for (i, mv) in current_player_moves.iter().enumerate() {
+        //         if i > (M - 1) {
+        //             break 'test;
+        //         }
+                
+        //         let mut new_board = board.make_move(&mv);
+     
+        //         let score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
+        //         if score >= beta {
+        //             cuts += 1;
+        //             if cuts >= C {
+        //                 return beta; // mc-prune
+
+        //             }
+                      
+        //         }
+                
+        //     }
 
         // }
 
@@ -155,22 +211,23 @@ impl Searcher {
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(&mv);
 
-            let mut score: f64;
-            if i > 1 {
-                score = -self.search(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1);
+            let mut score;
+            if i > 0 {
+                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
 
                 if score > alpha && score < beta {
-                    score = -self.search(&mut new_board, -beta, -score, -player, depth - 1);
+                    score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
+
                 }
 
             } else {
-                score = -self.search(&mut new_board, -beta, -alpha, -player, depth - 1);
+                score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
 
-            }
+            } 
 
             if is_root {
-                self.root_moves
-                    .update_move(mv.clone(), score, self.current_ply);
+                self.root_moves.update_move(mv.clone(), score, self.current_ply);
+
             }
 
             if score > best_score {
@@ -234,7 +291,7 @@ pub struct SearchData {
 
     pub beta_cuts: usize,
 
-    pub depth: usize,
+    pub ply: i8,
 
     pub game_over: bool,
     pub winner: usize,
@@ -242,7 +299,7 @@ pub struct SearchData {
 }
 
 impl SearchData {
-    pub fn new(depth: usize) -> SearchData {
+    pub fn new(ply: i8) -> SearchData {
         return SearchData {
             best_move: RootMove::new_null(),
             pv: vec![],
@@ -263,7 +320,7 @@ impl SearchData {
 
             beta_cuts: 0,
 
-            depth,
+            ply,
 
             game_over: false,
             winner: 0,
@@ -274,12 +331,12 @@ impl SearchData {
 
 }
 
-pub fn calc_pv(board: &mut BoardState, max_ply: usize) -> Vec<Entry> {
+pub fn calc_pv(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
     let mut pv = vec![];
 
     let mut temp_board = board.clone();
 
-    for i in 0..max_ply {
+    for _ in 0..max_ply {
         let board_hash = temp_board.hash();
         let (vaild, entry) = unsafe { tt().probe(board_hash) };
         if vaild {

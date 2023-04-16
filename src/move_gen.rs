@@ -1,4 +1,3 @@
-
 use crate::board::*;
 use crate::bitboard::*;
 use crate::consts::*;

@@ -58,12 +58,12 @@ pub struct RootMove {
     pub mv: Move,
     pub score: f64,
     pub threats: usize,
-    pub ply: usize
+    pub ply: i8
 
 }
 
 impl RootMove {
-    pub fn new(mv: Move, score: f64, ply: usize, threats: usize) -> RootMove {
+    pub fn new(mv: Move, score: f64, ply: i8, threats: usize) -> RootMove {
         return RootMove {
             mv,
             score,
@@ -96,7 +96,7 @@ impl RootMove {
 
     }
 
-    pub fn set_score_and_ply(&mut self, score: f64, ply: usize) {
+    pub fn set_score_and_ply(&mut self, score: f64, ply: i8) {
         self.score = score;
         self.ply = ply;
 

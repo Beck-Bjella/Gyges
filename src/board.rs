@@ -127,6 +127,21 @@ impl BoardState {
 
     }
 
+    pub fn make_null(self) -> BoardState {
+        let data = self.data.clone();
+        let hash = self.hash.clone();
+        let player = self.player * -1.0;
+
+        return BoardState {
+            data,
+            player,
+            hash
+
+        }
+
+
+    }
+
     pub fn get_active_lines(&self) -> [usize; 2] {
         let mut player_1_set = false;
     

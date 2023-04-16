@@ -24,6 +24,33 @@ pub const PLAYER_2_GOAL: usize = 37;
 pub const NULL: usize = 100;
 pub const NULL_BB: BitBoard = BitBoard(u64::MAX);
 
+
+pub trait Node {
+    fn is_pv() -> bool;
+
+}
+
+pub struct PV {}
+
+impl Node for PV {
+    fn is_pv() -> bool {
+        return true;
+
+    }
+
+}
+
+pub struct NonPV {}
+
+impl Node for NonPV {
+    fn is_pv() -> bool {
+        return false;
+
+    }
+
+}
+
+
 // Move gen Consts
 pub const THREE_PATHS: [[[usize; 4]; 40]; 36] = [
     [[0, 6, 12, 18], [0, 1, 2, 3], [0, 6, 12, 13], [0, 6, 7, 13], [0, 1, 7, 13], [0, 6, 7, 8], [0, 1, 7, 8], [0, 1, 2, 8], [0, 1, 2, 36], [0, 1, 7, 6], [0, 6, 7, 1], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4]],

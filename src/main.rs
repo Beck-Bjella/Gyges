@@ -33,8 +33,7 @@ fn main() {
     }
 
     let (stop_sender, stop_reciver): (Sender<bool>, Receiver<bool>) = mpsc::channel();
-    let (results_sender, results_reciver): (Sender<SearchData>, Receiver<SearchData>) =
-        mpsc::channel();
+    let (results_sender, results_reciver): (Sender<SearchData>, Receiver<SearchData>) = mpsc::channel();
 
     let mut board = BoardState::new();
     board.set(
@@ -70,7 +69,7 @@ fn main() {
             Ok(_) => {
                 let final_results = results.unwrap();
 
-                println!("Depth: {:?}", final_results.depth);
+                println!("Depth: {:?}", final_results.ply);
                 println!("  - Best: {:?}", final_results.best_move);
                 println!("  - Time: {:?}", final_results.search_time);
                 println!("");
@@ -91,14 +90,17 @@ fn main() {
                 println!("      - UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS });
                 println!("");
                 println!("  - PV");
-                for (i, mv) in final_results.pv.iter().enumerate() {
-                    println!("      - {}: {:?}", i, mv);
+                for (i, e) in final_results.pv.iter().enumerate() {
+                    println!("      - {}: {:?}", i, e.bestmove);
 
                 }
                 println!("");
             }
             Err(TryRecvError::Disconnected) => {}
             Err(TryRecvError::Empty) => {}
+
         }
+
     }
+
 }
