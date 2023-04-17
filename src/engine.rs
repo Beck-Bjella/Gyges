@@ -105,7 +105,6 @@ impl Searcher {
     fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, cut_node: bool) -> f64 {
         let is_root = depth == self.search_data.ply;
         let is_pv = N::is_pv();
-        let original_alpha = alpha;
         let board_hash = board.hash();
 
         if depth == 0 {
@@ -117,34 +116,29 @@ impl Searcher {
         }
 
         let (valid, entry) = unsafe { tt().probe(board_hash) };
-        if valid && !is_pv {
-            if entry.depth >= depth as i8 {
-                self.search_data.tt_hits += 1;
-                if entry.bound == NodeBound::ExactValue {
-                    self.search_data.tt_exacts += 1;
-                    return entry.score;
+        if valid && !is_pv && entry.depth >= depth as i8 {
+            self.search_data.tt_hits += 1;
 
-                } else if entry.bound == NodeBound::None && depth == 0 {
-                    return entry.score;
+            if entry.bound == NodeBound::ExactValue {
+                self.search_data.tt_exacts += 1;
+                return entry.score;
 
-                } else if entry.bound == NodeBound::LowerBound {
-                    if entry.score > alpha {
-                        alpha = entry.score;
-                    }
-                    
-                } else if entry.bound == NodeBound::UpperBound {
-                    if entry.score < beta {
-                        beta = entry.score;
-
-                    }
+            } else if entry.bound == NodeBound::LowerBound {
+                if entry.score > alpha {
+                    alpha = entry.score;
+                }
+                
+            } else if entry.bound == NodeBound::UpperBound {
+                if entry.score < beta {
+                    beta = entry.score;
 
                 }
 
-                if alpha >= beta {
-                    self.search_data.tt_cuts += 1;
-                    return entry.score;
+            }
 
-                }
+            if alpha >= beta {
+                self.search_data.tt_cuts += 1;
+                return entry.score;
 
             }
 
@@ -170,9 +164,9 @@ impl Searcher {
 
         // Null Move Pruning
         let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
-        if !is_pv && cut_node && r_depth > 0 {
+        if !is_pv && cut_node && r_depth > 1 {
             let mut null_move_board = board.make_null();
-            let score = -self.search::<NonPV>(&mut null_move_board, 0.0-beta, 1.0-beta, -player, r_depth, !cut_node);
+            let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
             if score >= beta {
                 return beta;
     
@@ -180,7 +174,7 @@ impl Searcher {
 
         }
         
-        // Multi Cut
+        // Multi Cut - Dosent Work
         // let r_depth = depth - 1 - MULTI_CUT_REDUCTION;
         // if r_depth > 0 && cut_node {
         //     let mut cuts = 0;
@@ -213,12 +207,12 @@ impl Searcher {
 
             let mut score;
             if i > 0 {
-                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
+                // score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
 
-                if score > alpha && score < beta {
+                // if score > alpha && score < beta {
                     score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
 
-                }
+                // }
 
             } else {
                 score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
@@ -249,14 +243,14 @@ impl Searcher {
 
         }
 
-        let node_bound: NodeBound = if best_score <= original_alpha {
-            NodeBound::UpperBound
-
-        } else if best_score >= beta {
+        let node_bound: NodeBound = if best_score >= beta {
             NodeBound::LowerBound
 
-        } else {
+        } else if is_pv && !best_move.is_null() {
             NodeBound::ExactValue
+
+        } else {
+            NodeBound::UpperBound
 
         };
 
