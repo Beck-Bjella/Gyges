@@ -9,10 +9,6 @@ use crate::move_list::*;
 use crate::moves::*;
 use crate::tt::*;
 
-// pub const M: usize = 10;
-// pub const C: usize = 2;
-// pub const MULTI_CUT_REDUCTION: i8 = 1;
-
 pub const NULL_MOVE_REDUCTION: i8 = 1;
 
 pub struct Searcher {
@@ -163,16 +159,16 @@ impl Searcher {
         // }
 
         // Null Move Pruning
-        let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
-        if !is_pv && cut_node && r_depth > 1 {
-            let mut null_move_board = board.make_null();
-            let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
-            if score >= beta {
-                return beta;
+        // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
+        // if !is_pv && cut_node && r_depth > 1 {
+        //     let mut null_move_board = board.make_null();
+        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
+        //     if score >= beta {
+        //         return beta;
     
-            }
+        //     }
 
-        }
+        // }
         
         // Multi Cut - Dosent Work
         // let r_depth = depth - 1 - MULTI_CUT_REDUCTION;
@@ -258,7 +254,7 @@ impl Searcher {
 
         unsafe { tt().insert(new_entry) };
 
-        return best_score;
+        return alpha;
 
     }
 
