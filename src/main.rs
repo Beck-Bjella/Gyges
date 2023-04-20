@@ -16,6 +16,7 @@ mod zobrist;
 use crate::board::*;
 use crate::consts::*;
 use crate::engine::*;
+use crate::evaluation::control_score;
 use crate::tt::*;
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
@@ -47,6 +48,7 @@ fn main() {
         PLAYER_1,
 
     );
+
     // board.set(
     //     [3, 2, 1, 1, 2, 3],
     //     [0, 0, 0, 0, 0, 0],
@@ -61,6 +63,7 @@ fn main() {
     thread::spawn(move || {
         let mut searcher = Searcher::new(results_sender);
         searcher.iterative_deepening_search(&mut board, 99);
+        
     });
 
     loop {

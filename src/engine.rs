@@ -9,8 +9,11 @@ use crate::move_list::*;
 use crate::moves::*;
 use crate::tt::*;
 
+// pub const MULTI_CUT_REDUCTION: i8 = 1;
+
 pub const NULL_MOVE_REDUCTION: i8 = 1;
 
+/// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
 pub struct Searcher {
     pub best_move: RootMove,
     pub pv: Vec<Entry>,
@@ -39,6 +42,7 @@ impl Searcher {
 
     }
 
+    /// Sends search data over the dataout Sender. This can be recived by the main thread.
     pub fn output_search_data(&mut self) {
         self.dataout.send(self.search_data.clone()).unwrap();
         
@@ -62,7 +66,7 @@ impl Searcher {
 
         }
 
-        let pv = calc_pv(board, self.current_ply);
+        let pv = calc_pv_tt(board, self.current_ply);
         self.pv = pv.clone();
         self.search_data.pv = pv.clone();
 
@@ -76,11 +80,6 @@ impl Searcher {
 
         self.current_ply = 1;
         while !self.search_data.game_over {
-            // for mv in self.root_moves.moves() {
-            //     println!("{:?}", mv);
-
-            // }
-
             self.search_data = SearchData::new(self.current_ply);
 
             self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false);
@@ -142,33 +141,37 @@ impl Searcher {
 
         self.search_data.branches += 1;
 
+        // Generate the Raw move list for this node.
         let mut move_list = unsafe { valid_moves(board, player) };
+
+        // If there is the threat for the current player return INF, because that move would eventualy be pick as best.
         if move_list.has_threat() {
             return f64::INFINITY;
             
         }
 
-        // let current_player_moves: Vec<Move>;
-        // if is_root {
-        //     current_player_moves = self.root_moves.moves();
+        // Use the previous depth to order the moves, otherwise generate and order them.
+        let mut current_player_moves: Vec<Move>;
+        if is_root {
+            current_player_moves = self.root_moves.as_vec();
 
-        // } else {
-            let mut current_player_moves = move_list.moves(board);
+        } else {
+            current_player_moves = move_list.moves(board);
             current_player_moves = order_moves(current_player_moves, board, player, &self.pv);
 
-        // }
+        }
 
         // Null Move Pruning
-        // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
-        // if !is_pv && cut_node && r_depth > 1 {
-        //     let mut null_move_board = board.make_null();
-        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
-        //     if score >= beta {
-        //         return beta;
+        let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
+        if !is_pv && cut_node && r_depth >= 1 {
+            let mut null_move_board = board.make_null();
+            let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
+            if score >= beta {
+                return beta;
     
-        //     }
+            }
 
-        // }
+        }
         
         // Multi Cut - Dosent Work
         // let r_depth = depth - 1 - MULTI_CUT_REDUCTION;
@@ -176,7 +179,7 @@ impl Searcher {
         //     let mut cuts = 0;
 
         //     'test: for (i, mv) in current_player_moves.iter().enumerate() {
-        //         if i > (M - 1) {
+        //         if i >= 50 {
         //             break 'test;
         //         }
                 
@@ -185,7 +188,7 @@ impl Searcher {
         //         let score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
         //         if score >= beta {
         //             cuts += 1;
-        //             if cuts >= C {
+        //             if cuts >= 40 {
         //                 return beta; // mc-prune
 
         //             }
@@ -202,19 +205,21 @@ impl Searcher {
             let mut new_board = board.make_move(&mv);
 
             let mut score;
-            if i > 0 {
-                // score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
-
-                // if score > alpha && score < beta {
-                    score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
-
-                // }
+            if i == 0 && is_pv {
+                score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
 
             } else {
-                score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
+                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
+
+                if score > alpha && score < beta {
+                    score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
+
+                }
+               
 
             } 
 
+            // Update the score of the corosponding rootnode if we are at the root.
             if is_root {
                 self.root_moves.update_move(mv.clone(), score, self.current_ply);
 
@@ -254,12 +259,14 @@ impl Searcher {
 
         unsafe { tt().insert(new_entry) };
 
-        return alpha;
+        return best_score;
 
     }
 
 }
 
+
+/// Structure that holds all of the informaion about a specific search ply.
 #[derive(Debug, Clone)]
 pub struct SearchData {
     pub best_move: RootMove,
@@ -321,7 +328,8 @@ impl SearchData {
 
 }
 
-pub fn calc_pv(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
+/// Uses the trasposition table to calculate the PV.
+pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
     let mut pv = vec![];
 
     let mut temp_board = board.clone();

@@ -1,6 +1,17 @@
 use crate::consts::*;
 use crate::board::*;
 use crate::move_gen::*;
+use crate::move_list::*;
+
+pub const PieceScores: [f64; 3] = [50.0, 40.0, 30.0];
+
+// pub const ThreeScoreTable: [[usize; 6]; 6] = [  [0, 0, 0, 0, 0, 0],
+//                                                 [0, 0, 0, 0, 0, 0],
+//                                                 [0, 0, 0, 0, 0, 0],
+//                                                 [0, 0, 0, 0, 0, 0],
+//                                                 [0, 0, 0, 0, 0, 0],
+//                                                 [0, 0, 0, 0, 0, 0]];
+
 
 fn in_bounds(pos: usize) -> bool {
     if pos <= 35 {
@@ -221,9 +232,32 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 
 }
 
+// Sums the value of every piece that the player can touch.
+pub fn control_score(board: &mut BoardState, player: f64) -> f64 {
+    let current_moves = unsafe{ valid_moves(board, player) };
+
+    let mut score = 0.0;
+    for board_pos in 0..36 {
+        if current_moves.replaceable(board_pos) && board.data[board_pos] != 0 {
+            score += PieceScores[board.data[board_pos] - 1]
+            
+        }
+
+    }
+
+    score
+
+}
+
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
-    let eval = unsafe{ valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64 };
-    
+    let move_count_eval = unsafe{ valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64 };
+
+    // Control Eval Test
+    // let control_eval = control_score(board, PLAYER_1) - control_score(board, PLAYER_2);
+    // let eval = move_count_eval + control_eval;
+
+    let eval = move_count_eval;
+
     return eval;
 
 } 

@@ -148,6 +148,19 @@ impl RawMoveList {
 
     }
 
+    pub fn replaceable(&self, piece_pos: usize) -> bool {
+        for idx in self.start_indexs.iter() {
+            if (self.end_positions[*idx] & (1 << piece_pos)).is_not_empty() {
+                return true;
+
+            }
+        
+        }
+
+        return false;
+
+    }
+
 }
 
 pub struct RootMoveList {
@@ -223,7 +236,7 @@ impl RootMoveList {
 
     }
 
-    pub fn moves(&self) -> Vec<Move> {
+    pub fn as_vec(&self) -> Vec<Move> {
         let moves: Vec<Move> = self.moves.clone().into_iter().map( |mv| {
             return mv.mv;
 

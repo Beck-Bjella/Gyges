@@ -16,6 +16,8 @@ const BYTES_PER_GB: f64 = BYTES_PER_MB * 1000.0;
 pub static mut TT_SAFE_INSERTS: usize = 0;
 pub static mut TT_UNSAFE_INSERTS: usize = 0;
 
+
+/// Defines the bound for a node.
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum NodeBound {
     ExactValue,
@@ -25,6 +27,7 @@ pub enum NodeBound {
 
 }
 
+/// Structure that holds the data of a node.
 #[derive(Clone, Copy, Debug)]
 pub struct Entry {
     pub key: u64,
@@ -62,12 +65,14 @@ impl Entry {
 
 }
 
+/// Structure that holds multiple entrys and is stored in the trasposition table.
 #[derive(Clone, Copy, Debug)]
 pub struct Cluster {
     pub entrys: [Entry; CLUSTER_SIZE],
 
 }
 
+/// Structure for the transposition table.
 pub struct TranspositionTable {
     pub clusters: UnsafeCell<NonNull<Cluster>>,
     pub cap: UnsafeCell<usize>,
@@ -82,30 +87,37 @@ impl TranspositionTable {
         };
     }
 
+    /// Gets the max size of the transposition table in kilobytes.
     pub fn size_kilobytes(&self) -> f64 {
         return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_KB;
     }
-
+    
+    /// Gets the max size of the transposition table in megabytes.
     pub fn size_megabytes(&self) -> f64 {
         return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_MB;
     }
 
+    /// Gets the max size of the transposition table in gigabytes.
     pub fn size_gigabytes(&self) -> f64 {
         return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_GB;
     }
 
+    /// Gets the max number of culusters in the transposition table.
     pub fn num_clusters(&self) -> usize {
         return unsafe { *self.cap.get() };
     }
 
-    pub unsafe fn num_entrys(&self) -> usize {
+    /// Gets the max number of entrys in the transposition table.
+    pub fn num_entrys(&self) -> usize {
         return self.num_clusters() * CLUSTER_SIZE;
     }
 
-    unsafe fn get_cluster(&self, i: usize) -> *mut Cluster {
-        return (*self.clusters.get()).as_ptr().add(i);
+    /// Returns a raw pointer to a specific cluster in the table.
+    fn get_cluster(&self, i: usize) -> *mut Cluster {
+        return unsafe{ (*self.clusters.get()).as_ptr().add(i) };
     }
 
+    /// Probes the transposition table for the data corosponding to a specific key.
     pub unsafe fn probe(&self, key: u64) -> (bool, &mut Entry) {
         let index = key as usize % self.num_clusters();
 
@@ -123,6 +135,7 @@ impl TranspositionTable {
         (false, &mut (*cluster_first_entry(cluster)))
     }
 
+    /// Uses a key and inserts a entry into the table in the best available spot.
     pub unsafe fn insert(&self, new_entry: Entry) -> bool {
         let index = new_entry.key as usize % self.num_clusters();
 
@@ -160,7 +173,9 @@ impl TranspositionTable {
         TT_UNSAFE_INSERTS += 1;
         replacement_entry.replace(new_entry);
         return false;
+
     }
+
 }
 
 impl Display for TranspositionTable {
@@ -188,14 +203,16 @@ impl Display for TranspositionTable {
 
 unsafe impl Sync for TranspositionTable {}
 
-unsafe fn get_entry(cluster: *mut Cluster, i: usize) -> *mut Entry {
-    return ((*cluster).entrys).as_ptr().add(i) as *mut Entry;
+/// Returns a raw pointer 
+fn get_entry(cluster: *mut Cluster, i: usize) -> *mut Entry {
+    return unsafe{ ((*cluster).entrys).as_ptr().add(i) as *mut Entry };
 }
 
 unsafe fn cluster_first_entry(cluster: *mut Cluster) -> *mut Entry {
     (*cluster).entrys.get_unchecked_mut(0) as *mut Entry
 }
 
+/// Allocates empty memory as clusters and returns a pointer to it.
 fn alloc_room(size: usize) -> NonNull<Cluster> {
     unsafe {
         let size = size * mem::size_of::<Cluster>();
@@ -209,10 +226,12 @@ fn alloc_room(size: usize) -> NonNull<Cluster> {
     }
 }
 
+/// Returns acess to the global transposition table.
 pub fn tt() -> &'static TranspositionTable {
     return unsafe { &*(&mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable) };
 }
 
+/// Initalizes the global transposition table.
 pub fn init_tt() {
     unsafe {
         let tt = &mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable;

@@ -14,7 +14,6 @@ pub enum MoveType {
 
 }
 
-
 /// Structure that defines a move
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct Move {
@@ -135,9 +134,9 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
         // If move is not the PV then guess how good it is
         sort_val = -1.0 * unsafe { valid_move_count(&mut new_board, -player)} as f64;
 
-        // If a move has less then 2 threats then penalize it
+        // If a move has less then 5 threats then penalize it
         let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
-        if threat_count <= 2 as usize {
+        if threat_count <= 5 as usize {
             sort_val -= 1000.0 * (5 - threat_count) as f64;
 
         }
