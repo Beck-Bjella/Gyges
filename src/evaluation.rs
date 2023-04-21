@@ -1,9 +1,10 @@
+use crate::board;
 use crate::consts::*;
 use crate::board::*;
 use crate::move_gen::*;
 use crate::move_list::*;
 
-pub const PieceScores: [f64; 3] = [50.0, 40.0, 30.0];
+pub const PIECE_SCORES: [f64; 3] = [50.0, 40.0, 30.0];
 
 // pub const ThreeScoreTable: [[usize; 6]; 6] = [  [0, 0, 0, 0, 0, 0],
 //                                                 [0, 0, 0, 0, 0, 0],
@@ -232,20 +233,48 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 
 }
 
-// Sums the value of every piece that the player can touch.
+/// Sums the value of every piece that the player can touch.
 pub fn control_score(board: &mut BoardState, player: f64) -> f64 {
     let current_moves = unsafe{ valid_moves(board, player) };
 
     let mut score = 0.0;
     for board_pos in 0..36 {
-        if current_moves.replaceable(board_pos) && board.data[board_pos] != 0 {
-            score += PieceScores[board.data[board_pos] - 1]
+        if current_moves.piece_replaceable(board_pos) && board.data[board_pos] != 0 {
+            score += PIECE_SCORES[board.data[board_pos] - 1]
             
         }
 
     }
 
     score
+
+}
+
+pub fn staranded_piece(board: &mut BoardState, player: f64) -> bool {
+    let active_lines = board.get_active_lines();
+    let active_line;
+    if player == PLAYER_1 {
+        active_line = active_lines[0]
+
+    } else {
+        active_line = active_lines[1]
+
+    }
+
+    let moves = unsafe{ valid_moves(board, player) };
+
+    for i in active_line..active_line + 6 {
+        if board.data[i] != 0 {
+            if moves.piece_has_drops(i % 6) {
+                return true;
+        
+            }
+
+        }
+
+    }
+
+    return false;
 
 }
 

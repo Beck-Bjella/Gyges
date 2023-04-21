@@ -16,7 +16,6 @@ mod zobrist;
 use crate::board::*;
 use crate::consts::*;
 use crate::engine::*;
-use crate::evaluation::control_score;
 use crate::tt::*;
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
@@ -25,15 +24,12 @@ use std::thread;
 fn main() {
     init_tt();
 
-    unsafe {
-        println!("TT STATS: ");
-        println!("GB: {}", tt().size_gigabytes());
-        println!("Clusters: {}", tt().num_clusters());
-        println!("Entries: {}", tt().num_entrys());
-        println!("");
-    }
+    println!("TT STATS: ");
+    println!("GB: {}", tt().size_gigabytes());
+    println!("Clusters: {}", tt().num_clusters());
+    println!("Entries: {}", tt().num_entrys());
+    println!("");
 
-    let (stop_sender, stop_reciver): (Sender<bool>, Receiver<bool>) = mpsc::channel();
     let (results_sender, results_reciver): (Sender<SearchData>, Receiver<SearchData>) = mpsc::channel();
 
     let mut board = BoardState::new();

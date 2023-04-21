@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::process::id;
 
 use crate::bitboard::*;
 use crate::consts::*;
@@ -78,42 +79,42 @@ impl RawMoveList {
 
     }
     
-    pub fn defensive_moves(&mut self, board: &BoardState) -> Vec<Move> {
-        let mut moves: Vec<Move> = Vec::with_capacity(1000);
+    // pub fn defensive_moves(&mut self, board: &BoardState) -> Vec<Move> {
+    //     let mut moves: Vec<Move> = Vec::with_capacity(1000);
 
-        let drop_positions = self.drop_positions.get_data();
+    //     let drop_positions = self.drop_positions.get_data();
 
-        for idx in self.start_indexs.iter() {
-            let start_position = self.start_positions[*idx];
-            if start_position.0 <= 6 {
-                for end_pos in self.end_positions[*idx].get_data() {
-                    if end_pos <= 11 {
-                        moves.push(Move::new([0, start_position.0, start_position.1, end_pos, NULL, NULL], MoveType::Bounce));
+    //     for idx in self.start_indexs.iter() {
+    //         let start_position = self.start_positions[*idx];
+    //         if start_position.0 <= 6 {
+    //             for end_pos in self.end_positions[*idx].get_data() {
+    //                 if end_pos <= 11 {
+    //                     moves.push(Move::new([0, start_position.0, start_position.1, end_pos, NULL, NULL], MoveType::Bounce));
     
-                    }
+    //                 }
                     
-                }
+    //             }
     
-                for pick_up_pos in self.pickup_positions[*idx].get_data() {
-                    moves.push(Move::new([0, start_position.0, start_position.1, pick_up_pos, board.data[pick_up_pos], start_position.0], MoveType::Drop));
+    //             for pick_up_pos in self.pickup_positions[*idx].get_data() {
+    //                 moves.push(Move::new([0, start_position.0, start_position.1, pick_up_pos, board.data[pick_up_pos], start_position.0], MoveType::Drop));
     
-                    for drop_pos in drop_positions.iter() {
-                        if *drop_pos <= 11 {
-                            moves.push(Move::new([0, start_position.0, start_position.1, pick_up_pos, board.data[pick_up_pos], *drop_pos], MoveType::Drop));
+    //                 for drop_pos in drop_positions.iter() {
+    //                     if *drop_pos <= 11 {
+    //                         moves.push(Move::new([0, start_position.0, start_position.1, pick_up_pos, board.data[pick_up_pos], *drop_pos], MoveType::Drop));
 
-                        }
+    //                     }
     
-                    }
+    //                 }
             
-                }
+    //             }
 
-            }
+    //         }
             
-        }
+    //     }
 
-        return moves;
+    //     return moves;
 
-    }
+    // }
 
     pub fn move_count(&mut self) -> usize {
         let mut count = 0;
@@ -148,13 +149,23 @@ impl RawMoveList {
 
     }
 
-    pub fn replaceable(&self, piece_pos: usize) -> bool {
+    pub fn piece_replaceable(&self, piece_pos: usize) -> bool {
         for idx in self.start_indexs.iter() {
             if (self.end_positions[*idx] & (1 << piece_pos)).is_not_empty() {
                 return true;
 
             }
         
+        }
+
+        return false;
+
+    }
+
+    pub fn piece_has_drops(&self, piece_idx: usize, ) -> bool {
+        if self.pickup_positions[piece_idx].is_not_empty() {
+            return true;
+
         }
 
         return false;

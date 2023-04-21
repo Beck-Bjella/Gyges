@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 
 use crate::consts::*;
 use crate::board::*;
+use crate::evaluation::staranded_piece;
 use crate::move_gen::*;
 use crate::tt::*;
 
@@ -104,7 +105,7 @@ impl RootMove {
 
     }
 
-    /// Sets the score and the search ply of a rootmove..-
+    /// Sets the score and the search ply of a rootmove.
     pub fn set_score_and_ply(&mut self, score: f64, ply: i8) {
         self.score = score;
         self.ply = ply;
@@ -115,11 +116,11 @@ impl RootMove {
 
 /// Orders a list of moves.
 pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &Vec<Entry>) -> Vec<Move> {
-    // For every move calculate a value to sort it by
+    // For every move calculate a value to sort it by.
     let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
         let mut sort_val: f64;
         
-        // Check if move is in the PV
+        // Check if move is in the PV.
         for e in pv {
             if e.bestmove == mv {
                 sort_val = 500_000.0;
@@ -127,14 +128,20 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 
             }
 
-        }
+        } 
 
         let mut new_board = board.make_move(&mv);
 
-        // If move is not the PV then guess how good it is
+        if staranded_piece(&mut new_board, player) {
+            sort_val = -400_000.0;
+            return (mv, sort_val);
+
+        }
+
+        // If move is not the PV then guess how good it is.
         sort_val = -1.0 * unsafe { valid_move_count(&mut new_board, -player)} as f64;
 
-        // If a move has less then 5 threats then penalize it
+        // If a move has less then 5 threats then penalize it.
         let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
         if threat_count <= 5 as usize {
             sort_val -= 1000.0 * (5 - threat_count) as f64;
@@ -145,7 +152,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 
     }).collect();
     
-    // Sort the moves based on their predicted values
+    // Sort the moves based on their predicted values.
     moves_to_sort.sort_by(|a, b| {
         if a.1 > b.1 {
             Ordering::Less
@@ -160,7 +167,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 
     });
 
-    // Collect the moves
+    // Collect the moves.
     let ordered_moves: Vec<Move> = moves_to_sort.into_iter().map(|x| x.0).collect();
 
     ordered_moves

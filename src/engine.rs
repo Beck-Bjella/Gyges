@@ -42,12 +42,13 @@ impl Searcher {
 
     }
 
-    /// Sends search data over the dataout Sender. This can be recived by the main thread.
+    /// Sends search data over the dataout. This can be recived by the main thread.
     pub fn output_search_data(&mut self) {
         self.dataout.send(self.search_data.clone()).unwrap();
         
     }
 
+    /// Updates the search data based on the collected data.
     pub fn update_search_stats(&mut self, board: &mut BoardState) {
         self.search_data.search_time = self.search_data.start_time.elapsed().as_secs_f64();
         self.search_data.bps =(self.search_data.branches as f64 / self.search_data.search_time) as usize;
@@ -72,6 +73,7 @@ impl Searcher {
 
     }
 
+    /// Iterative deepening search.
     pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: i8) {
         println!("START");
 
@@ -97,6 +99,7 @@ impl Searcher {
 
     }
     
+    /// Main search function.
     fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, cut_node: bool) -> f64 {
         let is_root = depth == self.search_data.ply;
         let is_pv = N::is_pv();

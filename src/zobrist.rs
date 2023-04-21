@@ -5,7 +5,6 @@ use rand::Rng;
 pub const PLAYER_1_HASH: u64 = 11071850447646664432;
 pub const PLAYER_2_HASH: u64 = 15525846075063937794;
 
-
 pub const ZOBRIST_HASH_DATA: [[u64; 4]; 38] = [
     [0, 16019584827874668947, 10756861282518694731, 326575046895935871], 
     [0, 10801462851853052059, 8912476932191465120, 4868635385389206586], 
@@ -48,18 +47,23 @@ pub const ZOBRIST_HASH_DATA: [[u64; 4]; 38] = [
                      
 ];
 
-// pub fn gen_data() {
-//     let mut rng = rand::thread_rng();
+/// Randomly Generates new hash data.
+pub fn gen_data() {
+    let mut rng = rand::thread_rng();
+
+    let mut new_hash_data: [[u64; 4]; 38] = [[0; 4]; 38];
+
+    for i in 0..38 {
+        let data: [u64; 4] = [0, rng.gen(), rng.gen(), rng.gen()];
+        new_hash_data[i] = data;
     
+    }
 
-//     for i in 0..38 {
-//         let data: [u64; 4] = [0, rng.gen(), rng.gen(), rng.gen()];
-//         unsafe{ZOBRIST_HASH_DATA[i] = data};
-    
-//     }
+    println!("{:?}", new_hash_data);
 
-// }
+}
 
+/// Gets the hash for a board including the player to move.
 pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
     let mut hash = 0;
 
@@ -83,6 +87,7 @@ pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
 
 }
 
+/// Gets the hash for a board not including the player to move.
 pub fn get_uni_hash(board: &mut BoardState) -> u64 {
     let mut hash = 0;
 
