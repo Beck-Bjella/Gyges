@@ -233,24 +233,50 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 
 }
 
-/// Sums the value of every piece that the player can touch.
-pub fn control_score(board: &mut BoardState, player: f64) -> f64 {
-    let current_moves = unsafe{ valid_moves(board, player) };
+// / Sums the value of every piece that the player can touch.
+// pub fn control_score(board: &mut BoardState, player: f64) -> f64 {
+//     let current_moves = unsafe{ valid_moves(board, player) };
 
-    let mut score = 0.0;
-    for board_pos in 0..36 {
-        if current_moves.piece_replaceable(board_pos) && board.data[board_pos] != 0 {
-            score += PIECE_SCORES[board.data[board_pos] - 1]
+//     let mut score = 0.0;
+//     for board_pos in 0..36 {
+//         if current_moves.piece_replaceable(board_pos) && board.data[board_pos] != 0 {
+//             score += PIECE_SCORES[board.data[board_pos] - 1]
             
+//         }
+
+//     }
+
+//     score
+
+// }
+
+pub fn piece_fully_stranded(board: &mut BoardState, pos: usize, piece: usize) -> bool {
+    let mut stranded = true;
+
+    for i in 0usize..36 {
+        if i != pos {
+            let x = (i % 6) as f64;
+            let y = (i as f64 / 6 as f64).floor();
+    
+            let pos_x = (pos % 6) as f64;
+            let pos_y = (pos as f64 / 6 as f64).floor();
+    
+            let dist = ((pos_y - y).powf(2.0) + (pos_x - x).powf(2.0)).sqrt();
+    
+            if board.data[i] != 0 && dist <= piece as f64 {
+                stranded = false
+    
+            }
+
         }
 
     }
 
-    score
+    return stranded;
 
 }
 
-pub fn staranded_piece(board: &mut BoardState, player: f64) -> bool {
+pub fn fully_stranded_pieces(board: &mut BoardState, player: f64) -> Vec<usize> {
     let active_lines = board.get_active_lines();
     let active_line;
     if player == PLAYER_1 {
@@ -261,31 +287,32 @@ pub fn staranded_piece(board: &mut BoardState, player: f64) -> bool {
 
     }
 
-    let moves = unsafe{ valid_moves(board, player) };
+    let mut pieces = vec![];
+    for board_pos in active_line..active_line + 6 {
+        let piece = board.data[board_pos];
 
-    for i in active_line..active_line + 6 {
-        if board.data[i] != 0 {
-            if moves.piece_has_drops(i % 6) {
-                return true;
-        
+        if piece != 0 {
+            if piece_fully_stranded(board, board_pos, piece) {
+                pieces.push(piece);
+                
             }
 
         }
 
     }
 
-    return false;
+    return pieces;
 
 }
 
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
+    // Calculates the difference in move count between player 1 and player 2.
     let move_count_eval = unsafe{ valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64 };
+    
+    // Determins the number of peices that are fully stranded on player 1 and player 2's active lines.
+    let stranded_eval = 1000.0 * (fully_stranded_pieces(board, PLAYER_2).len() as f64 - fully_stranded_pieces(board, PLAYER_1).len()  as f64);
 
-    // Control Eval Test
-    // let control_eval = control_score(board, PLAYER_1) - control_score(board, PLAYER_2);
-    // let eval = move_count_eval + control_eval;
-
-    let eval = move_count_eval;
+    let eval = move_count_eval + stranded_eval;
 
     return eval;
 

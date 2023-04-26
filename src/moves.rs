@@ -2,9 +2,14 @@ use std::cmp::Ordering;
 
 use crate::consts::*;
 use crate::board::*;
-use crate::evaluation::staranded_piece;
+use crate::evaluation::*;
 use crate::move_gen::*;
 use crate::tt::*;
+
+pub const ACTIVELINE_STRANDED_PENEITALYS: [usize; 3] = [15000, 10000, 5000];
+
+pub const STRANDED_PENEITALYS: [usize; 3] = [3000, 2000, 1000];
+
 
 /// Designates the type of move.
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -120,7 +125,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
     let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
         let mut sort_val: f64;
         
-        // Check if move is in the PV.
+        // If move is in the PV then sort it first.
         for e in pv {
             if e.bestmove == mv {
                 sort_val = 500_000.0;
@@ -132,12 +137,6 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 
         let mut new_board = board.make_move(&mv);
 
-        if staranded_piece(&mut new_board, player) {
-            sort_val = -400_000.0;
-            return (mv, sort_val);
-
-        }
-
         // If move is not the PV then guess how good it is.
         sort_val = -1.0 * unsafe { valid_move_count(&mut new_board, -player)} as f64;
 
@@ -147,7 +146,37 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
             sort_val -= 1000.0 * (5 - threat_count) as f64;
 
         }
-       
+        
+        // Checks if the move leaves a fully stranded piece on your active line.
+        for piece in fully_stranded_pieces(&mut new_board, player).iter() {
+            sort_val -= ACTIVELINE_STRANDED_PENEITALYS[piece - 1] as f64;
+
+        }
+
+        // Check if the move leaves the last active peice fullly stranded.
+        let end_pos: usize = if mv.flag == MoveType::Drop { 
+            mv.data[5] 
+
+        } else { 
+            mv.data[3] 
+
+        };
+        let end_type = new_board.data[end_pos];
+        let stranded = piece_fully_stranded(&mut new_board, end_pos, end_type);
+        if stranded {
+            sort_val -= STRANDED_PENEITALYS[end_type - 1] as f64;
+
+        }
+        
+        // Works decent but sometimes makes the ABF worse
+        // if mv.flag == MoveType::Drop && mv.data[2] == 1 && preventable(&mut new_board, &mv, player) {
+        //     // println!("=========");
+        //     // board.print();
+        //     // new_board.print();
+        //     sort_val -= 500.0;
+
+        // }
+
         (mv, sort_val)
 
     }).collect();
@@ -173,3 +202,11 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
     ordered_moves
  
 }
+
+
+// fn preventable(board: &mut BoardState, mv: &Move, player: f64) -> bool {
+//     let preventable = unsafe{ valid_moves(board, -player) }.moves_pickingup_with_type(board, mv.data[3], mv.data[4]).len() > 0;
+
+//     preventable
+
+// }

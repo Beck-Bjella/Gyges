@@ -165,6 +165,7 @@ impl Searcher {
         }
 
         // Null Move Pruning
+        // Works very well - Can cause search errors
         let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
         if !is_pv && cut_node && r_depth >= 1 {
             let mut null_move_board = board.make_null();
@@ -212,12 +213,12 @@ impl Searcher {
                 score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
 
             } else {
-                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
+                // score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
 
-                if score > alpha && score < beta {
+                // if score > alpha && score < beta {
                     score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
 
-                }
+                // }
                
 
             } 
@@ -244,6 +245,11 @@ impl Searcher {
                 break;
 
             }
+
+        }
+        
+        if is_root && self.current_ply == 5 {
+            self.root_moves.display_top(board)
 
         }
 

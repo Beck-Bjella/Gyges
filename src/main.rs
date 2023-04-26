@@ -13,10 +13,13 @@ mod moves;
 mod tt;
 mod zobrist;
 
+use move_gen::valid_moves;
+
 use crate::board::*;
 use crate::consts::*;
 use crate::engine::*;
 use crate::tt::*;
+use crate::evaluation::*;
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
