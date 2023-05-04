@@ -7,11 +7,6 @@ pub struct BitBoard(pub u64);
 impl_bit_ops!(BitBoard, u64);
 
 impl BitBoard {
-    pub fn new(set_bit: usize) -> BitBoard {
-        BitBoard(0 << set_bit)
-
-    }
-
     pub fn get_data(&mut self) -> Vec<usize> {
         let mut indexs = vec![];
 

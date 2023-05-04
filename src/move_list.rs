@@ -96,16 +96,25 @@ impl RawMoveList {
 
     }
 
-    pub fn has_threat(&mut self) -> bool {
-        for idx in self.start_indexs.iter() {
-            if (self.end_positions[*idx] & (1 << 37)).is_not_empty() {
-                return true;
-
-            } else if (self.end_positions[*idx] & (1 << 36)).is_not_empty() {
-                return true;
-
+    pub fn has_threat(&mut self, player: f64) -> bool {
+        if player == PLAYER_1 {
+            for idx in self.start_indexs.iter() {
+                if (self.end_positions[*idx] & (1 << PLAYER_2_GOAL)).is_not_empty() {
+                    return true;
+    
+                } 
+            
             }
-        
+
+        } else if player == PLAYER_2 {
+            for idx in self.start_indexs.iter() {
+                if (self.end_positions[*idx] & (1 << PLAYER_1_GOAL)).is_not_empty() {
+                    return true;
+    
+                }
+            
+            }
+
         }
 
         return false;
@@ -206,22 +215,22 @@ impl RootMoveList {
 
     }
 
-    pub fn display_top(&self, board: &mut BoardState) {
-        for (i, mv) in self.moves.iter().enumerate() {
-            if i >= 5 {
-                break;
+    // pub fn display_top(&self, board: &mut BoardState) {
+    //     for (i, mv) in self.moves.iter().enumerate() {
+    //         if i >= 5 {
+    //             break;
 
-            }
+    //         }
 
-            println!("========================================");
-            println!("{:?}", mv);
-            board.print();
-            let new_board = board.make_move(&mv.mv);
-            new_board.print();
+    //         println!("========================================");
+    //         println!("{:?}", mv);
+    //         board.print();
+    //         let new_board = board.make_move(&mv.mv);
+    //         new_board.print();
 
-        }
+    //     }
 
-    }
+    // }
 
     pub fn sort(&mut self) {
         self.moves.sort_by(|a, b| {

@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::hash;
 
 use crate::consts::*;
 use crate::board::*;
@@ -9,7 +10,6 @@ use crate::tt::*;
 pub const ACTIVELINE_STRANDED_PENEITALYS: [usize; 3] = [15000, 10000, 5000];
 
 pub const STRANDED_PENEITALYS: [usize; 3] = [3000, 2000, 1000];
-
 
 /// Designates the type of move.
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -124,7 +124,8 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
     // For every move calculate a value to sort it by.
     let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
         let mut sort_val: f64;
-        
+        let mut new_board = board.make_move(&mv);
+       
         // If move is in the PV then sort it first.
         for e in pv {
             if e.bestmove == mv {
@@ -134,8 +135,6 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
             }
 
         } 
-
-        let mut new_board = board.make_move(&mv);
 
         // If move is not the PV then guess how good it is.
         sort_val = -1.0 * unsafe { valid_move_count(&mut new_board, -player)} as f64;
@@ -170,17 +169,18 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
         
         // Works decent but sometimes makes the ABF worse
         // if mv.flag == MoveType::Drop && mv.data[2] == 1 && preventable(&mut new_board, &mv, player) {
-        //     // println!("=========");
-        //     // board.print();
-        //     // new_board.print();
-        //     sort_val -= 500.0;
+            // println!("=========");
+            // board.print();
+            // new_board.print();
+            // sort_val -= 500.0;
 
         // }
 
         (mv, sort_val)
 
     }).collect();
-    
+
+
     // Sort the moves based on their predicted values.
     moves_to_sort.sort_by(|a, b| {
         if a.1 > b.1 {
@@ -204,9 +204,9 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 }
 
 
-// fn preventable(board: &mut BoardState, mv: &Move, player: f64) -> bool {
-//     let preventable = unsafe{ valid_moves(board, -player) }.moves_pickingup_with_type(board, mv.data[3], mv.data[4]).len() > 0;
+fn preventable(board: &mut BoardState, mv: &Move, player: f64) -> bool {
+    let preventable = unsafe{ valid_moves(board, -player) }.moves_pickingup_with_type(board, mv.data[3], mv.data[4]).len() > 0;
 
-//     preventable
+    preventable
 
-// }
+}

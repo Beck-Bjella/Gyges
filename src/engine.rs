@@ -1,3 +1,4 @@
+use std::ops::Neg;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
 
@@ -111,6 +112,7 @@ impl Searcher {
             let eval = get_evalulation(board) * player;
 
             return eval;
+
         }
 
         let (valid, entry) = unsafe { tt().probe(board_hash) };
@@ -145,37 +147,68 @@ impl Searcher {
         self.search_data.branches += 1;
 
         // Generate the Raw move list for this node.
-        let mut move_list = unsafe { valid_moves(board, player) };
+        let mut move_list: RawMoveList = unsafe { valid_moves(board, player) };
 
-        // If there is the threat for the current player return INF, because that move would eventualy be pick as best.
-        if move_list.has_threat() {
-            return f64::INFINITY;
+        // let player_goal = if player == PLAYER_1 {
+        //     PLAYER_1_GOAL
+        // } else {
+        //     PLAYER_2_GOAL
+        // };
+
+        // If there is the threat for the current player return INF, because that move would eventualy be picked as best.
+        // if move_list.has_threat(player) {
+            // println!(" - WIN {}", player);
+            // board.print();
+            // return f64::INFINITY;
             
-        }
+        // }
 
-        // Use the previous depth to order the moves, otherwise generate and order them.
+        // Use the previous search to order the moves, otherwise generate and order them.
         let mut current_player_moves: Vec<Move>;
         if is_root {
             current_player_moves = self.root_moves.as_vec();
-
+            
         } else {
             current_player_moves = move_list.moves(board);
             current_player_moves = order_moves(current_player_moves, board, player, &self.pv);
+            
+        }
+
+        for mv in current_player_moves.iter() {
+            if mv.flag == MoveType::Bounce {
+                if player == PLAYER_1 {
+                    if mv.data[5] == PLAYER_2_GOAL {
+                        return f64::INFINITY;
+
+                    }
+    
+
+                } else if player == PLAYER_2 {
+                    if mv.data[5] == PLAYER_1_GOAL {
+                        return f64::INFINITY;
+
+                    }
+
+                }
+
+                
+            }
 
         }
 
         // Null Move Pruning
-        // Works very well - Can cause search errors
-        let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
-        if !is_pv && cut_node && r_depth >= 1 {
-            let mut null_move_board = board.make_null();
-            let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
-            if score >= beta {
-                return beta;
+        // Can cause search errors
+        // Might work now - need to check
+        // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
+        // if !is_pv && cut_node && r_depth >= 1 {
+        //     let mut null_move_board = board.make_null();
+        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
+        //     if score >= beta {
+        //         return beta;
     
-            }
+        //     }
 
-        }
+        // }
         
         // Multi Cut - Dosent Work
         // let r_depth = depth - 1 - MULTI_CUT_REDUCTION;
@@ -213,17 +246,17 @@ impl Searcher {
                 score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
 
             } else {
-                // score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
+                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
 
-                // if score > alpha && score < beta {
+                if score > alpha && score < beta {
                     score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
 
-                // }
+                }
                
 
             } 
 
-            // Update the score of the corosponding rootnode if we are at the root.
+            // Update the score of the corosponding rootnode.
             if is_root {
                 self.root_moves.update_move(mv.clone(), score, self.current_ply);
 
@@ -247,12 +280,8 @@ impl Searcher {
             }
 
         }
+
         
-        if is_root && self.current_ply == 5 {
-            self.root_moves.display_top(board)
-
-        }
-
         let node_bound: NodeBound = if best_score >= beta {
             NodeBound::LowerBound
 
