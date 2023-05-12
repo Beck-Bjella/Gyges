@@ -12,14 +12,14 @@ mod move_list;
 mod moves;
 mod tt;
 mod zobrist;
+mod tree_storage;
 
-use move_gen::valid_moves;
+use tree_storage::*;
 
 use crate::board::*;
 use crate::consts::*;
 use crate::engine::*;
 use crate::tt::*;
-use crate::evaluation::*;
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
@@ -61,7 +61,7 @@ fn main() {
 
     thread::spawn(move || {
         let mut searcher = Searcher::new(results_sender);
-        searcher.iterative_deepening_search(&mut board, 99);
+        searcher.iterative_deepening_search(&mut board, 1);
         
     });
 

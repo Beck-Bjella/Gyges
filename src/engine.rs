@@ -8,11 +8,14 @@ use crate::evaluation::*;
 use crate::move_gen::*;
 use crate::move_list::*;
 use crate::moves::*;
+use crate::tree_storage::TreeNode;
+use crate::tree_storage::TreeStorage;
 use crate::tt::*;
 
 // pub const MULTI_CUT_REDUCTION: i8 = 1;
-
 pub const NULL_MOVE_REDUCTION: i8 = 1;
+
+pub static mut NEXT_ID: usize = 0;
 
 /// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
 pub struct Searcher {
@@ -24,6 +27,8 @@ pub struct Searcher {
     pub root_moves: RootMoveList,
 
     pub dataout: Sender<SearchData>,
+
+    pub storage: TreeStorage
 
 }
 
@@ -38,6 +43,8 @@ impl Searcher {
             root_moves: RootMoveList::new(),
 
             dataout,
+
+            storage: TreeStorage::new(0)
 
         };
 
@@ -84,9 +91,14 @@ impl Searcher {
         self.current_ply = 1;
         while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
+            self.storage = TreeStorage::new(self.current_ply);
 
-            self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false);
+            unsafe { NEXT_ID = 0 };
+            
+            self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false, 0, 0);
             self.update_search_stats(board);
+
+            self.storage.end();
 
             self.output_search_data();
 
@@ -101,12 +113,25 @@ impl Searcher {
     }
     
     /// Main search function.
-    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, cut_node: bool) -> f64 {
+    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, cut_node: bool, node_id: usize, parent_id: usize) -> f64 {
         let is_root = depth == self.search_data.ply;
-        let is_pv = N::is_pv();
+        let is_leaf = depth == 0;
+        let is_pv: bool = N::is_pv();
         let board_hash = board.hash();
 
-        if depth == 0 {
+        let node = TreeNode::new(
+            node_id,
+            is_root,
+            is_leaf
+
+        );
+
+        self.storage.add(node);
+        self.storage.add_child_to_node(parent_id, node_id);
+
+        unsafe { NEXT_ID += 1 };
+
+        if is_leaf {
             self.search_data.leafs += 1;
 
             let eval = get_evalulation(board) * player;
@@ -138,6 +163,7 @@ impl Searcher {
 
             if alpha >= beta {
                 self.search_data.tt_cuts += 1;
+
                 return entry.score;
 
             }
@@ -149,19 +175,11 @@ impl Searcher {
         // Generate the Raw move list for this node.
         let mut move_list: RawMoveList = unsafe { valid_moves(board, player) };
 
-        // let player_goal = if player == PLAYER_1 {
-        //     PLAYER_1_GOAL
-        // } else {
-        //     PLAYER_2_GOAL
-        // };
-
         // If there is the threat for the current player return INF, because that move would eventualy be picked as best.
-        // if move_list.has_threat(player) {
-            // println!(" - WIN {}", player);
-            // board.print();
-            // return f64::INFINITY;
+        if move_list.has_threat(player) {
+            return f64::INFINITY;
             
-        // }
+        }
 
         // Use the previous search to order the moves, otherwise generate and order them.
         let mut current_player_moves: Vec<Move>;
@@ -173,36 +191,14 @@ impl Searcher {
             current_player_moves = order_moves(current_player_moves, board, player, &self.pv);
             
         }
-
-        for mv in current_player_moves.iter() {
-            if mv.flag == MoveType::Bounce {
-                if player == PLAYER_1 {
-                    if mv.data[5] == PLAYER_2_GOAL {
-                        return f64::INFINITY;
-
-                    }
-    
-
-                } else if player == PLAYER_2 {
-                    if mv.data[5] == PLAYER_1_GOAL {
-                        return f64::INFINITY;
-
-                    }
-
-                }
-
-                
-            }
-
-        }
-
+       
         // Null Move Pruning
         // Can cause search errors
         // Might work now - need to check
         // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
         // if !is_pv && cut_node && r_depth >= 1 {
         //     let mut null_move_board = board.make_null();
-        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
+        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node, unsafe{ NEXT_ID }, node_id);
         //     if score >= beta {
         //         return beta;
     
@@ -243,13 +239,13 @@ impl Searcher {
 
             let mut score;
             if i == 0 && is_pv {
-                score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
+                score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false, unsafe { NEXT_ID }, node_id);
 
             } else {
-                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
+                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node, unsafe { NEXT_ID }, node_id);
 
                 if score > alpha && score < beta {
-                    score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
+                    score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node, unsafe { NEXT_ID }, node_id);
 
                 }
                
@@ -281,7 +277,6 @@ impl Searcher {
 
         }
 
-        
         let node_bound: NodeBound = if best_score >= beta {
             NodeBound::LowerBound
 
@@ -294,7 +289,6 @@ impl Searcher {
         };
 
         let new_entry = Entry::new(board_hash, best_score, depth as i8, best_move, node_bound);
-
         unsafe { tt().insert(new_entry) };
 
         return best_score;

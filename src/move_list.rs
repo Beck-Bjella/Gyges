@@ -97,24 +97,20 @@ impl RawMoveList {
     }
 
     pub fn has_threat(&mut self, player: f64) -> bool {
-        if player == PLAYER_1 {
-            for idx in self.start_indexs.iter() {
+        for idx in self.start_indexs.iter() {
+            if player == PLAYER_1 {
                 if (self.end_positions[*idx] & (1 << PLAYER_2_GOAL)).is_not_empty() {
                     return true;
-    
-                } 
-            
-            }
 
-        } else if player == PLAYER_2 {
-            for idx in self.start_indexs.iter() {
+                } 
+
+            } else if player == PLAYER_2 {
                 if (self.end_positions[*idx] & (1 << PLAYER_1_GOAL)).is_not_empty() {
                     return true;
-    
-                }
-            
-            }
 
+                }
+            }
+        
         }
 
         return false;
