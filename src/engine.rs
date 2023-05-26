@@ -91,14 +91,11 @@ impl Searcher {
         self.current_ply = 1;
         while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
-            self.storage = TreeStorage::new(self.current_ply);
 
             unsafe { NEXT_ID = 0 };
             
-            self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false, 0, 0);
+            self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false, false);
             self.update_search_stats(board);
-
-            self.storage.end();
 
             self.output_search_data();
 
@@ -113,23 +110,15 @@ impl Searcher {
     }
     
     /// Main search function.
-    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, cut_node: bool, node_id: usize, parent_id: usize) -> f64 {
+    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, cut_node: bool, null_window: bool) -> f64 {
         let is_root = depth == self.search_data.ply;
         let is_leaf = depth == 0;
         let is_pv: bool = N::is_pv();
         let board_hash = board.hash();
 
-        let node = TreeNode::new(
-            node_id,
-            is_root,
-            is_leaf
-
-        );
-
-        self.storage.add(node);
-        self.storage.add_child_to_node(parent_id, node_id);
-
+        let id: usize = unsafe{ NEXT_ID };
         unsafe { NEXT_ID += 1 };
+
 
         if is_leaf {
             self.search_data.leafs += 1;
@@ -239,13 +228,13 @@ impl Searcher {
 
             let mut score;
             if i == 0 && is_pv {
-                score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false, unsafe { NEXT_ID }, node_id);
+                score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false, false);
 
             } else {
-                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node, unsafe { NEXT_ID }, node_id);
-
+                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node, true);
+                
                 if score > alpha && score < beta {
-                    score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node, unsafe { NEXT_ID }, node_id);
+                    score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node, false);
 
                 }
                
@@ -291,7 +280,7 @@ impl Searcher {
         let new_entry = Entry::new(board_hash, best_score, depth as i8, best_move, node_bound);
         unsafe { tt().insert(new_entry) };
 
-        return best_score;
+        return alpha;
 
     }
 
