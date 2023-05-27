@@ -29,7 +29,7 @@ pub struct Move {
 }
 
 impl Move {
-    // Create a new move from its indivudal components.
+    /// Create a new move from its indivudal components.
     pub fn new(data: [usize; 6], flag: MoveType) -> Move {
         return Move {
             data,
@@ -61,6 +61,48 @@ impl Move {
 
     }
 
+}
+
+impl From<TTMove> for Move {
+    fn from(mv: TTMove) -> Self {
+        let mut data = [0; 6];
+        for i in 0..mv.data.len() {
+            data[i] = mv.data[i] as usize
+
+        }
+
+        return Move {
+            data,
+            flag: mv.flag
+
+        };
+
+    }
+}
+
+/// Structure that defines a move for the tt table.
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub struct TTMove {
+    pub data: [u8; 6],
+    pub flag: MoveType,
+
+}
+
+impl From<Move> for TTMove {
+    fn from(mv: Move) -> Self {
+        let mut data = [0; 6];
+        for i in 0..mv.data.len() {
+            data[i] = mv.data[i] as u8
+
+        }
+
+        return TTMove {
+            data,
+            flag: mv.flag
+
+        };
+
+    }
 }
 
 /// Structure that defines a rootmove.
@@ -128,7 +170,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
        
         // If move is in the PV then sort it first.
         for e in pv {
-            if e.bestmove == mv {
+            if Move::from(e.bestmove ) == mv {
                 sort_val = 500_000.0;
                 return (mv, sort_val);
 

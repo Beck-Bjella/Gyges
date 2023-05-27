@@ -60,7 +60,7 @@ fn main() {
 
     thread::spawn(move || {
         let mut searcher = Searcher::new(results_sender);
-        searcher.iterative_deepening_search(&mut board, 3);
+        searcher.iterative_deepening_search(&mut board, 5);
         
     });
 

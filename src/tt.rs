@@ -32,7 +32,7 @@ pub enum NodeBound {
 pub struct Entry {
     pub key: u64,
     pub score: f64,
-    pub bestmove: Move,
+    pub bestmove: TTMove,
     pub depth: i8,
     pub bound: NodeBound,
     pub used: bool
@@ -40,7 +40,7 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn new(key: u64, score: f64, depth: i8, bestmove: Move, flag: NodeBound) -> Entry {
+    pub fn new(key: u64, score: f64, depth: i8, bestmove: TTMove, flag: NodeBound) -> Entry {
         return Entry {
             key,
             score,
@@ -84,37 +84,45 @@ impl TranspositionTable {
         return TranspositionTable {
             clusters: UnsafeCell::new(alloc_room(size)),
             cap: UnsafeCell::new(size),
+
         };
+
     }
 
     /// Gets the max size of the transposition table in kilobytes.
     pub fn size_kilobytes(&self) -> f64 {
         return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_KB;
+
     }
     
     /// Gets the max size of the transposition table in megabytes.
     pub fn size_megabytes(&self) -> f64 {
         return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_MB;
+
     }
 
     /// Gets the max size of the transposition table in gigabytes.
     pub fn size_gigabytes(&self) -> f64 {
         return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_GB;
+        
     }
 
     /// Gets the max number of culusters in the transposition table.
     pub fn num_clusters(&self) -> usize {
         return unsafe { *self.cap.get() };
+
     }
 
     /// Gets the max number of entrys in the transposition table.
     pub fn num_entrys(&self) -> usize {
         return self.num_clusters() * CLUSTER_SIZE;
+
     }
 
     /// Returns a raw pointer to a specific cluster in the table.
     fn get_cluster(&self, i: usize) -> *mut Cluster {
         return unsafe{ (*self.clusters.get()).as_ptr().add(i) };
+
     }
 
     /// Probes the transposition table for the data corosponding to a specific key.
@@ -129,10 +137,13 @@ impl TranspositionTable {
 
             if entry.key == key {
                 return (true, entry);
+
             }
+
         }
 
         (false, &mut (*cluster_first_entry(cluster)))
+
     }
 
     /// Uses a key and inserts a entry into the table in the best available spot.
@@ -150,13 +161,16 @@ impl TranspositionTable {
                 TT_SAFE_INSERTS += 1;
                 entry.replace(new_entry);
                 return true;
+
             }
 
             if entry.key == new_entry.key && new_entry.depth >= entry.depth {
                 TT_SAFE_INSERTS += 1;
                 entry.replace(new_entry);
                 return true;
+
             }
+
         }
 
         let mut replacement_ptr = cluster_first_entry(cluster);
@@ -165,7 +179,9 @@ impl TranspositionTable {
 
             if (*entry_ptr).depth <= (*replacement_ptr).depth {
                 replacement_ptr = entry_ptr;
+
             }
+
         }
 
         let replacement_entry = &mut (*replacement_ptr);

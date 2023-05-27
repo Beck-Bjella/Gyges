@@ -266,7 +266,7 @@ impl Searcher {
 
         };
 
-        let new_entry = Entry::new(board_hash, best_score, depth as i8, best_move, node_bound);
+        let new_entry = Entry::new(board_hash, best_score, depth as i8, TTMove::from(best_move), node_bound);
         unsafe { tt().insert(new_entry) };
 
         return best_score;
@@ -350,7 +350,7 @@ pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
         if vaild {
             pv.push(entry.clone());
 
-            temp_board = temp_board.make_move(&entry.bestmove);
+            temp_board = temp_board.make_move(&Move::from(entry.bestmove));
 
         } else {
             break;
