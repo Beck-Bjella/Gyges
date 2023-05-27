@@ -1,11 +1,10 @@
 use std::cmp::Ordering;
-use std::hash;
 
+use crate::board::board::*;
+use crate::search::evaluation::*;
+use crate::moves::move_gen::*;
+use crate::tools::tt::*;
 use crate::consts::*;
-use crate::board::*;
-use crate::evaluation::*;
-use crate::move_gen::*;
-use crate::tt::*;
 
 pub const ACTIVELINE_STRANDED_PENEITALYS: [usize; 3] = [15000, 10000, 5000];
 

@@ -1,7 +1,7 @@
-use crate::board::*;
-use crate::bitboard::*;
+use crate::board::board::*;
+use crate::board::bitboard::*;
+use crate::moves::move_list::*;
 use crate::consts::*;
-use crate::move_list::*;
 
 #[derive(PartialEq)]
 enum Action {

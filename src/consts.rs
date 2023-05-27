@@ -1,5 +1,5 @@
-use crate::tt::*;
-use crate::bitboard::*;
+use crate::tools::tt::*;
+use crate::board::bitboard::*;
 
 use std::mem;
 
@@ -50,7 +50,7 @@ impl Node for NonPV {
 
 }
 
-// Move gen Consts
+// Move Gen Consts
 pub const THREE_PATHS: [[[usize; 4]; 40]; 36] = [
     [[0, 6, 12, 18], [0, 1, 2, 3], [0, 6, 12, 13], [0, 6, 7, 13], [0, 1, 7, 13], [0, 6, 7, 8], [0, 1, 7, 8], [0, 1, 2, 8], [0, 1, 2, 36], [0, 1, 7, 6], [0, 6, 7, 1], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4]],
     [[1, 7, 13, 19], [1, 2, 3, 4], [1, 0, 6, 12], [1, 7, 6, 12], [1, 7, 13, 12], [1, 7, 13, 14], [1, 7, 8, 14], [1, 2, 8, 14], [1, 7, 8, 9], [1, 2, 8, 9], [1, 2, 3, 9], [1, 2, 3, 36], [1, 7, 6, 0], [1, 0, 6, 7], [1, 2, 8, 7], [1, 7, 8, 2], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4], [NULL; 4]],

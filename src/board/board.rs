@@ -1,7 +1,9 @@
+use std::fmt::Display;
+
+use crate::board::bitboard::*;
+use crate::tools::zobrist::*;
+use crate::moves::moves::*;
 use crate::consts::*;
-use crate::bitboard::*;
-use crate::zobrist::*;
-use crate::moves::*;
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct BoardState {
@@ -40,46 +42,6 @@ impl BoardState {
 
         self.player = player;
 
-    }
-
-    pub fn print(&self) {
-        println!(" ");
-        if self.data[37] == 0 {
-            println!("                .");
-
-        } else {
-            println!("                {}", self.data[37]);
-
-        }
-        println!(" ");
-        println!(" ");
-
-        for y in (0..6).rev() {
-            for x in 0..6 {
-                if self.data[y * 6 + x] == 0 {
-                    print!("    .");
-                } else {
-                    print!("    {}", self.data[y * 6 + x]);
-
-                }
-               
-            }
-            
-            println!(" ");
-            println!(" ");
-
-        }
-
-        println!(" ");
-        if self.data[36] == 0 {
-            println!("                .");
-
-        } else {
-            println!("                {}", self.data[36]);
-
-        }
-        println!(" ");
-    
     }
 
     pub fn make_move(self, mv: &Move) -> BoardState {
@@ -245,6 +207,50 @@ impl BoardState {
     
         self.data = temp_data;
     
+    }
+
+}
+
+impl Display for BoardState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, " ")?;
+        if self.data[37] == 0 {
+            writeln!(f, "                .")?;
+
+        } else {
+            writeln!(f, "                {}", self.data[37])?;
+
+        }
+        writeln!(f, " ")?;
+        writeln!(f, " ")?;
+
+        for y in (0..6).rev() {
+            for x in 0..6 {
+                if self.data[y * 6 + x] == 0 {
+                    write!(f, "    .")?;
+                } else {
+                    write!(f, "    {}", self.data[y * 6 + x])?;
+
+                }
+               
+            }
+            writeln!(f, " ")?;
+            writeln!(f, " ")?;
+
+        }
+
+        writeln!(f, " ")?;
+        if self.data[36] == 0 {
+            writeln!(f, "                .")?;
+
+        } else {
+            writeln!(f, "                {}", self.data[36])?;
+
+        }
+        writeln!(f, " ")?;
+
+        return Result::Ok(());
+
     }
 
 }

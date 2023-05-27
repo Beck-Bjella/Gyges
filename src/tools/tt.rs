@@ -5,7 +5,7 @@ use std::mem;
 use std::ptr::{self, NonNull};
 
 use crate::consts::*;
-use crate::moves::*;
+use crate::moves::moves::*;
 
 const CLUSTER_SIZE: usize = 3;
 
@@ -206,15 +206,22 @@ impl Display for TranspositionTable {
 
                     if (*entry).used {
                         writeln!(f, "  - {:?}", *entry)?;
+                        
                     } else {
                         writeln!(f, "  - NONE")?;
+
                     }
+
                 }
+
             }
+
         }
 
         return Result::Ok(());
+
     }
+
 }
 
 unsafe impl Sync for TranspositionTable {}
@@ -222,10 +229,12 @@ unsafe impl Sync for TranspositionTable {}
 /// Returns a raw pointer 
 fn get_entry(cluster: *mut Cluster, i: usize) -> *mut Entry {
     return unsafe{ ((*cluster).entrys).as_ptr().add(i) as *mut Entry };
+
 }
 
 unsafe fn cluster_first_entry(cluster: *mut Cluster) -> *mut Entry {
     (*cluster).entrys.get_unchecked_mut(0) as *mut Entry
+
 }
 
 /// Allocates empty memory as clusters and returns a pointer to it.
@@ -239,12 +248,15 @@ fn alloc_room(size: usize) -> NonNull<Cluster> {
         let new_ptr: *mut Cluster = ptr.cast();
 
         return NonNull::new(new_ptr).unwrap();
+
     }
+
 }
 
 /// Returns acess to the global transposition table.
 pub fn tt() -> &'static TranspositionTable {
     return unsafe { &*(&mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable) };
+
 }
 
 /// Initalizes the global transposition table.
@@ -252,5 +264,7 @@ pub fn init_tt() {
     unsafe {
         let tt = &mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable;
         ptr::write(tt, TranspositionTable::new(2usize.pow(24)));
+
     }
+
 }

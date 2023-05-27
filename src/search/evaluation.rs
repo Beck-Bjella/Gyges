@@ -1,6 +1,6 @@
 use crate::consts::*;
-use crate::board::*;
-use crate::move_gen::*;
+use crate::board::board::*;
+use crate::moves::move_gen::*;
 
 
 fn in_bounds(pos: usize) -> bool {

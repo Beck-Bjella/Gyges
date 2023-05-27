@@ -1,10 +1,10 @@
 use std::cmp::Ordering;
 
-use crate::bitboard::*;
+use crate::board::bitboard::*;
+use crate::moves::moves::*;
+use crate::board::board::*;
+use crate::moves::move_gen::*;
 use crate::consts::*;
-use crate::moves::*;
-use crate::board::*;
-use crate::move_gen::*;
 
 #[derive(Clone)]
 pub struct RawMoveList {

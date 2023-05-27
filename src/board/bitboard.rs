@@ -1,7 +1,9 @@
-//! Macros for easily implementing bit operations, shifting operations, math operations,
-//! and the `From` trait to a struct.
+use std::ops::{Not, Rem, RemAssign, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign, Shl, ShlAssign, Shr, ShrAssign};
+use std::fmt::Display;
 
-/// Allows for shifting operations to be applied to a struct consisting of a singular tuple
+use crate::helper::bit_twiddles::*;
+
+// Allows for shifting operations to be applied to a struct consisting of a singular tuple
 /// containing a type that implements that bit operation.
 macro_rules! impl_indv_shift_ops {
     ($t:ty, $tname:ident, $fname:ident, $w:ident, $ta_name:ident, $fa_name:ident) => (
@@ -20,11 +22,14 @@ macro_rules! impl_indv_shift_ops {
             #[inline]
             fn $fa_name(&mut self, rhs: usize) {
                 *self = Self::from((self.0).$w(rhs as u32));
-            }
-        }
-    )
-}
 
+            }
+
+        }
+
+    )
+
+}
 
 /// Allows for bit operations to be applied to a struct consisting of a singular tuple
 /// containing a type that implements that bit operation.
@@ -37,7 +42,9 @@ macro_rules! impl_indv_bit_ops {
             #[inline]
             fn $fname(self, rhs: $t) -> $t {
                 Self::from((self.0).$w(rhs.0))
+
             }
+
         }
 
         impl $ta_name for $t {
@@ -45,7 +52,9 @@ macro_rules! impl_indv_bit_ops {
             #[inline]
             fn $fa_name(&mut self, rhs: $t) {
                 *self = Self::from((self.0).$w(rhs.0));
+
             }
+
         }
 
         impl $tname<$b> for $t {
@@ -54,7 +63,9 @@ macro_rules! impl_indv_bit_ops {
             #[inline]
             fn $fname(self, rhs: $b) -> $t {
                 Self::from((self.0).$w(rhs))
+
             }
+
         }
 
         impl $ta_name<$b> for $t {
@@ -62,11 +73,14 @@ macro_rules! impl_indv_bit_ops {
             #[inline]
             fn $fa_name(&mut self, rhs: $b) {
                 *self = Self::from((self.0).$w(rhs));
-            }
-        }
-    )
-}
 
+            }
+
+        }
+
+    )
+
+}
 
 /// Implies bit operations `&, |, ^, !`, shifting operations `<< >>`,
 /// math operations `+, -, *, /, %` and `From` trait to a struct consisting of a
@@ -76,13 +90,17 @@ macro_rules! impl_bit_ops {
         impl From<$b> for $t {
             fn from(bit_type: $b) -> Self {
                 $t(bit_type)
+
             }
+
         }
 
         impl From<$t> for $b {
             fn from(it:$t) -> Self {
                 it.0
+
             }
+
         }
 
         impl_indv_bit_ops!( $t, $b,  Rem,    rem,    rem,             RemAssign,    rem_assign);
@@ -104,7 +122,83 @@ macro_rules! impl_bit_ops {
             #[inline]
             fn not(self) -> $t {
                 $t(!self.0)
+
             }
+
         }
+
     )
+    
+}
+
+#[derive(Copy, Clone, Default, Hash, PartialEq, Eq, Debug)]
+pub struct BitBoard(pub u64);
+
+impl_bit_ops!(BitBoard, u64);
+
+impl BitBoard {
+    pub fn get_data(&mut self) -> Vec<usize> {
+        let mut indexs = vec![];
+
+        while self.0 != 0 {
+            indexs.push(self.pop_lsb());
+
+        }
+
+        indexs
+
+    }
+
+    pub fn bit_scan_forward(&self) -> usize {
+        bit_scan_forward(self.0)
+
+    }
+
+    pub fn pop_lsb(&mut self) -> usize {
+        let bit = self.bit_scan_forward();
+        *self &= *self - 1;
+        bit
+        
+    }
+
+    pub fn set_bit(&mut self, bit: usize) {
+        let mask = 1 << bit;
+
+        self.0 |= mask;
+
+    }
+
+    pub fn clear_bit(&mut self, bit: usize) {
+        let mask = 1 << bit;
+
+        self.0 &= !mask;
+
+    }
+
+    pub fn toggle_bit(&mut self, bit: usize) {
+        let mask = 1 << bit;
+
+        self.0 ^= mask;
+
+    }
+
+    pub fn is_empty(self) -> bool {
+        self.0 == 0
+        
+    }
+    
+    pub fn is_not_empty(self) -> bool {
+        self.0 != 0
+    }
+
+}
+
+impl Display for BitBoard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{:#b}", self.0)?;
+
+        return Result::Ok(());
+
+    }
+
 }

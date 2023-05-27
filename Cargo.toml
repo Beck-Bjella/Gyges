@@ -9,6 +9,10 @@ edition = "2021"
 rand = "0.8.5"
 
 [profile.release]
+opt-level = 3
+debug = false
+rpath = false
+debug-assertions = false
+codegen-units = 1
 lto = true
-code_gen_units = 1
 panic = "abort"

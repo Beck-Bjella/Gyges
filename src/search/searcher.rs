@@ -1,13 +1,13 @@
 use std::sync::mpsc::Sender;
 use std::time::Instant;
 
-use crate::board::*;
+use crate::board::board::*;
 use crate::consts::*;
-use crate::evaluation::*;
-use crate::move_gen::*;
-use crate::move_list::*;
-use crate::moves::*;
-use crate::tt::*;
+use crate::search::evaluation::*;
+use crate::moves::moves::*;
+use crate::moves::move_gen::*;
+use crate::moves::move_list::*;
+use crate::tools::tt::*;
 
 // pub const MULTI_CUT_REDUCTION: i8 = 1;
 pub const NULL_MOVE_REDUCTION: i8 = 1;

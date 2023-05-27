@@ -1,24 +1,14 @@
-#[macro_use]
-mod macros;
-
-mod bit_twiddles;
-mod bitboard;
 mod board;
-mod consts;
-mod engine;
-mod evaluation;
-mod move_gen;
-mod move_list;
+mod helper;
 mod moves;
-mod tt;
-mod zobrist;
+mod search;
+mod tools;
+mod consts;
 
-mod tree_storage;
-
-use crate::board::*;
+use crate::board::board::*;
 use crate::consts::*;
-use crate::engine::*;
-use crate::tt::*;
+use crate::search::searcher::*;
+use crate::tools::tt::*;
 
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread;
@@ -60,7 +50,7 @@ fn main() {
 
     thread::spawn(move || {
         let mut searcher = Searcher::new(results_sender);
-        searcher.iterative_deepening_search(&mut board, 5);
+        searcher.iterative_deepening_search(&mut board, 3);
         
     });
 

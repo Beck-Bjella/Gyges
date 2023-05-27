@@ -1,6 +1,6 @@
-use crate::board::*;
-
 use rand::Rng;
+
+use crate::board::board::*;
 
 pub const PLAYER_1_HASH: u64 = 11071850447646664432;
 pub const PLAYER_2_HASH: u64 = 15525846075063937794;
