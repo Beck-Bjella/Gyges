@@ -1,17 +1,6 @@
-use crate::board;
 use crate::consts::*;
 use crate::board::*;
 use crate::move_gen::*;
-use crate::move_list::*;
-
-pub const PIECE_SCORES: [f64; 3] = [50.0, 40.0, 30.0];
-
-// pub const ThreeScoreTable: [[usize; 6]; 6] = [  [0, 0, 0, 0, 0, 0],
-//                                                 [0, 0, 0, 0, 0, 0],
-//                                                 [0, 0, 0, 0, 0, 0],
-//                                                 [0, 0, 0, 0, 0, 0],
-//                                                 [0, 0, 0, 0, 0, 0],
-//                                                 [0, 0, 0, 0, 0, 0]];
 
 
 fn in_bounds(pos: usize) -> bool {

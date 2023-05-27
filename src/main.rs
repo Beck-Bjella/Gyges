@@ -12,9 +12,8 @@ mod move_list;
 mod moves;
 mod tt;
 mod zobrist;
-mod tree_storage;
 
-use tree_storage::*;
+mod tree_storage;
 
 use crate::board::*;
 use crate::consts::*;
@@ -93,7 +92,7 @@ fn main() {
                 println!("");
                 println!("  - PV");
                 for (i, e) in final_results.pv.iter().enumerate() {
-                    println!("      - {}: {:?}", i, e.bestmove);
+                    println!("      - {}: {:?}, {}", i, e.bestmove, e.score);
 
                 }
                 println!("");

@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::process::id;
 
 use crate::bitboard::*;
 use crate::consts::*;
@@ -210,23 +209,6 @@ impl RootMoveList {
         };
 
     }
-
-    // pub fn display_top(&self, board: &mut BoardState) {
-    //     for (i, mv) in self.moves.iter().enumerate() {
-    //         if i >= 5 {
-    //             break;
-
-    //         }
-
-    //         println!("========================================");
-    //         println!("{:?}", mv);
-    //         board.print();
-    //         let new_board = board.make_move(&mv.mv);
-    //         new_board.print();
-
-    //     }
-
-    // }
 
     pub fn sort(&mut self) {
         self.moves.sort_by(|a, b| {

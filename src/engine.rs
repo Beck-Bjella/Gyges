@@ -1,4 +1,3 @@
-use std::ops::Neg;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
 
@@ -8,8 +7,6 @@ use crate::evaluation::*;
 use crate::move_gen::*;
 use crate::move_list::*;
 use crate::moves::*;
-use crate::tree_storage::TreeNode;
-use crate::tree_storage::TreeStorage;
 use crate::tt::*;
 
 // pub const MULTI_CUT_REDUCTION: i8 = 1;
@@ -26,9 +23,7 @@ pub struct Searcher {
     pub search_data: SearchData,
     pub root_moves: RootMoveList,
 
-    pub dataout: Sender<SearchData>,
-
-    pub storage: TreeStorage
+    pub dataout: Sender<SearchData>
 
 }
 
@@ -42,9 +37,7 @@ impl Searcher {
             search_data: SearchData::new(0),
             root_moves: RootMoveList::new(),
 
-            dataout,
-
-            storage: TreeStorage::new(0)
+            dataout
 
         };
 
@@ -94,7 +87,7 @@ impl Searcher {
 
             unsafe { NEXT_ID = 0 };
             
-            self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false, false);
+            self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false);
             self.update_search_stats(board);
 
             self.output_search_data();
@@ -110,7 +103,7 @@ impl Searcher {
     }
     
     /// Main search function.
-    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, cut_node: bool, null_window: bool) -> f64 {
+    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, cut_node: bool) -> f64 {
         let is_root = depth == self.search_data.ply;
         let is_leaf = depth == 0;
         let is_pv: bool = N::is_pv();
@@ -118,7 +111,6 @@ impl Searcher {
 
         let id: usize = unsafe{ NEXT_ID };
         unsafe { NEXT_ID += 1 };
-
 
         if is_leaf {
             self.search_data.leafs += 1;
@@ -182,18 +174,16 @@ impl Searcher {
         }
        
         // Null Move Pruning
-        // Can cause search errors
-        // Might work now - need to check
-        // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
-        // if !is_pv && cut_node && r_depth >= 1 {
-        //     let mut null_move_board = board.make_null();
-        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node, unsafe{ NEXT_ID }, node_id);
-        //     if score >= beta {
-        //         return beta;
+        let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
+        if !is_pv && cut_node && r_depth >= 1 {
+            let mut null_move_board = board.make_null();
+            let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
+            if score >= beta {
+                return beta;
     
-        //     }
+            }
 
-        // }
+        }
         
         // Multi Cut - Dosent Work
         // let r_depth = depth - 1 - MULTI_CUT_REDUCTION;
@@ -222,19 +212,19 @@ impl Searcher {
         // }
 
         let mut best_move = Move::new_null();
-        let mut best_score = f64::NEG_INFINITY;
+        let mut best_score: f64 = f64::NEG_INFINITY;
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(&mv);
 
             let mut score;
             if i == 0 && is_pv {
-                score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false, false);
+                score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
 
             } else {
-                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node, true);
+                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
                 
                 if score > alpha && score < beta {
-                    score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node, false);
+                    score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
 
                 }
                
@@ -250,7 +240,6 @@ impl Searcher {
             if score > best_score {
                 best_score = score;
                 best_move = *mv;
-
             }
 
             if best_score > alpha {
@@ -280,7 +269,7 @@ impl Searcher {
         let new_entry = Entry::new(board_hash, best_score, depth as i8, best_move, node_bound);
         unsafe { tt().insert(new_entry) };
 
-        return alpha;
+        return best_score;
 
     }
 

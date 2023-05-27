@@ -139,7 +139,6 @@ impl BoardState {
 
         }
 
-
     }
 
     pub fn get_active_lines(&self) -> [usize; 2] {
