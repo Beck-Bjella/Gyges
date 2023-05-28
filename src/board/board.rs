@@ -126,53 +126,21 @@ impl BoardState {
     }
 
     pub fn get_active_lines(&self) -> [usize; 2] {
-        let mut player_1_set = false;
-    
-        let mut player_1_active_line = 9;
-        let mut player_2_active_line = 9;
-    
-        for y in 0..6 {
-            for x in 0..6 {
-                if self.data[y * 6 + x] != 0 {
-                    if !player_1_set {
-                        player_1_active_line = y;
-                        player_1_set = true;
-    
-                    }
-                    player_2_active_line = y;
-                    
-                }
-            }
-        }
-    
-        [player_1_active_line * 6, player_2_active_line * 6]
-    
+        let player_1_active_line = (self.peice_board.bit_scan_forward() as f64 / 6.0).floor() as usize;
+        let player_2_active_line = (self.peice_board.bit_scan_reverse() as f64 / 6.0).floor() as usize;
+        
+        [player_1_active_line, player_2_active_line]
+
     }
 
     pub fn get_drops(&self, active_lines: [usize; 2], player: f64) -> BitBoard {
-        let mut current_player_drops: BitBoard = BitBoard(0);
-
-        if player == -1.0 {
-            for i in active_lines[0]..36 {
-                if self.data[i] == 0 {
-                    current_player_drops.set_bit(i);
-
-                }
-    
-            }
+        if player == PLAYER_1 {
+            return (FULL ^ OPP_BACK_ZONE[active_lines[1]]) & !self.peice_board;
 
         } else {
-            for i in 0..active_lines[1] + 6 {
-                if self.data[i] == 0 {
-                    current_player_drops.set_bit(i);
-
-                }
+            return (FULL ^ PLAYER_BACK_ZONE[active_lines[0]]) & !self.peice_board;
                 
-            }
-
         }
-
-        current_player_drops
 
     }
 

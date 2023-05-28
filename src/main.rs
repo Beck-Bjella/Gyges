@@ -5,8 +5,7 @@ mod search;
 mod tools;
 mod consts;
 
-use crate::board::bitboard::*;
-use crate::moves::moves::*;
+use crate::board::bitboard::BitBoard;
 use crate::board::board::*;
 use crate::consts::*;
 use crate::search::searcher::*;
@@ -38,15 +37,7 @@ fn main() {
         PLAYER_1,
 
     );
-
-    println!("{}", board);
-    println!("{}", board.peice_board);
-
-    let new_board = board.make_move(&Move::new([0, 0, 2, 2, 2, 0], MoveType::Drop));
-
-    println!("{}", new_board);
-    println!("{}", new_board.peice_board);
-
+    
     // board.set(
     //     [3, 2, 1, 1, 2, 3],
     //     [0, 0, 0, 0, 0, 0],

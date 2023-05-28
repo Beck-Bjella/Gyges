@@ -19,10 +19,10 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
 
     let active_line: usize;
     if player == PLAYER_1 {
-        active_line = active_lines[0];
+        active_line = active_lines[0] * 6;
 
     } else {
-        active_line = active_lines[1];
+        active_line = active_lines[1] * 6;
 
     }
 
@@ -239,10 +239,10 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
 
     let active_line: usize;
     if player == PLAYER_1 {
-        active_line = active_lines[0];
+        active_line = active_lines[0] * 6;
 
     } else {
-        active_line = active_lines[1];
+        active_line = active_lines[1] * 6;
 
     }
 
@@ -456,10 +456,10 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
 
     let active_line: usize;
     if player == PLAYER_1 {
-        active_line = active_lines[0];
+        active_line = active_lines[0] * 6;
 
     } else {
-        active_line = active_lines[1];
+        active_line = active_lines[1] * 6;
 
     }
 

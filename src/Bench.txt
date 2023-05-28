@@ -83,4 +83,92 @@ Depth: 5
       - 3: TTMove { data: [0, 33, 1, 21, 1, 8], flag: Drop }, -2080
       - 4: TTMove { data: [0, 2, 2, 27, 1, 2], flag: Drop }, 2080
 
-      
+
+
+
+
+5/28/2023
+Null Move Pruning
+No PVS
+Optimised Active line and drop calculation
+
+TT STATS: 
+GB: 1.610612736
+Clusters: 16777216
+Entries: 50331648
+
+START
+Depth: 1
+  - Best: RootMove { mv: Move { data: [0, 3, 1, 10, 3, 20], flag: Drop }, score: 5083.0, threats: 60, ply: 1 }
+  - Time: 0.0044829
+
+  - Abf: 610
+
+  - Branchs: 1
+  - Bps: 223
+
+  - Leafs: 609
+  - Lps: 135849
+
+  - TT:
+      - HITS: 0
+      - EXACTS: 0
+      - CUTS: 0
+
+      - SAFE INSERTS: 1
+      - UNSAFE INSERTS: 0
+
+  - PV
+      - 0: TTMove { data: [0, 3, 1, 10, 3, 20], flag: Drop }, 5083
+
+Depth: 3
+  - Best: RootMove { mv: Move { data: [0, 3, 1, 21, 2, 5], flag: Drop }, score: 2685.0, threats: 14, ply: 3 }
+  - Time: 2.9306811
+
+  - Abf: 51.97015052168936
+
+  - Branchs: 2762
+  - Bps: 942
+
+  - Leafs: 137604
+  - Lps: 46952
+
+  - TT:
+      - HITS: 0
+      - EXACTS: 0
+      - CUTS: 0
+
+      - SAFE INSERTS: 1514
+      - UNSAFE INSERTS: 0
+
+  - PV
+      - 0: TTMove { data: [0, 3, 1, 21, 2, 5], flag: Drop }, 2685
+      - 1: TTMove { data: [0, 34, 2, 21, 1, 16], flag: Drop }, -2685
+      - 2: TTMove { data: [0, 5, 2, 10, 3, 20], flag: Drop }, 2685
+
+Depth: 5
+  - Best: RootMove { mv: Move { data: [0, 3, 1, 21, 2, 23], flag: Drop }, score: 2080.0, threats: 16, ply: 5 }
+  - Time: 222.7935847
+
+  - Abf: 21.78344141035031
+
+  - Branchs: 389707
+  - Bps: 1749
+
+  - Leafs: 4515219
+  - Lps: 20266
+
+  - TT:
+      - HITS: 0
+      - EXACTS: 0
+      - CUTS: 0
+
+      - SAFE INSERTS: 125542
+      - UNSAFE INSERTS: 0
+
+  - PV
+      - 0: TTMove { data: [0, 3, 1, 21, 2, 23], flag: Drop }, 2080
+      - 1: TTMove { data: [0, 34, 2, 21, 1, 29], flag: Drop }, -2080
+      - 2: TTMove { data: [0, 4, 1, 21, 2, 7], flag: Drop }, 2080
+      - 3: TTMove { data: [0, 33, 1, 21, 1, 8], flag: Drop }, -2080
+      - 4: TTMove { data: [0, 2, 2, 27, 1, 2], flag: Drop }, 2080

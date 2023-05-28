@@ -137,26 +137,6 @@ pub struct BitBoard(pub u64);
 impl_bit_ops!(BitBoard, u64);
 
 impl BitBoard {
-    pub const ROWS: [BitBoard; 6] = [
-        BitBoard(0b000000000000000000000000000000111111),
-        BitBoard(0b000000000000000000000000111111000000),
-        BitBoard(0b000000000000000000111111000000000000),
-        BitBoard(0b000000000000111111000000000000000000),
-        BitBoard(0b000000111111000000000000000000000000),
-        BitBoard(0b111111000000000000000000000000000000),
-        
-    ];
-
-    pub const COLS: [BitBoard; 6] = [
-        BitBoard(0b000001000001000001000001000001000001),
-        BitBoard(0b000010000010000010000010000010000010),
-        BitBoard(0b000100000100000100000100000100000100),
-        BitBoard(0b001000001000001000001000001000001000),
-        BitBoard(0b010000010000010000010000010000010000),
-        BitBoard(0b100000100000100000100000100000100000),
-        
-    ];
-
     pub fn get_data(&mut self) -> Vec<usize> {
         let mut indexs = vec![];
 
@@ -170,13 +150,25 @@ impl BitBoard {
     }
 
     pub fn bit_scan_forward(&self) -> usize {
-        bit_scan_forward(self.0)
+        bit_scan_forward(self.0) as usize
+
+    }
+
+    pub fn bit_scan_reverse(&self) -> usize {
+        bit_scan_reverse(self.0) as usize
 
     }
 
     pub fn pop_lsb(&mut self) -> usize {
         let bit = self.bit_scan_forward();
-        *self &= *self - 1;
+        self.0 &= !(1 << bit);
+        bit
+        
+    }
+
+    pub fn pop_msb(&mut self) -> usize {
+        let bit = self.bit_scan_reverse();
+        self.0 &= !(1 << bit);
         bit
         
     }

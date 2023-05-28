@@ -269,10 +269,10 @@ pub fn fully_stranded_pieces(board: &mut BoardState, player: f64) -> Vec<usize> 
     let active_lines = board.get_active_lines();
     let active_line;
     if player == PLAYER_1 {
-        active_line = active_lines[0]
+        active_line = active_lines[0] * 6
 
     } else {
-        active_line = active_lines[1]
+        active_line = active_lines[1] * 6
 
     }
 
