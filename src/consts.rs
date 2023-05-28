@@ -169,6 +169,8 @@ pub const THREE_PATH_LENGTHS: [usize; 36] = [
     11
 ];
 
+
+
 pub const TWO_PATHS: [[[usize; 3]; 15]; 36] = [
     [[0, 6, 12], [0, 6, 7], [0, 1, 7], [0, 1, 2], [0, 1, 36], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3]],
     [[1, 0, 6], [1, 7, 6], [1, 7, 13], [1, 7, 8], [1, 2, 8], [1, 2, 3], [1, 2, 36], [1, 0, 36], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3], [NULL; 3]],
@@ -287,6 +289,8 @@ pub const TWO_PATH_LENGTHS: [usize; 36] = [
     5
 ];
 
+
+
 pub const ONE_PATHS: [[[usize; 2]; 4]; 36] = [
     [[0, 6], [0, 1], [0, 36], [NULL; 2]],
     [[1, 0], [1, 7], [1, 2], [1, 36]],
@@ -404,3 +408,5 @@ pub const ONE_PATH_LEGNTHS: [usize; 36] = [
     4,
     3
 ];
+
+

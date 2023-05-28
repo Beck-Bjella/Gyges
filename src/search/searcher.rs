@@ -1,5 +1,6 @@
 use std::sync::mpsc::Sender;
 use std::time::Instant;
+use std::fmt::Display;
 
 use crate::board::board::*;
 use crate::consts::*;
@@ -216,20 +217,20 @@ impl Searcher {
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(&mv);
 
-            let mut score;
-            if i == 0 && is_pv {
+            let score;
+            // if i == 0 && is_pv {
                 score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
 
-            } else {
-                score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
+            // } else {
+            //     score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
                 
-                if score > alpha && score < beta {
-                    score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
+            //     if score > alpha && score < beta {
+            //         score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
 
-                }
+            //     }
                
 
-            } 
+            // } 
 
             // Update the score of the corosponding rootnode.
             if is_root {
@@ -274,7 +275,6 @@ impl Searcher {
     }
 
 }
-
 
 /// Structure that holds all of the informaion about a specific search ply.
 #[derive(Debug, Clone)]
@@ -333,6 +333,40 @@ impl SearchData {
             winner: 0,
 
         };
+
+    }
+
+}
+
+impl Display for SearchData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Depth: {:?}", self.ply)?;
+        writeln!(f, "  - Best: {:?}", self.best_move)?;
+        writeln!(f, "  - Time: {:?}", self.search_time)?;
+        writeln!(f, "")?;
+        writeln!(f, "  - Abf: {}", self.average_branching_factor)?;
+        writeln!(f, "")?;
+        writeln!(f, "  - Branchs: {}", self.branches)?;
+        writeln!(f, "  - Bps: {}", self.bps)?;
+        writeln!(f, "")?;
+        writeln!(f, "  - Leafs: {}", self.leafs)?;
+        writeln!(f, "  - Lps: {}", self.lps)?;
+        writeln!(f, "")?;
+        writeln!(f, "  - TT:")?;
+        writeln!(f, "      - HITS: {:?}", self.tt_hits)?;
+        writeln!(f, "      - EXACTS: {:?}", self.tt_exacts)?;
+        writeln!(f, "      - CUTS: {:?}", self.tt_cuts)?;
+        writeln!(f, "")?;
+        writeln!(f, "      - SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS })?;
+        writeln!(f, "      - UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS })?;
+        writeln!(f, "")?;
+        writeln!(f, "  - PV")?;
+        for (i, e) in self.pv.iter().enumerate() {
+            writeln!(f, "      - {}: {:?}, {}", i, e.bestmove, e.score)?;
+
+        }
+    
+        return Result::Ok(());
 
     }
 

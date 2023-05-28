@@ -8,6 +8,7 @@ use crate::consts::*;
 #[derive(Clone, Copy, PartialEq)]
 pub struct BoardState {
     pub data: [usize; 38],
+    pub peice_board: BitBoard,
     pub player: f64,
     hash: u64
 
@@ -17,6 +18,7 @@ impl BoardState {
     pub fn new() -> BoardState {
         BoardState {
             data: [0; 38],
+            peice_board: BitBoard(0),
             player: 0.0,
             hash: 0
 
@@ -41,12 +43,21 @@ impl BoardState {
         self.hash = get_uni_hash(self);
 
         self.player = player;
+        
+        for i in 0..36 {
+            if self.data[i] != 0 {
+                self.peice_board .set_bit(i);
+
+            }
+
+        }
 
     }
 
     pub fn make_move(self, mv: &Move) -> BoardState {
         let mut data = self.data.clone();
-        let mut hash = self.hash.clone();
+        let mut peice_board = self.peice_board.clone();
+        let mut hash: u64 = self.hash.clone();
         let player = self.player * -1.0;
 
         let step1 = [mv.data[0], mv.data[1]];
@@ -66,6 +77,10 @@ impl BoardState {
             data[step2[1]] = step2[0];
         
             data[step3[1]] = step3[0];
+
+            peice_board.clear_bit(step1[1]);
+            peice_board.set_bit(step2[1]);
+            peice_board.set_bit(step3[1]);
             
         } else if mv.flag == MoveType::Bounce {
            
@@ -77,10 +92,15 @@ impl BoardState {
 
             data[step2[1]] = step2[0];
 
+            peice_board.clear_bit(step1[1]);
+
+            peice_board.set_bit(step2[1]);
+
         }
         
         return BoardState {
             data,
+            peice_board,
             player,
             hash
 
@@ -91,11 +111,13 @@ impl BoardState {
 
     pub fn make_null(self) -> BoardState {
         let data = self.data.clone();
+        let peice_board = self.peice_board.clone();
         let hash = self.hash.clone();
         let player = self.player * -1.0;
 
         return BoardState {
             data,
+            peice_board,
             player,
             hash
 

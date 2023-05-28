@@ -5,6 +5,8 @@ mod search;
 mod tools;
 mod consts;
 
+use crate::board::bitboard::*;
+use crate::moves::moves::*;
 use crate::board::board::*;
 use crate::consts::*;
 use crate::search::searcher::*;
@@ -37,6 +39,14 @@ fn main() {
 
     );
 
+    println!("{}", board);
+    println!("{}", board.peice_board);
+
+    let new_board = board.make_move(&Move::new([0, 0, 2, 2, 2, 0], MoveType::Drop));
+
+    println!("{}", new_board);
+    println!("{}", new_board.peice_board);
+
     // board.set(
     //     [3, 2, 1, 1, 2, 3],
     //     [0, 0, 0, 0, 0, 0],
@@ -49,8 +59,8 @@ fn main() {
     // );
 
     thread::spawn(move || {
-        let mut searcher = Searcher::new(results_sender);
-        searcher.iterative_deepening_search(&mut board, 3);
+        let mut searcher: Searcher = Searcher::new(results_sender);
+        searcher.iterative_deepening_search(&mut board, 5);
         
     });
 
@@ -59,33 +69,8 @@ fn main() {
         match results {
             Ok(_) => {
                 let final_results = results.unwrap();
-
-                println!("Depth: {:?}", final_results.ply);
-                println!("  - Best: {:?}", final_results.best_move);
-                println!("  - Time: {:?}", final_results.search_time);
-                println!("");
-                println!("  - Abf: {}", final_results.average_branching_factor);
-                println!("");
-                println!("  - Branchs: {}", final_results.branches);
-                println!("  - Bps: {}", final_results.bps);
-                println!("");
-                println!("  - Leafs: {}", final_results.leafs);
-                println!("  - Lps: {}", final_results.lps);
-                println!("");
-                println!("  - TT:");
-                println!("      - HITS: {:?}", final_results.tt_hits);
-                println!("      - EXACTS: {:?}", final_results.tt_exacts);
-                println!("      - CUTS: {:?}", final_results.tt_cuts);
-                println!("");
-                println!("      - SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS });
-                println!("      - UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS });
-                println!("");
-                println!("  - PV");
-                for (i, e) in final_results.pv.iter().enumerate() {
-                    println!("      - {}: {:?}, {}", i, e.bestmove, e.score);
-
-                }
-                println!("");
+                println!("{}", final_results);
+                
             }
             Err(TryRecvError::Disconnected) => {}
             Err(TryRecvError::Empty) => {}
