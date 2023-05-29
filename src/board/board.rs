@@ -79,7 +79,6 @@ impl BoardState {
             data[step3[1]] = step3[0];
 
             peice_board.clear_bit(step1[1]);
-            peice_board.set_bit(step2[1]);
             peice_board.set_bit(step3[1]);
             
         } else if mv.flag == MoveType::Bounce {

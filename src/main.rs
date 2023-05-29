@@ -5,9 +5,14 @@ mod search;
 mod tools;
 mod consts;
 
+use moves::moves::MoveType;
+use search::evaluation::activeline_unreachable;
+
+use crate::moves::move_gen::*;
 use crate::board::bitboard::BitBoard;
 use crate::board::board::*;
 use crate::consts::*;
+use crate::search::evaluation::*;
 use crate::search::searcher::*;
 use crate::tools::tt::*;
 
@@ -37,7 +42,7 @@ fn main() {
         PLAYER_1,
 
     );
-    
+
     // board.set(
     //     [3, 2, 1, 1, 2, 3],
     //     [0, 0, 0, 0, 0, 0],

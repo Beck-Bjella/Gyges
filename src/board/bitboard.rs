@@ -1,6 +1,7 @@
 use std::ops::{Not, Rem, RemAssign, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign, Shl, ShlAssign, Shr, ShrAssign};
 use std::fmt::Display;
 
+use crate::consts::*;
 use crate::helper::bit_twiddles::*;
 
 // Allows for shifting operations to be applied to a struct consisting of a singular tuple
@@ -173,6 +174,11 @@ impl BitBoard {
         
     }
 
+    pub fn pop_count(&self) -> usize {
+        self.0.count_ones() as usize
+
+    }
+
     pub fn set_bit(&mut self, bit: usize) {
         let mask = 1 << bit;
 
@@ -207,8 +213,40 @@ impl BitBoard {
 
 impl Display for BitBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{:#b}", self.0)?;
+        let data = self.clone().get_data();
+        
+        if data.contains(&PLAYER_2_GOAL) {
+            println!("          1");
 
+        } else {
+            println!("          0");
+            
+        }
+
+        for y in (0..6).rev() {
+            for x in 0..6 {
+                if data.contains(&((y * 6) + x)) {
+                    print!("  1");
+
+                } else {
+                    print!("  0");
+
+                }
+
+            }
+
+            println!("")
+
+        }
+
+        if data.contains(&PLAYER_2_GOAL) {
+            println!("          1");
+
+        } else {
+            println!("          0");
+            
+        }
+    
         return Result::Ok(());
 
     }

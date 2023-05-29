@@ -1,3 +1,4 @@
+use crate::board::bitboard::BitBoard;
 use crate::consts::*;
 use crate::board::board::*;
 use crate::moves::move_gen::*;
@@ -239,69 +240,105 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 
 // }
 
-pub fn piece_fully_stranded(board: &mut BoardState, pos: usize, piece: usize) -> bool {
-    let mut stranded = true;
+pub fn unreaceable_positions(board: &mut BoardState) -> BitBoard {
+    let mut piece_board = board.peice_board.clone();
+    let piece_positions = piece_board.get_data();
 
-    for i in 0usize..36 {
-        if i != pos {
-            let x = (i % 6) as f64;
-            let y = (i as f64 / 6 as f64).floor();
-    
-            let pos_x = (pos % 6) as f64;
-            let pos_y = (pos as f64 / 6 as f64).floor();
-    
-            let dist = ((pos_y - y).powf(2.0) + (pos_x - x).powf(2.0)).sqrt();
-    
-            if board.data[i] != 0 && dist <= piece as f64 {
-                stranded = false
-    
-            }
+    let mut reach_positions = EMPTY;
+
+    for pos in piece_positions {
+        if board.data[pos] == 1 {
+            reach_positions |= ONE_ENDS[pos];
+
+        } else if board.data[pos] == 2 {
+            reach_positions |= TWO_ENDS[pos];
+
+        } else if board.data[pos] == 3 {
+            reach_positions |= THREE_ENDS[pos];
 
         }
 
     }
 
-    return stranded;
+    return !reach_positions; 
 
 }
 
-pub fn fully_stranded_pieces(board: &mut BoardState, player: f64) -> Vec<usize> {
+
+pub fn piece_cant_reach(board: &mut BoardState, pos: usize, piece: usize) -> bool {
+    if piece == 3 {
+        return (THREE_ENDS[pos] & board.peice_board).is_empty();
+
+    } else if piece == 2 {
+        return (TWO_ENDS[pos] & board.peice_board).is_empty();
+
+    } else if piece == 1{
+        return (ONE_ENDS[pos] & board.peice_board).is_empty();
+
+    }
+
+    return false;
+
+}
+
+pub fn activeline_unreachable(board: &mut BoardState, player: f64) -> usize {
     let active_lines = board.get_active_lines();
-    let active_line;
+
+    let active_line: usize;
     if player == PLAYER_1 {
-        active_line = active_lines[0] * 6
+        active_line = active_lines[0];
 
     } else {
-        active_line = active_lines[1] * 6
+        active_line = active_lines[1];
 
     }
 
-    let mut pieces = vec![];
-    for board_pos in active_line..active_line + 6 {
-        let piece = board.data[board_pos];
+    let activeline_board = ROWS[active_line] & board.peice_board;
 
-        if piece != 0 {
-            if piece_fully_stranded(board, board_pos, piece) {
-                pieces.push(piece);
-                
-            }
+    let unreach_pos = unreaceable_positions(board);
+
+    return (unreach_pos & activeline_board).pop_count();
+
+}
+
+pub fn activeline_cant_reach(board: &mut BoardState, player: f64) -> usize {
+    let active_lines = board.get_active_lines();
+
+    let active_line: usize;
+    if player == PLAYER_1 {
+        active_line = active_lines[0];
+
+    } else {
+        active_line = active_lines[1];
+
+    }
+
+    let mut count = 0;
+    for x in (active_line * 6)..((active_line * 6) + 6) {
+        if piece_cant_reach(board, x, board.data[x]) {
+            count += 1;
 
         }
 
     }
 
-    return pieces;
+    return count;
+
 
 }
+
 
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
     // Calculates the difference in move count between player 1 and player 2.
     let move_count_eval = unsafe{ valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64 };
     
-    // Determins the number of peices that are fully stranded on player 1 and player 2's active lines.
-    let stranded_eval = 1000.0 * (fully_stranded_pieces(board, PLAYER_2).len() as f64 - fully_stranded_pieces(board, PLAYER_1).len()  as f64);
+    // Determins the number of peices that cant theoriticaly reach anything on player 1 and player 2's active lines.
+    // let cant_reach_eval = 1000.0 * (activeline_cant_reach(board, PLAYER_2) as f64 - activeline_cant_reach(board, PLAYER_1) as f64);
 
-    let eval = move_count_eval + stranded_eval;
+    // Determins the number of peices that are theoriticaly unreachable on player 1 and player 2's active lines.
+    // let unreachable_eval = 500.0 * (activeline_unreachable(board, PLAYER_2) as f64 - activeline_unreachable(board, PLAYER_1) as f64);
+
+    let eval = move_count_eval;// + cant_reach_eval + unreachable_eval;
 
     return eval;
 

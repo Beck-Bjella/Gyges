@@ -1,14 +1,11 @@
 use std::cmp::Ordering;
 
-use crate::board::board::*;
-use crate::search::evaluation::*;
+use crate::board::{board::*, bitboard::*};
 use crate::moves::move_gen::*;
+use crate::search::evaluation::*;
 use crate::tools::tt::*;
 use crate::consts::*;
 
-pub const ACTIVELINE_STRANDED_PENEITALYS: [usize; 3] = [15000, 10000, 5000];
-
-pub const STRANDED_PENEITALYS: [usize; 3] = [3000, 2000, 1000];
 
 /// Designates the type of move.
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -186,27 +183,26 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
             sort_val -= 1000.0 * (5 - threat_count) as f64;
 
         }
+
+        // Lower the score if there are pieces that cant reach anything or are unreachable on your active line.
+        // sort_val -= activeline_cant_reach(board, player) as f64 * 1000.0;
+        // sort_val -= activeline_unreachable(board, player) as f64 * 500.0;
+
+        // Lower the score of moves that leave the piece where it cant reach anything.
+        // let end_pos: usize = if mv.flag == MoveType::Drop { 
+        //     mv.data[5] 
+
+        // } else { 
+        //     mv.data[3] 
+
+        // };
+        // let end_type = new_board.data[end_pos];
+    
         
-        // Checks if the move leaves a fully stranded piece on your active line.
-        for piece in fully_stranded_pieces(&mut new_board, player).iter() {
-            sort_val -= ACTIVELINE_STRANDED_PENEITALYS[piece - 1] as f64;
+        // if piece_cant_reach(board, end_pos, end_type) {
+        //     sort_val -= (4 - end_type) as f64 * 1000.0
 
-        }
-
-        // Check if the move leaves the last active peice fullly stranded.
-        let end_pos: usize = if mv.flag == MoveType::Drop { 
-            mv.data[5] 
-
-        } else { 
-            mv.data[3] 
-
-        };
-        let end_type = new_board.data[end_pos];
-        let stranded = piece_fully_stranded(&mut new_board, end_pos, end_type);
-        if stranded {
-            sort_val -= STRANDED_PENEITALYS[end_type - 1] as f64;
-
-        }
+        // }
         
         // Works decent but sometimes makes the ABF worse
         // if mv.flag == MoveType::Drop && mv.data[2] == 1 && preventable(&mut new_board, &mv, player) {
