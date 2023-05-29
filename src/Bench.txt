@@ -1,5 +1,5 @@
 5/27/2023
-Null Move Pruning
+No Null Move Pruning
 No PVS
 
 TT STATS: 
@@ -88,7 +88,7 @@ Depth: 5
 
 
 5/28/2023
-Null Move Pruning
+No Null Move Pruning
 No PVS
 Optimised Active line and drop calculation
 

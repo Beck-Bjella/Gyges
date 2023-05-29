@@ -78,23 +78,6 @@ impl RawMoveList {
 
     }
 
-    pub fn move_count(&mut self) -> usize {
-        let mut count = 0;
-
-        let drop_count = self.drop_positions.get_data().len();
-        
-        for idx in self.start_indexs.iter() {
-            
-            let end_pos_count = self.end_positions[*idx].get_data().len();
-            let pickup_pos_count = self.pickup_positions[*idx].get_data().len();
-            count += ((drop_count + 1) * pickup_pos_count) + end_pos_count;
-        
-        }
-
-        return count;
-
-    }
-
     pub fn has_threat(&mut self, player: f64) -> bool {
         for idx in self.start_indexs.iter() {
             if player == PLAYER_1 {
@@ -115,84 +98,6 @@ impl RawMoveList {
         return false;
 
     }
-
-    pub fn moves_pickingup(&mut self, board: &mut BoardState ,piece_pos: usize) -> Vec<Move> {
-        let mut moves: Vec<Move> = Vec::with_capacity(1000);
-
-        let drop_positions = self.drop_positions.get_data();
-
-        for idx in self.start_indexs.iter() {
-            let start_position = self.start_positions[*idx];
-            
-            if (self.pickup_positions[*idx] & (1 << piece_pos)).is_not_empty() {
-                moves.push(Move::new([0, start_position.0, start_position.1, piece_pos, NULL, NULL], MoveType::Bounce));
-
-                moves.push(Move::new([0, start_position.0, start_position.1, piece_pos, board.data[piece_pos], start_position.0], MoveType::Drop));
-
-                for drop_pos in drop_positions.iter() {
-                    moves.push(Move::new([0, start_position.0, start_position.1, piece_pos, board.data[piece_pos], *drop_pos], MoveType::Drop));
-    
-                }
-
-            }
-        
-        }
-
-        return moves;
-
-    }
-
-    pub fn moves_pickingup_with_type(&mut self, board: &mut BoardState, piece_pos: usize, peice_type: usize) -> Vec<Move> {
-        let mut moves: Vec<Move> = Vec::with_capacity(1000);
-
-        let drop_positions = self.drop_positions.get_data();
-
-        for idx in self.start_indexs.iter() {
-            let start_position = self.start_positions[*idx];
-
-            if start_position.1 == peice_type {
-                if (self.pickup_positions[*idx] & (1 << piece_pos)).is_not_empty() {
-                    moves.push(Move::new([0, start_position.0, start_position.1, piece_pos, NULL, NULL], MoveType::Bounce));
-    
-                    moves.push(Move::new([0, start_position.0, start_position.1, piece_pos, board.data[piece_pos], start_position.0], MoveType::Drop));
-    
-                    for drop_pos in drop_positions.iter() {
-                        moves.push(Move::new([0, start_position.0, start_position.1, piece_pos, board.data[piece_pos], *drop_pos], MoveType::Drop));
-        
-                    }
-    
-                }
-
-            }
-        
-        }
-
-        return moves;
-
-    }
-
-    // pub fn piece_replaceable(&self, piece_pos: usize) -> bool {
-    //     for idx in self.start_indexs.iter() {
-    //         if (self.end_positions[*idx] & (1 << piece_pos)).is_not_empty() {
-    //             return true;
-
-    //         }
-        
-    //     }
-
-    //     return false;
-
-    // }
-
-    // pub fn piece_can_pickup(&self, piece_idx: usize, ) -> bool {
-    //     if self.pickup_positions[piece_idx].is_not_empty() {
-    //         return true;
-
-    //     }
-
-    //     return false;
-
-    // }
 
 }
 

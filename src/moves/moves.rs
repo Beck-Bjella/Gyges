@@ -203,15 +203,6 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
         //     sort_val -= (4 - end_type) as f64 * 1000.0
 
         // }
-        
-        // Works decent but sometimes makes the ABF worse
-        // if mv.flag == MoveType::Drop && mv.data[2] == 1 && preventable(&mut new_board, &mv, player) {
-            // println!("=========");
-            // board.print();
-            // new_board.print();
-            // sort_val -= 500.0;
-
-        // }
 
         (mv, sort_val)
 
@@ -238,12 +229,4 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 
     ordered_moves
  
-}
-
-
-fn preventable(board: &mut BoardState, mv: &Move, player: f64) -> bool {
-    let preventable = unsafe{ valid_moves(board, -player) }.moves_pickingup_with_type(board, mv.data[3], mv.data[4]).len() > 0;
-
-    preventable
-
 }

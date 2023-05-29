@@ -218,19 +218,13 @@ impl Searcher {
             let mut new_board = board.make_move(&mv);
 
             let score;
-            // if i == 0 && is_pv {
+            if i == 0 && is_pv {
                 score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
 
-            // } else {
-            //     score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, depth - 1, !cut_node);
-                
-            //     if score > alpha && score < beta {
-            //         score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
+            } else {
+                score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
 
-            //     }
-               
-
-            // } 
+            } 
 
             // Update the score of the corosponding rootnode.
             if is_root {
