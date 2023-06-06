@@ -114,8 +114,17 @@ impl RootMoveList {
         };
 
     }
-
+    
     pub fn sort(&mut self) {
+        // let mut new_list: Vec<RootMove> = vec![];
+        // self.moves.clone().into_iter().map(|mv| {
+        //     if mv.score != f64::NEG_INFINITY {
+        //         new_list.push(mv);
+                
+        //     }
+
+        // });
+
         self.moves.sort_by(|a, b| {
             if a.score > b.score {
                 Ordering::Less

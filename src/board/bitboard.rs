@@ -239,7 +239,7 @@ impl Display for BitBoard {
 
         }
 
-        if data.contains(&PLAYER_2_GOAL) {
+        if data.contains(&PLAYER_1_GOAL) {
             println!("          1");
 
         } else {
