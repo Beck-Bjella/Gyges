@@ -1,13 +1,21 @@
-[package]
-name = "gyges_engine"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+    "gyges_engine",
+    "mgc"
+    
+]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-itertools = "0.10.5"
-rand = "0.8.5"
+[profile.dev]
+opt-level = 1
+debug = true
+split-debuginfo = '...'
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = true
+codegen-units = 4
+rpath = false
 
 [profile.release]
 opt-level = 3

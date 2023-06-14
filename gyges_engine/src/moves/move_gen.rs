@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+use std::hash::Hash;
 use std::path;
 
 use crate::board::board::*;
@@ -651,3 +653,192 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
     return count;
 
 }
+
+
+
+
+
+
+pub fn generate_permutations<T: Clone>(list: &[T]) -> Vec<Vec<&T>> {
+    let mut all_permutations = Vec::new();
+    for r in 0..=list.len() {
+        for combination in list.iter().combinations(r) {
+            all_permutations.push(combination.clone());
+
+        }
+
+    }
+
+    return all_permutations;
+
+}
+
+// Contains a path and its backtrack bb
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThreePath {
+    pub path: [u8; 4],
+    pub backtrack: BitBoard
+
+}
+
+impl ThreePath {
+    pub fn empty() -> ThreePath {
+        return ThreePath {
+            path: [NULL_U8; 4],
+            backtrack: BitBoard(0)
+
+        }
+
+    }
+
+}
+
+// Contains all of the paths for a specific intercept bb
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ThreePaths {
+    pub paths: [ThreePath; 35],
+    pub len: u8,
+
+}
+
+impl ThreePaths {
+    pub fn empty() -> ThreePaths {
+        return ThreePaths {
+            paths: [ThreePath::empty(); 35],
+            len: 0
+
+        }
+
+    }
+
+}
+
+pub fn get_path_key(intercept_bb: BitBoard, pos: usize) -> u64 {
+    (pos << 36) as u64 ^ intercept_bb.0
+    
+}
+
+
+use itertools::Itertools;
+use mgc::*;
+
+
+
+
+pub unsafe fn valid_moves_2(board: &mut BoardState, player: f64) -> RawMoveList {
+    let active_lines = board.get_active_lines();
+    let mut move_list: RawMoveList = RawMoveList::new(board.get_drops(active_lines, player));
+
+    let active_line: usize;
+    if player == PLAYER_1 {
+        active_line = active_lines[0] * 6;
+
+    } else {
+        active_line = active_lines[1] * 6;
+
+    }
+
+    for x in 0..6 {
+        if board.data[active_line + x] != 0 {
+            let starting_piece: usize = active_line + x;
+            let starting_piece_type: usize = board.data[starting_piece];
+
+            move_list.add_start_index(x);
+            move_list.set_start(x, starting_piece, starting_piece_type);
+
+            STACK_BUFFER.push((Action::End, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::Gen, BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            STACK_BUFFER.push((Action::Start, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+
+        }
+
+    }
+
+    while let Some(data) = STACK_BUFFER.pop() {
+        let action = data.0;
+        let backtrack_board: BitBoard = data.1;
+        let banned_positions: BitBoard = data.2;
+        let current_piece: usize = data.3;
+        let current_piece_type: usize = data.4;
+        let starting_piece: usize = data.5;
+        let starting_piece_type: usize = data.6;
+        let active_line_idx: usize = data.7;
+        let player: f64 = data.8;
+
+        if action == Action::Start {
+            board.data[starting_piece] = 0;
+            continue;
+
+        }
+        
+        if action == Action::End {
+            board.data[starting_piece] = starting_piece_type;
+            continue;
+        }
+
+        if current_piece_type == ONE_PIECE {
+     
+
+        } else if current_piece_type == TWO_PIECE {
+           
+
+        } else if current_piece_type == THREE_PIECE {
+            let intercept_bb = board.peice_board & ALL_INTERCEPTS[current_piece];
+
+            let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % THREE_MAP_LEN];
+            let valid_paths= UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
+            for i in 0..valid_paths[PATH_COUNT_IDX] {
+                let path_idx = valid_paths[i as usize];
+                let path = UNIQUE_THREE_PATHS[path_idx as usize];
+
+                if (backtrack_board & path.1).is_not_empty() {
+                    continue;
+    
+                }
+                
+                let end = path.0[3] as usize;
+               
+                if end == PLAYER_1_GOAL {
+                    if player == PLAYER_1 {
+                        continue;
+                    }
+                    move_list.set_end_position(active_line_idx, PLAYER_1_GOAL);
+                    continue;
+    
+                } else if end == PLAYER_2_GOAL {
+                    if player == PLAYER_2 {
+                        continue;
+                    }
+                    move_list.set_end_position(active_line_idx, PLAYER_2_GOAL);
+                    continue;
+    
+                }
+                
+                let end_piece = board.data[end];
+                if end_piece != 0 {
+                    let end_bit = 1 << end;
+                    if (banned_positions & end_bit).is_empty() {
+                        let new_banned_positions = banned_positions ^ end_bit;
+                        let new_backtrack_board = backtrack_board ^ path.1;
+                        
+                        move_list.set_pickup_position(active_line_idx, end);
+                        
+                        STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
+
+                    }
+                    
+                } else {
+                    move_list.set_end_position(active_line_idx, end);
+    
+                }
+    
+            }
+
+        }
+
+    }
+
+    return move_list;
+
+}
+
