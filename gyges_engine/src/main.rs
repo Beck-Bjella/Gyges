@@ -35,18 +35,16 @@ fn main() {
 
     );
 
-    // println!("1: {:?}", unsafe{ valid_moves(&mut board, PLAYER_1) }.moves(&board).len()) ;
-    // println!("2: {:?}", unsafe{ valid_moves_2(&mut board, PLAYER_1) }.moves(&board).len());
- 
+    // println!("{}", moves1.len());
+    // println!("{}", moves2.len());
+
     // let start_time = std::time::Instant::now();
-    // for i in 0..1000000usize {
+    // for i in 0..10000000usize {
     //     unsafe{ valid_moves(&mut board, PLAYER_1) };
        
     // }
-    // println!("Nanos 1: {}", start_time.elapsed().as_micros() as f64 / 1000000.0);
+    // println!("Nanos 1: {}", start_time.elapsed().as_micros() as f64 / 10000000.0);
 
-
-    println!("START");
     let start_time = std::time::Instant::now();
     for i in 0..100_000_00usize {
         unsafe{ valid_moves_2(&mut board, PLAYER_1) };

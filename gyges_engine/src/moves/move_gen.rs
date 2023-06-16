@@ -1,7 +1,3 @@
-use std::collections::BTreeMap;
-use std::hash::Hash;
-use std::path;
-
 use crate::board::board::*;
 use crate::board::bitboard::*;
 use crate::moves::move_list::*;
@@ -16,6 +12,7 @@ enum Action {
 }
 
 static mut STACK_BUFFER: Vec<(Action, BitBoard, BitBoard, usize, usize, usize, usize, usize, f64)> = Vec::new();
+
 
 pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
     let active_lines = board.get_active_lines();
@@ -713,16 +710,8 @@ impl ThreePaths {
 
 }
 
-pub fn get_path_key(intercept_bb: BitBoard, pos: usize) -> u64 {
-    (pos << 36) as u64 ^ intercept_bb.0
-    
-}
-
 
 use itertools::Itertools;
-use mgc::*;
-
-
 
 
 pub unsafe fn valid_moves_2(board: &mut BoardState, player: f64) -> RawMoveList {
@@ -754,7 +743,12 @@ pub unsafe fn valid_moves_2(board: &mut BoardState, player: f64) -> RawMoveList 
 
     }
 
-    while let Some(data) = STACK_BUFFER.pop() {
+    loop {
+        if STACK_BUFFER.len() == 0 {
+            break;
+        }
+        let data = STACK_BUFFER.pop().unwrap_unchecked();
+
         let action = data.0;
         let backtrack_board: BitBoard = data.1;
         let banned_positions: BitBoard = data.2;
@@ -767,13 +761,16 @@ pub unsafe fn valid_moves_2(board: &mut BoardState, player: f64) -> RawMoveList 
 
         if action == Action::Start {
             board.data[starting_piece] = 0;
+            board.peice_board ^= 1 << starting_piece;
             continue;
 
         }
         
         if action == Action::End {
             board.data[starting_piece] = starting_piece_type;
+            board.peice_board ^= 1 << starting_piece;
             continue;
+            
         }
 
         if current_piece_type == ONE_PIECE {
@@ -786,18 +783,24 @@ pub unsafe fn valid_moves_2(board: &mut BoardState, player: f64) -> RawMoveList 
             let intercept_bb = board.peice_board & ALL_INTERCEPTS[current_piece];
 
             let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % THREE_MAP_LEN];
-            let valid_paths= UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
+            let valid_paths = UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
             for i in 0..valid_paths[PATH_COUNT_IDX] {
                 let path_idx = valid_paths[i as usize];
                 let path = UNIQUE_THREE_PATHS[path_idx as usize];
+
+                let end = path.0[3] as usize;
+                let end_bit = 1 << end;
 
                 if (backtrack_board & path.1).is_not_empty() {
                     continue;
     
                 }
+
+                if (move_list.end_positions[active_line_idx] & end_bit).is_not_empty() {
+                    continue;
+
+                }
                 
-                let end = path.0[3] as usize;
-               
                 if end == PLAYER_1_GOAL {
                     if player == PLAYER_1 {
                         continue;
@@ -816,7 +819,6 @@ pub unsafe fn valid_moves_2(board: &mut BoardState, player: f64) -> RawMoveList 
                 
                 let end_piece = board.data[end];
                 if end_piece != 0 {
-                    let end_bit = 1 << end;
                     if (banned_positions & end_bit).is_empty() {
                         let new_banned_positions = banned_positions ^ end_bit;
                         let new_backtrack_board = backtrack_board ^ path.1;

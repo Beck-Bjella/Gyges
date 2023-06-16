@@ -8,11 +8,11 @@ use crate::consts::*;
 
 #[derive(Clone)]
 pub struct RawMoveList {
-    drop_positions: BitBoard,
-    start_indexs: Vec<usize>,
-    start_positions: [(usize, usize); 6],
-    end_positions: [BitBoard; 6],
-    pickup_positions: [BitBoard; 6],
+    pub drop_positions: BitBoard,
+    pub start_indexs: Vec<usize>,
+    pub start_positions: [(usize, usize); 6],
+    pub end_positions: [BitBoard; 6],
+    pub pickup_positions: [BitBoard; 6],
 
 }
 

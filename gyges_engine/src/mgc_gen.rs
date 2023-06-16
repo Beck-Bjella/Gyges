@@ -77,7 +77,7 @@ use std::vec;
                 
 //                 let end_bb: u64 = 1 << path[3];
               
-//                 let final_path = (small_path, backtrack_bb, goal, end_bb);
+//                 let final_path = (small_path, backtrack_bb, goal);
 
 //                 all_paths.push(final_path.clone());
 
@@ -98,9 +98,9 @@ use std::vec;
 
 //     }
 
-//     writeln!(f, "([100, 100, 100, 100], 0, false, 0)")?;
+//     writeln!(f, "([100, 100, 100, 100], 0, false)")?;
 //     for path in unique_three_paths {
-//         writeln!(f, "({:?}, {}, {}, {}),", path.0, path.1.0, path.2, path.3)?;
+//         writeln!(f, "({:?}, {}, {}),", path.0, path.1.0, path.2)?;
 
 //     }
     
