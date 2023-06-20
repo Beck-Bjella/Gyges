@@ -333,13 +333,13 @@ pub fn get_evalulation(board: &mut BoardState) -> f64 {
     let move_count_eval = unsafe{ valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64 };
     
     // Determins the number of peices that cant theoriticaly reach anything on player 1 and player 2's active lines.
-    let cant_reach_eval = 1000.0 * (activeline_cant_reach(board, PLAYER_2) as f64 - activeline_cant_reach(board, PLAYER_1) as f64);
+    // let cant_reach_eval = 1000.0 * (activeline_cant_reach(board, PLAYER_2) as f64 - activeline_cant_reach(board, PLAYER_1) as f64);
 
     // Determins the number of peices that are theoriticaly unreachable on player 1 and player 2's active lines.
-    let unreachable_eval = 500.0 * (activeline_unreachable(board, PLAYER_2) as f64 - activeline_unreachable(board, PLAYER_1) as f64);
+    // let unreachable_eval = 500.0 * (activeline_unreachable(board, PLAYER_2) as f64 - activeline_unreachable(board, PLAYER_1) as f64);
 
-    let eval = move_count_eval + cant_reach_eval + unreachable_eval;
+    // let eval = move_count_eval + cant_reach_eval + unreachable_eval;
 
-    return eval;
+    return move_count_eval;
 
 } 

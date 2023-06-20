@@ -157,6 +157,45 @@ impl RootMove {
 
 }
 
+pub struct BitMove {
+    pub data: [u64; 3],
+
+}
+
+impl BitMove {
+    // pub fn new(mv: Move) -> BitMove {
+    //     let mut data: u128 = 0;
+
+    //     let step1 = [mv.data[0], mv.data[1]];
+    //     let step2 = [mv.data[2], mv.data[3]];
+    //     let step3 = [mv.data[4], mv.data[5]];
+        
+    //     if mv.flag == MoveType::Drop {
+    //         data[]
+
+    //         data[step1[1]] = step1[0];
+
+    //         data[step2[1]] = step2[0];
+        
+    //         data[step3[1]] = step3[0];
+            
+    //     } else if mv.flag == MoveType::Bounce {
+    //         data[step1[1]] = step1[0];
+
+    //         data[step2[1]] = step2[0];
+
+    //     }
+
+    //     return BitMove {
+    //         data
+
+    //     };
+
+    // }
+
+}
+
+
 /// Orders a list of moves.
 pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &Vec<Entry>) -> Vec<Move> {
     // For every move calculate a value to sort it by.

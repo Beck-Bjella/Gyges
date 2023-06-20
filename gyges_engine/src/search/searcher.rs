@@ -91,7 +91,8 @@ impl Searcher {
             self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false);
             self.update_search_stats(board);
 
-            self.output_search_data();
+            // self.output_search_data();
+            println!("{}", self.search_data);
 
             self.current_ply += 2;
             if self.current_ply > max_ply {
@@ -175,16 +176,16 @@ impl Searcher {
         }
        
         // Null Move Pruning
-        // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
-        // if !is_pv && cut_node && r_depth >= 1 {
-        //     let mut null_move_board = board.make_null();
-        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
-        //     if score >= beta {
-        //         return beta;
+        let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
+        if !is_pv && cut_node && r_depth >= 1 {
+            let mut null_move_board = board.make_null();
+            let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
+            if score >= beta {
+                return beta;
     
-        //     }
+            }
 
-        // }
+        }
         
         // Multi Cut - Dosent Work
         // let r_depth = depth - 1 - MULTI_CUT_REDUCTION;
