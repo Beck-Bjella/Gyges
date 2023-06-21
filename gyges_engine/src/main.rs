@@ -77,9 +77,11 @@ fn main() {
 
     );
 
+    // SINGLE THREADED
     let mut searcher: Searcher = Searcher::new(results_sender);
     searcher.iterative_deepening_search(&mut board, 5);
 
+    // MULTI THREADED
     // thread::spawn(move || {
     //     let mut searcher: Searcher = Searcher::new(results_sender);
     //     searcher.iterative_deepening_search(&mut board, 5);
