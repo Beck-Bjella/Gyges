@@ -12,8 +12,8 @@ use crate::consts::*;
 use crate::search::searcher::*;
 use crate::tools::tt::*;
 
-use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
-use std::thread;
+use std::sync::mpsc::{self, Receiver, Sender};
+
 
 
 fn main() {
@@ -23,9 +23,9 @@ fn main() {
     println!("  - GB: {}", tt().size_gigabytes());
     println!("  - Clusters: {}", tt().num_clusters());
     println!("  - Entries: {}", tt().num_entrys());
-    println!("");
+    println!();
 
-    let (rs, rr): (Sender<SearchData>, Receiver<SearchData>) = mpsc::channel();
+    let (rs, _rr): (Sender<SearchData>, Receiver<SearchData>) = mpsc::channel();
 
     let mut board = BoardState::from(TEST_BOARD, PLAYER_1);
 

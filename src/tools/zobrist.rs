@@ -83,7 +83,7 @@ pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
 
     }
 
-    return hash;
+    hash
 
 }
 
@@ -100,6 +100,6 @@ pub fn get_uni_hash(data: [usize; 38]) -> u64 {
 
     }
 
-    return hash;
+    hash
 
 }

@@ -212,7 +212,7 @@ impl BitBoard {
 }
 
 impl Display for BitBoard {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let data = self.clone().get_data();
         
         if data.contains(&PLAYER_2_GOAL) {
@@ -235,7 +235,7 @@ impl Display for BitBoard {
 
             }
 
-            println!("")
+            println!()
 
         }
 
@@ -247,7 +247,7 @@ impl Display for BitBoard {
             
         }
     
-        return Result::Ok(());
+        Result::Ok(())
 
     }
 

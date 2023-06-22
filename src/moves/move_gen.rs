@@ -46,7 +46,7 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
     }
 
     loop {
-        if STACK_BUFFER.len() == 0 {
+        if STACK_BUFFER.is_empty() {
             break;
         }
         let data = STACK_BUFFER.pop().unwrap_unchecked();
@@ -130,7 +130,7 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
         } else if current_piece_type == TWO_PIECE {
             let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_piece];
 
-            let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % TWO_MAP_LEN];
+            let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % 29];
             let valid_paths = UNIQUE_TWO_PATH_LISTS[valid_paths_idx as usize];
 
             for i in 0..valid_paths[TWO_PATH_COUNT_IDX] {
@@ -188,7 +188,7 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
         } else if current_piece_type == THREE_PIECE {
             let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_piece];
 
-            let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % THREE_MAP_LEN];
+            let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % 11007];
             let valid_paths = UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
 
             for i in 0..valid_paths[THREE_PATH_COUNT_IDX] {
@@ -247,7 +247,7 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
 
     }
 
-    return move_list;
+    move_list
 
 }
 
@@ -278,7 +278,7 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
     }
 
     loop {
-        if STACK_BUFFER.len() == 0 {
+        if STACK_BUFFER.is_empty() {
             break;
         }
         let data = STACK_BUFFER.pop().unwrap_unchecked();
@@ -357,7 +357,7 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
         } else if current_piece_type == TWO_PIECE {
             let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_piece];
 
-            let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % TWO_MAP_LEN];
+            let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % 29];
             let valid_paths = UNIQUE_TWO_PATH_LISTS[valid_paths_idx as usize];
 
             for i in 0..valid_paths[TWO_PATH_COUNT_IDX] {
@@ -410,7 +410,7 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
         } else if current_piece_type == THREE_PIECE {
             let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_piece];
 
-            let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % THREE_MAP_LEN];
+            let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % 11007];
             let valid_paths = UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
 
             for i in 0..valid_paths[THREE_PATH_COUNT_IDX] {
@@ -464,7 +464,7 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
 
     }
 
-    return count;
+    count
 
 }
 
@@ -495,7 +495,7 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
     }
 
     loop {
-        if STACK_BUFFER.len() == 0 {
+        if STACK_BUFFER.is_empty() {
             break;
         }
         let data = STACK_BUFFER.pop().unwrap_unchecked();
@@ -553,15 +553,12 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
                 }
                 
                 let end_piece = board.data[end];
-                if end_piece != 0 {
-                    if (banned_positions & end_bit).is_empty() {
-                        let new_banned_positions = banned_positions ^ end_bit;
-                        let new_backtrack_board = backtrack_board ^ path.1;
-                      
-                        STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
+                if end_piece != 0 && (banned_positions & end_bit).is_empty() {
+                    let new_banned_positions = banned_positions ^ end_bit;
+                    let new_backtrack_board = backtrack_board ^ path.1;
+                  
+                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
 
-                    }
-                    
                 }
     
             }
@@ -569,7 +566,7 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
         } else if current_piece_type == TWO_PIECE {
             let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_piece];
 
-            let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % TWO_MAP_LEN];
+            let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % 29];
             let valid_paths = UNIQUE_TWO_PATH_LISTS[valid_paths_idx as usize];
 
             for i in 0..valid_paths[TWO_PATH_COUNT_IDX] {
@@ -601,15 +598,12 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
                 }
                 
                 let end_piece = board.data[end];
-                if end_piece != 0 {
-                    if (banned_positions & end_bit).is_empty() {
-                        let new_banned_positions = banned_positions ^ end_bit;
-                        let new_backtrack_board = backtrack_board ^ path.1;
-                        
-                        STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
-
-                    }
+                if end_piece != 0 && (banned_positions & end_bit).is_empty() {
+                    let new_banned_positions = banned_positions ^ end_bit;
+                    let new_backtrack_board = backtrack_board ^ path.1;
                     
+                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
+
                 }
     
             }
@@ -617,7 +611,7 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
         } else if current_piece_type == THREE_PIECE {
             let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_piece];
 
-            let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % THREE_MAP_LEN];
+            let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % 11007];
             let valid_paths = UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
 
             for i in 0..valid_paths[THREE_PATH_COUNT_IDX] {
@@ -649,15 +643,12 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
                 }
                 
                 let end_piece = board.data[end];
-                if end_piece != 0 {
-                    if (banned_positions & end_bit).is_empty() {
-                        let new_banned_positions = banned_positions ^ end_bit;
-                        let new_backtrack_board = backtrack_board ^ path.1;
-                       
-                        STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
+                if end_piece != 0 && (banned_positions & end_bit).is_empty() {
+                    let new_banned_positions = banned_positions ^ end_bit;
+                    let new_backtrack_board = backtrack_board ^ path.1;
+                   
+                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_piece, starting_piece_type, active_line_idx, player));
 
-                    }
-                    
                 }
     
             }
@@ -666,7 +657,7 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
 
     }
 
-    return count;
+    count
 
 }
 
@@ -886,7 +877,7 @@ pub unsafe fn old_valid_moves(board: &mut BoardState, player: f64) -> RawMoveLis
 
     }
 
-    return move_list;
+    move_list
 
 }
 
@@ -1102,7 +1093,7 @@ pub unsafe fn old_valid_move_count(board: &mut BoardState, player: f64) -> usize
 
     }
 
-    return count;
+    count
 
 }
 
@@ -1303,7 +1294,7 @@ pub unsafe fn old_valid_threat_count(board: &mut BoardState, player: f64) -> usi
 
     }
 
-    return count;
+    count
 
 }
 

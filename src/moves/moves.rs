@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 
-use crate::board::{board::*, bitboard::*};
+use crate::board::{board::*};
 use crate::moves::move_gen::*;
-use crate::search::evaluation::*;
+
 use crate::tools::tt::*;
 use crate::consts::*;
 
@@ -27,33 +27,27 @@ pub struct Move {
 impl Move {
     /// Create a new move from its indivudal components.
     pub fn new(data: [usize; 6], flag: MoveType) -> Move {
-        return Move {
+        Move {
             data,
             flag,
 
-        };
+        }
 
     }
 
     /// Creates a new null move.
     pub fn new_null() -> Move {
-        return Move {
+        Move {
             data: [NULL; 6],
             flag: MoveType::None,
 
-        };
+        }
 
     }
 
     /// Checks if a move is null.
     pub fn is_null(&self) -> bool {
-        if self.data == [NULL; 6] && self.flag == MoveType::None {
-            return true;
-
-        } else {
-            return false;
-
-        }
+        self.data == [NULL; 6] && self.flag == MoveType::None
 
     }
 
@@ -67,11 +61,11 @@ impl From<TTMove> for Move {
 
         }
 
-        return Move {
+        Move {
             data,
             flag: mv.flag
 
-        };
+        }
 
     }
 }
@@ -92,11 +86,11 @@ impl From<Move> for TTMove {
 
         }
 
-        return TTMove {
+        TTMove {
             data,
             flag: mv.flag
 
-        };
+        }
 
     }
 }
@@ -114,37 +108,31 @@ pub struct RootMove {
 impl RootMove {
     /// Creates a rootmove from its indivudal components.
     pub fn new(mv: Move, score: f64, ply: i8, threats: usize) -> RootMove {
-        return RootMove {
+        RootMove {
             mv,
             score,
             ply,
             threats
 
-        };
+        }
 
     }
 
     /// Creates a null rootmove.
     pub fn new_null() -> RootMove {
-        return RootMove {
+        RootMove {
             mv: Move::new_null(),
             score: 0.0,
             ply: 0,
             threats: 0
 
-        };
+        }
 
     }
 
     /// Checks if a rootmove is null.
     pub fn is_null(&self) -> bool {
-        if self.mv.is_null() && self.score == 0.0 && self.ply == 0 {
-            return true;
-
-        } else {
-            return false;
-
-        }
+        self.mv.is_null() && self.score == 0.0 && self.ply == 0
 
     }
 
@@ -218,7 +206,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 
         // If a move has less then 5 threats then penalize it.
         let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
-        if threat_count <= 5 as usize {
+        if threat_count <= 5_usize {
             sort_val -= 1000.0 * (5 - threat_count) as f64;
 
         }

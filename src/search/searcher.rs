@@ -30,7 +30,7 @@ pub struct Searcher {
 
 impl Searcher {
     pub fn new(dataout: Sender<SearchData>) -> Searcher {
-        return Searcher {
+        Searcher {
             best_move: RootMove::new_null(),
             pv: vec![],
             current_ply: 0,
@@ -40,7 +40,7 @@ impl Searcher {
 
             dataout
 
-        };
+        }
 
     }
 
@@ -71,7 +71,7 @@ impl Searcher {
 
         let pv = calc_pv_tt(board, self.current_ply);
         self.pv = pv.clone();
-        self.search_data.pv = pv.clone();
+        self.search_data.pv = pv;
 
     }
 
@@ -111,7 +111,7 @@ impl Searcher {
         let is_pv: bool = N::is_pv();
         let board_hash = board.hash();
 
-        let id: usize = unsafe{ NEXT_ID };
+        let _id: usize = unsafe{ NEXT_ID };
         unsafe { NEXT_ID += 1 };
 
         if is_leaf {
@@ -124,7 +124,7 @@ impl Searcher {
         }
 
         let (valid, entry) = unsafe { tt().probe(board_hash) };
-        if valid && !is_pv && entry.depth >= depth as i8 {
+        if valid && !is_pv && entry.depth >= depth {
             self.search_data.tt_hits += 1;
 
             if entry.bound == NodeBound::ExactValue {
@@ -136,11 +136,8 @@ impl Searcher {
                     alpha = entry.score;
                 }
                 
-            } else if entry.bound == NodeBound::UpperBound {
-                if entry.score < beta {
-                    beta = entry.score;
-
-                }
+            } else if entry.bound == NodeBound::UpperBound && entry.score < beta {
+                beta = entry.score;
 
             }
 
@@ -216,7 +213,7 @@ impl Searcher {
         let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
         for (i, mv) in current_player_moves.iter().enumerate() {
-            let mut new_board = board.make_move(&mv);
+            let mut new_board = board.make_move(mv);
 
             let score;
             if i == 0 && is_pv {
@@ -229,7 +226,7 @@ impl Searcher {
 
             // Update the score of the corosponding rootnode.
             if is_root {
-                self.root_moves.update_move(mv.clone(), score, self.current_ply);
+                self.root_moves.update_move(*mv, score, self.current_ply);
 
             }
 
@@ -262,10 +259,10 @@ impl Searcher {
 
         };
 
-        let new_entry = Entry::new(board_hash, best_score, depth as i8, TTMove::from(best_move), node_bound);
+        let new_entry = Entry::new(board_hash, best_score, depth, TTMove::from(best_move), node_bound);
         unsafe { tt().insert(new_entry) };
 
-        return best_score;
+        best_score
 
     }
 
@@ -302,7 +299,7 @@ pub struct SearchData {
 
 impl SearchData {
     pub fn new(ply: i8) -> SearchData {
-        return SearchData {
+        SearchData {
             best_move: RootMove::new_null(),
             pv: vec![],
 
@@ -327,7 +324,7 @@ impl SearchData {
             game_over: false,
             winner: 0,
 
-        };
+        }
 
     }
 
@@ -338,30 +335,30 @@ impl Display for SearchData {
         writeln!(f, "Depth: {:?}", self.ply)?;
         writeln!(f, "  - Best: {:?}", self.best_move)?;
         writeln!(f, "  - Time: {:?}", self.search_time)?;
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "  - Abf: {}", self.average_branching_factor)?;
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "  - Branchs: {}", self.branches)?;
         writeln!(f, "  - Bps: {}", self.bps)?;
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "  - Leafs: {}", self.leafs)?;
         writeln!(f, "  - Lps: {}", self.lps)?;
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "  - TT:")?;
         writeln!(f, "      - HITS: {:?}", self.tt_hits)?;
         writeln!(f, "      - EXACTS: {:?}", self.tt_exacts)?;
         writeln!(f, "      - CUTS: {:?}", self.tt_cuts)?;
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "      - SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS })?;
         writeln!(f, "      - UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS })?;
-        writeln!(f, "")?;
+        writeln!(f)?;
         writeln!(f, "  - PV")?;
         for (i, e) in self.pv.iter().enumerate() {
             writeln!(f, "      - {}: {:?}, {}", i, e.bestmove, e.score)?;
 
         }
     
-        return Result::Ok(());
+        Result::Ok(())
 
     }
 
@@ -371,13 +368,13 @@ impl Display for SearchData {
 pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
     let mut pv = vec![];
 
-    let mut temp_board = board.clone();
+    let mut temp_board = *board;
 
     for _ in 0..max_ply {
         let board_hash = temp_board.hash();
         let (vaild, entry) = unsafe { tt().probe(board_hash) };
         if vaild {
-            pv.push(entry.clone());
+            pv.push(*entry);
 
             temp_board = temp_board.make_move(&Move::from(entry.bestmove));
 
@@ -388,6 +385,6 @@ pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
 
     }
 
-    return pv;
+    pv
 
 }

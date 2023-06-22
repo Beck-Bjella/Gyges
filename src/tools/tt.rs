@@ -41,7 +41,7 @@ pub struct Entry {
 
 impl Entry {
     pub fn new(key: u64, score: f64, depth: i8, bestmove: TTMove, flag: NodeBound) -> Entry {
-        return Entry {
+        Entry {
             key,
             score,
             bestmove,
@@ -49,7 +49,7 @@ impl Entry {
             bound: flag,
             used: true
 
-        };
+        }
 
     }
 
@@ -81,47 +81,47 @@ pub struct TranspositionTable {
 
 impl TranspositionTable {
     pub fn new(size: usize) -> TranspositionTable {
-        return TranspositionTable {
+        TranspositionTable {
             clusters: UnsafeCell::new(alloc_room(size)),
             cap: UnsafeCell::new(size),
 
-        };
+        }
 
     }
 
     /// Gets the max size of the transposition table in kilobytes.
     pub fn size_kilobytes(&self) -> f64 {
-        return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_KB;
+        (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_KB
 
     }
     
     /// Gets the max size of the transposition table in megabytes.
     pub fn size_megabytes(&self) -> f64 {
-        return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_MB;
+        (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_MB
 
     }
 
     /// Gets the max size of the transposition table in gigabytes.
     pub fn size_gigabytes(&self) -> f64 {
-        return (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_GB;
+        (mem::size_of::<Cluster>() * self.num_clusters()) as f64 / BYTES_PER_GB
         
     }
 
     /// Gets the max number of culusters in the transposition table.
     pub fn num_clusters(&self) -> usize {
-        return unsafe { *self.cap.get() };
+        unsafe { *self.cap.get() }
 
     }
 
     /// Gets the max number of entrys in the transposition table.
     pub fn num_entrys(&self) -> usize {
-        return self.num_clusters() * CLUSTER_SIZE;
+        self.num_clusters() * CLUSTER_SIZE
 
     }
 
     /// Returns a raw pointer to a specific cluster in the table.
     fn get_cluster(&self, i: usize) -> *mut Cluster {
-        return unsafe{ (*self.clusters.get()).as_ptr().add(i) };
+        unsafe{ (*self.clusters.get()).as_ptr().add(i) }
 
     }
 
@@ -188,7 +188,7 @@ impl TranspositionTable {
 
         TT_UNSAFE_INSERTS += 1;
         replacement_entry.replace(new_entry);
-        return false;
+        false
 
     }
 
@@ -218,7 +218,7 @@ impl Display for TranspositionTable {
 
         }
 
-        return Result::Ok(());
+        Result::Ok(())
 
     }
 
@@ -228,7 +228,7 @@ unsafe impl Sync for TranspositionTable {}
 
 /// Returns a raw pointer 
 fn get_entry(cluster: *mut Cluster, i: usize) -> *mut Entry {
-    return unsafe{ ((*cluster).entrys).as_ptr().add(i) as *mut Entry };
+    unsafe{ ((*cluster).entrys).as_ptr().add(i) as *mut Entry }
 
 }
 
@@ -247,7 +247,7 @@ fn alloc_room(size: usize) -> NonNull<Cluster> {
 
         let new_ptr: *mut Cluster = ptr.cast();
 
-        return NonNull::new(new_ptr).unwrap();
+        NonNull::new(new_ptr).unwrap()
 
     }
 
@@ -255,7 +255,7 @@ fn alloc_room(size: usize) -> NonNull<Cluster> {
 
 /// Returns acess to the global transposition table.
 pub fn tt() -> &'static TranspositionTable {
-    return unsafe { &*(&mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable) };
+    unsafe { &*(&mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable) }
 
 }
 

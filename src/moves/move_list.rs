@@ -74,7 +74,7 @@ impl RawMoveList {
         
         }
 
-        return moves;
+        moves
 
     }
 
@@ -86,16 +86,14 @@ impl RawMoveList {
 
                 } 
 
-            } else if player == PLAYER_2 {
-                if (self.end_positions[*idx] & (1 << PLAYER_1_GOAL)).is_not_empty() {
-                    return true;
+            } else if player == PLAYER_2 && (self.end_positions[*idx] & (1 << PLAYER_1_GOAL)).is_not_empty() {
+                return true;
 
-                }
             }
         
         }
 
-        return false;
+        false
 
     }
 
@@ -108,10 +106,10 @@ pub struct RootMoveList {
 
 impl RootMoveList {
     pub fn new() -> RootMoveList {
-        return RootMoveList {
+        RootMoveList {
             moves: vec![],
 
-        };
+        }
 
     }
     
@@ -167,10 +165,10 @@ impl RootMoveList {
         let moves = order_moves(unsafe { valid_moves(board, PLAYER_1) }.moves(board), board, PLAYER_1, &vec![]);
 
         let root_moves: Vec<RootMove> = moves.iter().map( |mv| {
-            let mut new_board = board.make_move(&mv);
+            let mut new_board = board.make_move(mv);
             let threats = unsafe { valid_threat_count(&mut new_board, PLAYER_1) };
 
-            return RootMove::new(*mv, 0.0, 0, threats);
+            RootMove::new(*mv, 0.0, 0, threats)
 
         }).collect();
 
@@ -179,17 +177,17 @@ impl RootMoveList {
     }
 
     pub fn first(&self) -> RootMove {
-        return self.moves[0];
+        self.moves[0]
 
     }
 
     pub fn as_vec(&self) -> Vec<Move> {
         let moves: Vec<Move> = self.moves.clone().into_iter().map( |mv| {
-            return mv.mv;
+            mv.mv
 
         }).collect();
 
-        return moves;
+        moves
 
     }
 

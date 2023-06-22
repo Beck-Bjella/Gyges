@@ -5,57 +5,27 @@ use crate::moves::move_gen::*;
 
 
 fn in_bounds(pos: usize) -> bool {
-    if pos <= 35 {
-        return true;
-
-    } else {
-        return false;
-
-    }
+    pos <= 35
 
 }
 
 fn on_top_edge(pos: usize) -> bool {
-    if pos + 6 > 35 {
-        return true;
-
-    } else {
-        return false;
-
-    }
+    pos + 6 > 35
 
 }
 
 fn on_bottom_edge(pos: usize) -> bool {
-    if pos - 6 > 35 {
-        return true;
-
-    } else {
-        return false;
-
-    }
+    pos - 6 > 35
 
 }
 
 fn on_right_edge(pos: usize) -> bool {
-    if pos == 5 || pos == 11 || pos == 17 || pos == 23 || pos == 29 || pos == 35 {
-        return true;
-
-    } else {
-        return false;
-
-    }
+    pos == 5 || pos == 11 || pos == 17 || pos == 23 || pos == 29 || pos == 35
 
 }
 
 fn on_left_edge(pos: usize) -> bool {
-    if pos == 0 || pos == 6 || pos == 12 || pos == 18 || pos == 24 || pos == 30 {
-        return true;
-
-    } else {
-        return false;
-
-    }
+    pos == 0 || pos == 6 || pos == 12 || pos == 18 || pos == 24 || pos == 30
 
 }
 
@@ -121,7 +91,7 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
         let mut down_pieces = vec![];
 
         // Gather consecutive up pieces
-        let mut current_pos_clone = current_pos.clone();
+        let mut current_pos_clone = current_pos;
         if in_bounds(current_pos_clone + 6) {
             current_pos_clone += 6;
 
@@ -134,7 +104,7 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
         }
 
         // Gather consecutive down pieces
-        let mut current_pos_clone = current_pos.clone();
+        let mut current_pos_clone = current_pos;
         if in_bounds(current_pos_clone - 6)  {
             current_pos_clone -= 6;
 
@@ -213,13 +183,13 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 
             }
 
-            total_two_goodness += goodness as f64;
+            total_two_goodness += goodness;
 
         }
 
     }
 
-    return total_two_goodness;
+    total_two_goodness
 
 }
 
@@ -241,7 +211,7 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 // }
 
 pub fn unreaceable_positions(board: &mut BoardState) -> BitBoard {
-    let mut piece_board = board.piece_bb.clone();
+    let mut piece_board = board.piece_bb;
     let piece_positions = piece_board.get_data();
 
     let mut reach_positions = EMPTY;
@@ -260,7 +230,7 @@ pub fn unreaceable_positions(board: &mut BoardState) -> BitBoard {
 
     }
 
-    return !reach_positions; 
+    !reach_positions
 
 }
 
@@ -277,7 +247,7 @@ pub fn piece_cant_reach(board: &mut BoardState, pos: usize, piece: usize) -> boo
 
     }
 
-    return false;
+    false
 
 }
 
@@ -297,7 +267,7 @@ pub fn activeline_unreachable(board: &mut BoardState, player: f64) -> usize {
 
     let unreach_pos = unreaceable_positions(board);
 
-    return (unreach_pos & activeline_board).pop_count();
+    (unreach_pos & activeline_board).pop_count()
 
 }
 
@@ -322,7 +292,7 @@ pub fn activeline_cant_reach(board: &mut BoardState, player: f64) -> usize {
 
     }
 
-    return count;
+    count
 
 
 }
@@ -330,7 +300,7 @@ pub fn activeline_cant_reach(board: &mut BoardState, player: f64) -> usize {
 
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
     // Calculates the difference in move count between player 1 and player 2.
-    let move_count_eval = unsafe{ valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64 };
+    
     
     // Determins the number of peices that cant theoriticaly reach anything on player 1 and player 2's active lines.
     // let cant_reach_eval = 1000.0 * (activeline_cant_reach(board, PLAYER_2) as f64 - activeline_cant_reach(board, PLAYER_1) as f64);
@@ -340,6 +310,6 @@ pub fn get_evalulation(board: &mut BoardState) -> f64 {
 
     // let eval = move_count_eval + cant_reach_eval + unreachable_eval;
 
-    return move_count_eval;
+    unsafe{ valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64 }
 
 } 

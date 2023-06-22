@@ -66,20 +66,20 @@ impl BoardState {
 
         }
 
-        return BoardState {
+        BoardState {
             data,
             piece_bb,
             player,
             hash
 
-        };
+        }
 
     }
 
     pub fn make_move(self, mv: &Move) -> BoardState {
-        let mut data = self.data.clone();
-        let mut piece_bb = self.piece_bb.clone();
-        let mut hash: u64 = self.hash.clone();
+        let mut data = self.data;
+        let mut piece_bb = self.piece_bb;
+        let mut hash: u64 = self.hash;
         let player = self.player * -1.0;
 
         let step1 = [mv.data[0], mv.data[1]];
@@ -119,7 +119,7 @@ impl BoardState {
 
         }
         
-        return BoardState {
+        BoardState {
             data,
             piece_bb,
             player,
@@ -131,12 +131,12 @@ impl BoardState {
     }
 
     pub fn make_null(self) -> BoardState {
-        let data = self.data.clone();
-        let piece_bb = self.piece_bb.clone();
-        let hash = self.hash.clone();
+        let data = self.data;
+        let piece_bb = self.piece_bb;
+        let hash = self.hash;
         let player = self.player * -1.0;
 
-        return BoardState {
+        BoardState {
             data,
             piece_bb,
             player,
@@ -156,10 +156,10 @@ impl BoardState {
 
     pub fn get_drops(&self, active_lines: [usize; 2], player: f64) -> BitBoard {
         if player == PLAYER_1 {
-            return (FULL ^ OPP_BACK_ZONE[active_lines[1]]) & !self.piece_bb;
+            (FULL ^ OPP_BACK_ZONE[active_lines[1]]) & !self.piece_bb
 
         } else {
-            return (FULL ^ PLAYER_BACK_ZONE[active_lines[0]]) & !self.piece_bb;
+            (FULL ^ PLAYER_BACK_ZONE[active_lines[0]]) & !self.piece_bb
                 
         }
 
@@ -167,10 +167,10 @@ impl BoardState {
     
     pub fn hash(&self) -> u64 {
         if self.player == PLAYER_1 {
-            return self.hash ^ PLAYER_1_HASH;
+            self.hash ^ PLAYER_1_HASH
 
         } else {
-            return self.hash ^ PLAYER_2_HASH;
+            self.hash ^ PLAYER_2_HASH
 
         }
 
@@ -233,7 +233,7 @@ impl Display for BoardState {
         }
         writeln!(f, " ")?;
 
-        return Result::Ok(());
+        Result::Ok(())
 
     }
 
