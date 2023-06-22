@@ -8,7 +8,6 @@ use std::path::Path;
 use std::io::{Write, BufWriter, Error};
 use std::vec;
 
-
 use itertools::Itertools;
 
 pub fn generate_permutations<T: Clone>(list: &[T]) -> Vec<Vec<&T>> {
