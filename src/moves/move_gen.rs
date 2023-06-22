@@ -14,20 +14,21 @@ enum Action {
 
 }
 
-static mut STACK_BUFFER: Vec<(Action, BitBoard, BitBoard, usize, usize, usize, usize, usize, f64)> = Vec::new();
+type StackData = (Action, BitBoard, BitBoard, usize, usize, usize, usize, usize, f64);
+
+static mut STACK_BUFFER: Vec<StackData> = Vec::new();
 
 pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
     let active_lines = board.get_active_lines();
     let mut move_list: RawMoveList = RawMoveList::new(board.get_drops(active_lines, player));
 
-    let active_line: usize;
-    if player == PLAYER_1 {
-        active_line = active_lines[0] * 6;
+    let active_line: usize = if player == PLAYER_1 {
+        active_lines[0] * 6
 
     } else {
-        active_line = active_lines[1] * 6;
+        active_lines[1] * 6
 
-    }
+    };
 
     for x in 0..6 {
         if board.data[active_line + x] != 0 {
@@ -255,14 +256,13 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
     let active_lines: [usize; 2] = board.get_active_lines();
     let mut count: usize = 0;
 
-    let active_line: usize;
-    if player == PLAYER_1 {
-        active_line = active_lines[0] * 6;
+    let active_line: usize = if player == PLAYER_1 {
+        active_lines[0] * 6
 
     } else {
-        active_line = active_lines[1] * 6;
-
-    }
+        active_lines[1] * 6
+        
+    };
 
     for x in 0..6 {
         if board.data[active_line + x] != 0 {
@@ -472,14 +472,13 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
     let active_lines: [usize; 2] = board.get_active_lines();
     let mut count: usize = 0;
 
-    let active_line: usize;
-    if player == PLAYER_1 {
-        active_line = active_lines[0] * 6;
+    let active_line: usize = if player == PLAYER_1 {
+        active_lines[0] * 6
 
     } else {
-        active_line = active_lines[1] * 6;
-
-    }
+        active_lines[1] * 6
+        
+    };
 
     for x in 0..6 {
         if board.data[active_line + x] != 0 {
@@ -667,14 +666,13 @@ pub unsafe fn old_valid_moves(board: &mut BoardState, player: f64) -> RawMoveLis
     let active_lines = board.get_active_lines();
     let mut move_list: RawMoveList = RawMoveList::new(board.get_drops(active_lines, player));
 
-    let active_line: usize;
-    if player == PLAYER_1 {
-        active_line = active_lines[0] * 6;
+    let active_line: usize = if player == PLAYER_1 {
+        active_lines[0] * 6
 
     } else {
-        active_line = active_lines[1] * 6;
-
-    }
+        active_lines[1] * 6
+        
+    };
 
     for x in 0..6 {
         if board.data[active_line + x] != 0 {
@@ -827,10 +825,7 @@ pub unsafe fn old_valid_moves(board: &mut BoardState, player: f64) -> RawMoveLis
     
                 }
 
-                if board.data[path[1]] != 0 {
-                    continue;
-                    
-                } else if board.data[path[2]] != 0 {
+                if board.data[path[1]] != 0 || board.data[path[2]] != 0 {
                     continue;
                     
                 }
@@ -886,14 +881,13 @@ pub unsafe fn old_valid_move_count(board: &mut BoardState, player: f64) -> usize
 
     let active_lines = board.get_active_lines();
 
-    let active_line: usize;
-    if player == PLAYER_1 {
-        active_line = active_lines[0] * 6;
+    let active_line: usize = if player == PLAYER_1 {
+        active_lines[0] * 6
 
     } else {
-        active_line = active_lines[1] * 6;
-
-    }
+        active_lines[1] * 6
+        
+    };
 
     for x in 0..6 {
         if board.data[active_line + x] != 0 {
@@ -1043,10 +1037,7 @@ pub unsafe fn old_valid_move_count(board: &mut BoardState, player: f64) -> usize
     
                 }
 
-                if board.data[path[1]] != 0 {
-                    continue;
-                    
-                } else if board.data[path[2]] != 0 {
+                if board.data[path[1]] != 0 || board.data[path[2]] != 0 {
                     continue;
                     
                 }
@@ -1102,14 +1093,13 @@ pub unsafe fn old_valid_threat_count(board: &mut BoardState, player: f64) -> usi
 
     let active_lines = board.get_active_lines();
 
-    let active_line: usize;
-    if player == PLAYER_1 {
-        active_line = active_lines[0] * 6;
+    let active_line: usize = if player == PLAYER_1 {
+        active_lines[0] * 6
 
     } else {
-        active_line = active_lines[1] * 6;
-
-    }
+        active_lines[1] * 6
+        
+    };
 
     for x in 0..6 {
         if board.data[active_line + x] != 0 {
@@ -1249,10 +1239,7 @@ pub unsafe fn old_valid_threat_count(board: &mut BoardState, player: f64) -> usi
     
                 }
 
-                if board.data[path[1]] != 0 {
-                    continue;
-                    
-                } else if board.data[path[2]] != 0 {
+                if board.data[path[1]] != 0 || board.data[path[2]] != 0 {
                     continue;
                     
                 }

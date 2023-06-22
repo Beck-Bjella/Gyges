@@ -74,10 +74,9 @@ pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
 
     }
 
-    for i in 0..36 {
-        if board.data[i] != 0 {
-            let piece_type = board.data[i];
-           hash ^= ZOBRIST_HASH_DATA[i][piece_type];
+    for (i, piece) in board.data.iter().enumerate().take(36) {
+        if *piece != 0 {
+           hash ^= ZOBRIST_HASH_DATA[i][*piece];
 
         }
 
@@ -91,10 +90,9 @@ pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
 pub fn get_uni_hash(data: [usize; 38]) -> u64 {
     let mut hash = 0;
 
-    for i in 0..36 {
-        if data[i] != 0 {
-            let piece_type = data[i];
-            hash ^= ZOBRIST_HASH_DATA[i][piece_type];
+    for (i, piece) in data.iter().enumerate().take(36) {
+        if *piece != 0 {
+            hash ^= ZOBRIST_HASH_DATA[i][*piece];
 
         }
 

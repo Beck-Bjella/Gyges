@@ -212,42 +212,42 @@ impl BitBoard {
 }
 
 impl Display for BitBoard {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let data = self.clone().get_data();
         
         if data.contains(&PLAYER_2_GOAL) {
-            println!("          1");
+            writeln!(f, "          1")?;
 
         } else {
-            println!("          0");
+            writeln!(f, "          0")?;
             
         }
 
         for y in (0..6).rev() {
             for x in 0..6 {
                 if data.contains(&((y * 6) + x)) {
-                    print!("  1");
+                    write!(f, "  1")?;
 
                 } else {
-                    print!("  0");
+                    write!(f, "  0")?;
 
                 }
 
             }
 
-            println!()
+            writeln!(f)?;
 
         }
 
         if data.contains(&PLAYER_1_GOAL) {
-            println!("          1");
+            writeln!(f, "          1")?;
 
         } else {
-            println!("          0");
+            writeln!(f, "          0")?;
             
         }
     
-        Result::Ok(())
+       Ok(())
 
     }
 

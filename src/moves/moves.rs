@@ -235,7 +235,6 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 
     }).collect();
 
-
     // Sort the moves based on their predicted values.
     moves_to_sort.sort_by(|a, b| {
         if a.1 > b.1 {

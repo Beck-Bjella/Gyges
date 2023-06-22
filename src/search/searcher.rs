@@ -215,14 +215,13 @@ impl Searcher {
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
 
-            let score;
-            if i == 0 && is_pv {
-                score = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false);
+            let score: f64 = if i == 0 && is_pv {
+                -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false)
 
             } else {
-                score = -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node);
+                -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node)
 
-            } 
+            };
 
             // Update the score of the corosponding rootnode.
             if is_root {

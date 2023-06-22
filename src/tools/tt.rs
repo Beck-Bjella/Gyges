@@ -199,7 +199,7 @@ impl Display for TranspositionTable {
         unsafe {
             for cluster_idx in 0..self.num_clusters() {
                 let cluster = self.get_cluster(cluster_idx);
-                println!("cluster {}", cluster_idx);
+                writeln!(f, "cluster {}", cluster_idx)?;
 
                 for entry_idx in 0..CLUSTER_SIZE {
                     let entry = get_entry(cluster, entry_idx);

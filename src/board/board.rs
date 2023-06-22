@@ -27,15 +27,12 @@ impl BoardState {
     }
 
     pub fn set(&mut self, rank5: [usize; 6], rank4: [usize; 6], rank3: [usize; 6], rank2: [usize; 6], rank1: [usize; 6], rank0: [usize; 6], goal_data: [usize; 2], player: f64) {
-        for x in 0..6 {
-            self.data[x] = rank0[x];
-            self.data[x + 6] = rank1[x];
-            self.data[x + 12] = rank2[x];
-            self.data[x + 18] = rank3[x];
-            self.data[x + 24] = rank4[x];
-            self.data[x + 30] = rank5[x];
-
-        }
+        self.data[..6].copy_from_slice(&rank0);
+        self.data[6..12].copy_from_slice(&rank1);
+        self.data[12..18].copy_from_slice(&rank2);
+        self.data[18..24].copy_from_slice(&rank3);
+        self.data[24..30].copy_from_slice(&rank4);
+        self.data[30..36].copy_from_slice(&rank5);
         
         self.data[PLAYER_1_GOAL] = goal_data[0];
         self.data[PLAYER_2_GOAL] = goal_data[1];
@@ -58,8 +55,8 @@ impl BoardState {
         let hash = get_uni_hash(data);
 
         let mut piece_bb = BitBoard(0);
-        for i in 0..36 {
-            if data[i] != 0 {
+        for (i, piece) in data.iter().enumerate().take(36) {
+            if *piece != 0 {
                 piece_bb.set_bit(i);
 
             }

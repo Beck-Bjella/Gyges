@@ -254,14 +254,13 @@ pub fn piece_cant_reach(board: &mut BoardState, pos: usize, piece: usize) -> boo
 pub fn activeline_unreachable(board: &mut BoardState, player: f64) -> usize {
     let active_lines = board.get_active_lines();
 
-    let active_line: usize;
-    if player == PLAYER_1 {
-        active_line = active_lines[0];
+    let active_line: usize = if player == PLAYER_1 {
+        active_lines[0]
 
     } else {
-        active_line = active_lines[1];
+        active_lines[1]
 
-    }
+    };
 
     let activeline_board = ROWS[active_line] & board.piece_bb;
 
@@ -274,14 +273,13 @@ pub fn activeline_unreachable(board: &mut BoardState, player: f64) -> usize {
 pub fn activeline_cant_reach(board: &mut BoardState, player: f64) -> usize {
     let active_lines = board.get_active_lines();
 
-    let active_line: usize;
-    if player == PLAYER_1 {
-        active_line = active_lines[0];
+    let active_line: usize = if player == PLAYER_1 {
+        active_lines[0]
 
     } else {
-        active_line = active_lines[1];
+        active_lines[1]
 
-    }
+    };
 
     let mut count = 0;
     for x in (active_line * 6)..((active_line * 6) + 6) {
