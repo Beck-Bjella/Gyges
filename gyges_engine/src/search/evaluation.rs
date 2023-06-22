@@ -241,7 +241,7 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 // }
 
 pub fn unreaceable_positions(board: &mut BoardState) -> BitBoard {
-    let mut piece_board = board.peice_board.clone();
+    let mut piece_board = board.piece_bb.clone();
     let piece_positions = piece_board.get_data();
 
     let mut reach_positions = EMPTY;
@@ -267,13 +267,13 @@ pub fn unreaceable_positions(board: &mut BoardState) -> BitBoard {
 
 pub fn piece_cant_reach(board: &mut BoardState, pos: usize, piece: usize) -> bool {
     if piece == 3 {
-        return (THREE_ENDS[pos] & board.peice_board).is_empty();
+        return (THREE_ENDS[pos] & board.piece_bb).is_empty();
 
     } else if piece == 2 {
-        return (TWO_ENDS[pos] & board.peice_board).is_empty();
+        return (TWO_ENDS[pos] & board.piece_bb).is_empty();
 
     } else if piece == 1{
-        return (ONE_ENDS[pos] & board.peice_board).is_empty();
+        return (ONE_ENDS[pos] & board.piece_bb).is_empty();
 
     }
 
@@ -293,7 +293,7 @@ pub fn activeline_unreachable(board: &mut BoardState, player: f64) -> usize {
 
     }
 
-    let activeline_board = ROWS[active_line] & board.peice_board;
+    let activeline_board = ROWS[active_line] & board.piece_bb;
 
     let unreach_pos = unreaceable_positions(board);
 

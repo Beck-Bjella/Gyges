@@ -88,12 +88,12 @@ pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
 }
 
 /// Gets the hash for a board not including the player to move.
-pub fn get_uni_hash(board: &mut BoardState) -> u64 {
+pub fn get_uni_hash(data: [usize; 38]) -> u64 {
     let mut hash = 0;
 
     for i in 0..36 {
-        if board.data[i] != 0 {
-            let piece_type = board.data[i];
+        if data[i] != 0 {
+            let piece_type = data[i];
             hash ^= ZOBRIST_HASH_DATA[i][piece_type];
 
         }

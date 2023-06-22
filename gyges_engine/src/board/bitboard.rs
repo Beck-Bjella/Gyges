@@ -83,7 +83,7 @@ macro_rules! impl_indv_bit_ops {
 
 }
 
-/// Implies bit operations `&, |, ^, !`, shifting operations `<< >>`,
+/// Implies bit operations `&, |, ^, !`, shifting operations `<< >>`,1
 /// math operations `+, -, *, /, %` and `From` trait to a struct consisting of a
 /// singular tuple. This tuple must contain a type that implements these bit operations.
 macro_rules! impl_bit_ops {

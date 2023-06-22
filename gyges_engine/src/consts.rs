@@ -25,6 +25,30 @@ pub const NULL: usize = 100;
 pub const NULL_U8: u8 = 100;
 pub const NULL_BB: BitBoard = BitBoard(u64::MAX);
 
+// Board data
+pub const TEST_BOARD: [usize; 38] = [
+    2, 0, 2, 1, 1, 0,
+    0, 0, 0, 3, 3, 0,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 2, 0, 0,
+    0, 0, 0, 1, 0, 0,
+    0, 3, 0, 1, 2, 3,
+    0, 0
+
+];
+
+
+pub const BENCH_BOARD: [usize; 38] = [
+    2, 0, 2, 1, 1, 0,
+    0, 0, 0, 3, 3, 0,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 2, 0, 0,
+    0, 0, 0, 1, 0, 0,
+    0, 3, 0, 1, 2, 3,
+    0, 0
+
+];
+
 // Node types
 pub trait Node {
     fn is_pv() -> bool;
@@ -95,8 +119,6 @@ pub const PLAYER_BACK_ZONE: [BitBoard; 6] = [
     BitBoard(0b000000111111111111111111111111111111),
     
 ];
-
-
 
 // TEST MGC
 pub const UPS: [BitBoard; 36] = [

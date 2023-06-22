@@ -1,6 +1,5 @@
 #![feature(test)]
 
-
 mod board;
 mod helper;
 mod moves;
@@ -28,36 +27,38 @@ fn main() {
     println!("Entries: {}", tt().num_entrys());
     println!("");
 
-    let (results_sender, results_reciver): (Sender<SearchData>, Receiver<SearchData>) = mpsc::channel();
+    let (rs, rr): (Sender<SearchData>, Receiver<SearchData>) = mpsc::channel();
+
+    // let mut board = BoardState::from(TEST_BOARD, PLAYER_1);
 
     let mut board = BoardState::new();
-
-    // TESTING BOARD
     board.set(
-        [0, 3, 0, 1, 2, 3],
-        [0, 0, 0, 1, 0, 0],
-        [0, 0, 0, 2, 0, 0],
-        [0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 3, 3, 0],
-        [2, 0, 2, 1, 1, 0],
+        [3, 0, 0, 0, 0, 1],
+        [0, 1, 1, 1, 0, 0],
+        [0, 3, 0, 3, 0, 0],
+        [0, 2, 0, 2, 0, 0],
+        [0, 0, 2, 0, 0, 0], 
+        [0, 0, 2, 0, 3, 0],
         [0, 0],
-        PLAYER_1,
+        PLAYER_1
 
     );
 
+    println!("{board}");
+
     // SINGLE THREADED
-    let mut searcher: Searcher = Searcher::new(results_sender);
-    searcher.iterative_deepening_search(&mut board, 5);
+    let mut searcher: Searcher = Searcher::new(rs);
+    searcher.iterative_deepening_search(&mut board, 99);
 
     // MULTI THREADED
     // thread::spawn(move || {
-    //     let mut searcher: Searcher = Searcher::new(results_sender);
+    //     let mut searcher: Searcher = Searcher::new(rs);
     //     searcher.iterative_deepening_search(&mut board, 5);
         
     // });
 
     // loop {
-    //     let results = results_reciver.try_recv();
+    //     let results = rr.try_recv();
     //     match results {
     //         Ok(_) => {
     //             let final_results = results.unwrap();

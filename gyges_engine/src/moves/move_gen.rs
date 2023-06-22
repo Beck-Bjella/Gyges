@@ -63,12 +63,12 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
 
         if action == Action::Start {
             board.data[starting_piece] = 0;
-            board.peice_board ^= 1 << starting_piece;
+            board.piece_bb ^= 1 << starting_piece;
             continue;
 
         } else if action == Action::End {
             board.data[starting_piece] = starting_piece_type;
-            board.peice_board ^= 1 << starting_piece;
+            board.piece_bb ^= 1 << starting_piece;
             continue;
             
         } else if current_piece_type == ONE_PIECE {
@@ -128,7 +128,7 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
             }
 
         } else if current_piece_type == TWO_PIECE {
-            let intercept_bb = board.peice_board & ALL_TWO_INTERCEPTS[current_piece];
+            let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_piece];
 
             let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % TWO_MAP_LEN];
             let valid_paths = UNIQUE_TWO_PATH_LISTS[valid_paths_idx as usize];
@@ -186,7 +186,7 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
             }
            
         } else if current_piece_type == THREE_PIECE {
-            let intercept_bb = board.peice_board & ALL_THREE_INTERCEPTS[current_piece];
+            let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_piece];
 
             let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % THREE_MAP_LEN];
             let valid_paths = UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
@@ -295,12 +295,12 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
 
         if action == Action::Start {
             board.data[starting_piece] = 0;
-            board.peice_board ^= 1 << starting_piece;
+            board.piece_bb ^= 1 << starting_piece;
             continue;
 
         } else if action == Action::End {
             board.data[starting_piece] = starting_piece_type;
-            board.peice_board ^= 1 << starting_piece;
+            board.piece_bb ^= 1 << starting_piece;
             continue;
             
         } else if current_piece_type == ONE_PIECE {
@@ -355,7 +355,7 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
             }
 
         } else if current_piece_type == TWO_PIECE {
-            let intercept_bb = board.peice_board & ALL_TWO_INTERCEPTS[current_piece];
+            let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_piece];
 
             let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % TWO_MAP_LEN];
             let valid_paths = UNIQUE_TWO_PATH_LISTS[valid_paths_idx as usize];
@@ -408,7 +408,7 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
             }
            
         } else if current_piece_type == THREE_PIECE {
-            let intercept_bb = board.peice_board & ALL_THREE_INTERCEPTS[current_piece];
+            let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_piece];
 
             let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % THREE_MAP_LEN];
             let valid_paths = UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
@@ -512,12 +512,12 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
 
         if action == Action::Start {
             board.data[starting_piece] = 0;
-            board.peice_board ^= 1 << starting_piece;
+            board.piece_bb ^= 1 << starting_piece;
             continue;
 
         } else if action == Action::End {
             board.data[starting_piece] = starting_piece_type;
-            board.peice_board ^= 1 << starting_piece;
+            board.piece_bb ^= 1 << starting_piece;
             continue;
             
         } else if current_piece_type == ONE_PIECE {
@@ -567,7 +567,7 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
             }
 
         } else if current_piece_type == TWO_PIECE {
-            let intercept_bb = board.peice_board & ALL_TWO_INTERCEPTS[current_piece];
+            let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_piece];
 
             let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % TWO_MAP_LEN];
             let valid_paths = UNIQUE_TWO_PATH_LISTS[valid_paths_idx as usize];
@@ -615,7 +615,7 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
             }
            
         } else if current_piece_type == THREE_PIECE {
-            let intercept_bb = board.peice_board & ALL_THREE_INTERCEPTS[current_piece];
+            let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_piece];
 
             let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % THREE_MAP_LEN];
             let valid_paths = UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
@@ -1316,18 +1316,7 @@ mod move_gen_bench {
 
     #[bench]
     fn bench_valid_moves(b: &mut Bencher) {
-        let mut board = BoardState::new();
-        board.set(
-            [0, 3, 0, 1, 2, 3],
-            [0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 2, 0, 0],
-            [0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 3, 3, 0],
-            [2, 0, 2, 1, 1, 0],
-            [0, 0],
-            PLAYER_1,
-
-        );
+        let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
 
         b.iter(|| unsafe{ valid_moves(&mut board, PLAYER_1) }.moves(&board));
 
@@ -1335,18 +1324,7 @@ mod move_gen_bench {
 
     #[bench]
     fn bench_old_valid_moves(b: &mut Bencher) {
-        let mut board = BoardState::new();
-        board.set(
-            [0, 3, 0, 1, 2, 3],
-            [0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 2, 0, 0],
-            [0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 3, 3, 0],
-            [2, 0, 2, 1, 1, 0],
-            [0, 0],
-            PLAYER_1,
-
-        );
+        let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
 
         b.iter(|| unsafe{ old_valid_moves(&mut board, PLAYER_1) }.moves(&board));
 
@@ -1354,18 +1332,7 @@ mod move_gen_bench {
 
     #[bench]
     fn bench_valid_move_count(b: &mut Bencher) {
-        let mut board = BoardState::new();
-        board.set(
-            [0, 3, 0, 1, 2, 3],
-            [0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 2, 0, 0],
-            [0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 3, 3, 0],
-            [2, 0, 2, 1, 1, 0],
-            [0, 0],
-            PLAYER_1,
-
-        );
+        let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
 
         b.iter(|| unsafe{ valid_move_count(&mut board, PLAYER_1) });
 
@@ -1373,22 +1340,26 @@ mod move_gen_bench {
 
     #[bench]
     fn bench_old_valid_move_count(b: &mut Bencher) {
-        let mut board = BoardState::new();
-        board.set(
-            [0, 3, 0, 1, 2, 3],
-            [0, 0, 0, 1, 0, 0],
-            [0, 0, 0, 2, 0, 0],
-            [0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 3, 3, 0],
-            [2, 0, 2, 1, 1, 0],
-            [0, 0],
-            PLAYER_1,
-
-        );
+        let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
 
         b.iter(|| unsafe{ old_valid_move_count(&mut board, PLAYER_1) });
 
     }
 
+    #[bench]
+    fn bench_threat_count(b: &mut Bencher) {
+        let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
+
+        b.iter(|| unsafe{ valid_threat_count(&mut board, PLAYER_1) });
+
+    }
+
+    #[bench]
+    fn bench_old_bench_threat_count(b: &mut Bencher) {
+        let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
+        
+        b.iter(|| unsafe{ old_valid_threat_count(&mut board, PLAYER_1) });
+
+    }
 
 }
