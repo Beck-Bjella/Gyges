@@ -1,0 +1,120 @@
+LAST 80%
+Depth: 7
+  - Best: RootMove { mv: Move { data: [0, 3, 1, 21, 2, 20], flag: Drop }, score: 2497.0, threats: 21, ply: 7 }
+  - Time: 332.0982327
+
+  - Abf: 11.534361407148621
+
+  - Branchs: 2888812
+  - Bps: 8698
+
+  - Leafs: 24272759
+  - Lps: 73089
+
+  - TT:
+      - HITS: 238887
+      - EXACTS: 10
+      - CUTS: 222565
+
+      - SAFE INSERTS: 657451
+      - UNSAFE INSERTS: 1
+
+  - PV
+      - 0: TTMove { data: [0, 3, 1, 21, 2, 23], flag: Drop }, 2497
+      - 1: TTMove { data: [0, 33, 1, 21, 1, 16], flag: Drop }, -2497
+      - 2: TTMove { data: [0, 0, 2, 27, 1, 15], flag: Drop }, 2497
+      - 3: TTMove { data: [0, 35, 3, 34, 2, 33], flag: Drop }, -2497
+      - 4: TTMove { data: [0, 2, 2, 34, 3, 2], flag: Drop }, 917
+      - 5: TTMove { data: [0, 34, 2, 27, 2, 19], flag: Drop }, -917
+      - 6: TTMove { data: [0, 4, 1, 9, 3, 28], flag: Drop }, 917
+
+LAST 60%
+Depth: 7
+  - Best: RootMove { mv: Move { data: [0, 3, 1, 21, 2, 20], flag: Drop }, score: 2497.0, threats: 21, ply: 7 }
+  - Time: 305.1822958
+
+  - Abf: 11.430321248833115
+
+  - Branchs: 2658898
+  - Bps: 8712
+
+  - Leafs: 22833404
+  - Lps: 74818
+
+  - TT:
+      - HITS: 201319
+      - EXACTS: 10
+      - CUTS: 186021
+
+      - SAFE INSERTS: 606108
+      - UNSAFE INSERTS: 1
+
+  - PV
+      - 0: TTMove { data: [0, 3, 1, 21, 2, 23], flag: Drop }, 2497
+      - 1: TTMove { data: [0, 33, 1, 21, 1, 16], flag: Drop }, -2497
+      - 2: TTMove { data: [0, 0, 2, 27, 1, 15], flag: Drop }, 2497
+      - 3: TTMove { data: [0, 35, 3, 34, 2, 33], flag: Drop }, -2497
+      - 4: TTMove { data: [0, 2, 2, 34, 3, 2], flag: Drop }, 917
+      - 5: TTMove { data: [0, 34, 2, 27, 2, 19], flag: Drop }, -917
+      - 6: TTMove { data: [0, 4, 1, 9, 3, 28], flag: Drop }, 917
+
+LAST 50%
+Depth: 7
+  - Best: RootMove { mv: Move { data: [0, 3, 1, 21, 2, 20], flag: Drop }, score: 2497.0, threats: 21, ply: 7 }
+  - Time: 295.2476481
+
+  - Abf: 11.401694877580063
+
+  - Branchs: 2531019
+  - Bps: 8572
+
+  - Leafs: 22517722
+  - Lps: 76267
+
+  - TT:
+      - HITS: 185191
+      - EXACTS: 10
+      - CUTS: 171019
+
+      - SAFE INSERTS: 586351
+      - UNSAFE INSERTS: 1
+
+  - PV
+      - 0: TTMove { data: [0, 3, 1, 21, 2, 23], flag: Drop }, 2497
+      - 1: TTMove { data: [0, 33, 1, 21, 1, 16], flag: Drop }, -2497
+      - 2: TTMove { data: [0, 0, 2, 27, 1, 15], flag: Drop }, 2497
+      - 3: TTMove { data: [0, 35, 3, 34, 2, 33], flag: Drop }, -2497
+      - 4: TTMove { data: [0, 2, 2, 34, 3, 2], flag: Drop }, 917
+      - 5: TTMove { data: [0, 34, 2, 27, 2, 19], flag: Drop }, -917
+      - 6: TTMove { data: [0, 4, 1, 9, 3, 28], flag: Drop }, 917
+
+
+NORMAL
+Depth: 7
+  - Best: RootMove { mv: Move { data: [0, 3, 1, 21, 2, 20], flag: Drop }, score: 2497.0, threats: 21, ply: 7 }
+  - Time: 338.0840119
+
+  - Abf: 11.53746096869772
+
+  - Branchs: 2915712
+  - Bps: 8624
+
+  - Leafs: 24296993
+  - Lps: 71866
+
+  - TT:
+      - HITS: 251835
+      - EXACTS: 10
+      - CUTS: 235416
+
+      - SAFE INSERTS: 663904
+      - UNSAFE INSERTS: 1
+
+  - PV
+      - 0: TTMove { data: [0, 3, 1, 21, 2, 23], flag: Drop }, 2497
+      - 1: TTMove { data: [0, 33, 1, 21, 1, 16], flag: Drop }, -2497
+      - 2: TTMove { data: [0, 0, 2, 27, 1, 15], flag: Drop }, 2497
+      - 3: TTMove { data: [0, 35, 3, 34, 2, 33], flag: Drop }, -2497
+      - 4: TTMove { data: [0, 2, 2, 34, 3, 2], flag: Drop }, 917
+      - 5: TTMove { data: [0, 34, 2, 27, 2, 19], flag: Drop }, -917
+      - 6: TTMove { data: [0, 4, 1, 9, 3, 28], flag: Drop }, 917

@@ -13,8 +13,6 @@ use crate::tools::tt::*;
 // pub const MULTI_CUT_REDUCTION: i8 = 1;
 pub const NULL_MOVE_REDUCTION: i8 = 1;
 
-pub static mut NEXT_ID: usize = 0;
-
 /// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
 pub struct Searcher {
     pub best_move: RootMove,
@@ -86,8 +84,6 @@ impl Searcher {
         while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
 
-            unsafe { NEXT_ID = 0 };
-            
             self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false);
             self.update_search_stats(board);
 
@@ -110,9 +106,6 @@ impl Searcher {
         let is_leaf = depth == 0;
         let is_pv: bool = N::is_pv();
         let board_hash = board.hash();
-
-        let _id: usize = unsafe{ NEXT_ID };
-        unsafe { NEXT_ID += 1 };
 
         if is_leaf {
             self.search_data.leafs += 1;
@@ -149,6 +142,7 @@ impl Searcher {
             }
 
         }
+
 
         self.search_data.branches += 1;
 
@@ -214,12 +208,20 @@ impl Searcher {
         let mut best_score: f64 = f64::NEG_INFINITY;
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
+            
+            let mut lmr = 0;
+
+            // Check for a LMR
+            if i > (current_player_moves.len() as f64 * 0.65) as usize && !is_pv && depth >= 3 {
+                lmr += 2;
+                
+            }
 
             let score: f64 = if i == 0 && is_pv {
-                -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, false)
+                -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1 - lmr, false)
 
             } else {
-                -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1, !cut_node)
+                -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1 - lmr, !cut_node)
 
             };
 
