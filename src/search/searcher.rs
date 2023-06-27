@@ -212,10 +212,10 @@ impl Searcher {
             let mut lmr = 0;
 
             // Check for a LMR
-            if i > (current_player_moves.len() as f64 * 0.65) as usize && !is_pv && depth >= 3 {
-                lmr += 2;
+            // if i > (current_player_moves.len() as f64 * 0.65) as usize && !is_pv && depth >= 3 {
+            //     lmr += 2;
                 
-            }
+            // }
 
             let score: f64 = if i == 0 && is_pv {
                 -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1 - lmr, false)

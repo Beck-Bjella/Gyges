@@ -73,12 +73,12 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
             continue;
             
         } else if current_piece_type == ONE_PIECE {
-            let valid_paths_idx = ONE_MAP[current_piece][0];
-            let valid_paths = UNIQUE_ONE_PATH_LISTS[valid_paths_idx as usize];
+            let valid_paths_idx = ONE_MAP.get_unchecked(current_piece).get_unchecked(0);
+            let valid_paths = UNIQUE_ONE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
 
             for i in 0..valid_paths[ONE_PATH_COUNT_IDX] {
                 let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_ONE_PATHS[path_idx as usize];
+                let path = UNIQUE_ONE_PATHS.get_unchecked(path_idx as usize);
 
                 if (backtrack_board & path.1).is_not_empty() {
                     continue;
@@ -131,12 +131,12 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
         } else if current_piece_type == TWO_PIECE {
             let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_piece];
 
-            let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % 29];
-            let valid_paths = UNIQUE_TWO_PATH_LISTS[valid_paths_idx as usize];
+            let valid_paths_idx = TWO_MAP.get_unchecked(current_piece).get_unchecked(intercept_bb.0 as usize % 29);
+            let valid_paths = UNIQUE_TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
 
             for i in 0..valid_paths[TWO_PATH_COUNT_IDX] {
                 let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_TWO_PATHS[path_idx as usize];
+                let path = UNIQUE_TWO_PATHS.get_unchecked(path_idx as usize);
 
                 if (backtrack_board & path.1).is_not_empty() {
                     continue;
@@ -189,12 +189,12 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
         } else if current_piece_type == THREE_PIECE {
             let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_piece];
 
-            let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % 11007];
-            let valid_paths = UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
+            let valid_paths_idx = THREE_MAP.get_unchecked(current_piece).get_unchecked(intercept_bb.0 as usize % 11007);
+            let valid_paths = UNIQUE_THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
 
             for i in 0..valid_paths[THREE_PATH_COUNT_IDX] {
                 let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_THREE_PATHS[path_idx as usize];
+                let path = UNIQUE_THREE_PATHS.get_unchecked(path_idx as usize);
 
                 if (backtrack_board & path.1).is_not_empty() {
                     continue;
@@ -304,12 +304,12 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
             continue;
             
         } else if current_piece_type == ONE_PIECE {
-            let valid_paths_idx = ONE_MAP[current_piece][0];
-            let valid_paths = UNIQUE_ONE_PATH_LISTS[valid_paths_idx as usize];
+            let valid_paths_idx = ONE_MAP.get_unchecked(current_piece).get_unchecked(0);
+            let valid_paths = UNIQUE_ONE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
 
-            for i in 0..valid_paths[ONE_PATH_COUNT_IDX] {
-                let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_ONE_PATHS[path_idx as usize];
+            for i in 0..*valid_paths.get_unchecked(ONE_PATH_COUNT_IDX) {
+                let path_idx = valid_paths.get_unchecked(i as usize);
+                let path = UNIQUE_ONE_PATHS.get_unchecked(*path_idx as usize);
 
                 if (backtrack_board & path.1).is_not_empty() {
                     continue;
@@ -355,14 +355,14 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
             }
 
         } else if current_piece_type == TWO_PIECE {
-            let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_piece];
+            let intercept_bb = board.piece_bb & *ALL_TWO_INTERCEPTS.get_unchecked(current_piece);
 
-            let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % 29];
-            let valid_paths = UNIQUE_TWO_PATH_LISTS[valid_paths_idx as usize];
+            let valid_paths_idx = TWO_MAP.get_unchecked(current_piece).get_unchecked(intercept_bb.0 as usize % 29);
+            let valid_paths = UNIQUE_TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
 
-            for i in 0..valid_paths[TWO_PATH_COUNT_IDX] {
-                let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_TWO_PATHS[path_idx as usize];
+            for i in 0..*valid_paths.get_unchecked(TWO_PATH_COUNT_IDX) {
+                let path_idx = valid_paths.get_unchecked(i as usize);
+                let path = UNIQUE_TWO_PATHS.get_unchecked(*path_idx as usize);
 
                 if (backtrack_board & path.1).is_not_empty() {
                     continue;
@@ -408,14 +408,14 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
             }
            
         } else if current_piece_type == THREE_PIECE {
-            let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_piece];
+            let intercept_bb = board.piece_bb & *ALL_THREE_INTERCEPTS.get_unchecked(current_piece);
 
-            let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % 11007];
-            let valid_paths = UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
+            let valid_paths_idx = THREE_MAP.get_unchecked(current_piece).get_unchecked(intercept_bb.0 as usize % 11007);
+            let valid_paths = UNIQUE_THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
 
-            for i in 0..valid_paths[THREE_PATH_COUNT_IDX] {
-                let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_THREE_PATHS[path_idx as usize];
+            for i in 0..*valid_paths.get_unchecked(THREE_PATH_COUNT_IDX) {
+                let path_idx = valid_paths.get_unchecked(i as usize);
+                let path = UNIQUE_THREE_PATHS.get_unchecked(*path_idx as usize);
 
                 if (backtrack_board & path.1).is_not_empty() {
                     continue;
@@ -520,12 +520,12 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
             continue;
             
         } else if current_piece_type == ONE_PIECE {
-            let valid_paths_idx = ONE_MAP[current_piece][0];
-            let valid_paths = UNIQUE_ONE_PATH_LISTS[valid_paths_idx as usize];
+            let valid_paths_idx = ONE_MAP.get_unchecked(current_piece).get_unchecked(0);
+            let valid_paths = UNIQUE_ONE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
 
             for i in 0..valid_paths[ONE_PATH_COUNT_IDX] {
                 let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_ONE_PATHS[path_idx as usize];
+                let path = UNIQUE_ONE_PATHS.get_unchecked(path_idx as usize);
 
                 if (backtrack_board & path.1).is_not_empty() {
                     continue;
@@ -565,12 +565,12 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
         } else if current_piece_type == TWO_PIECE {
             let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_piece];
 
-            let valid_paths_idx = TWO_MAP[current_piece][intercept_bb.0 as usize % 29];
-            let valid_paths = UNIQUE_TWO_PATH_LISTS[valid_paths_idx as usize];
+            let valid_paths_idx = TWO_MAP.get_unchecked(current_piece).get_unchecked(intercept_bb.0 as usize % 29);
+            let valid_paths = UNIQUE_TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
 
             for i in 0..valid_paths[TWO_PATH_COUNT_IDX] {
                 let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_TWO_PATHS[path_idx as usize];
+                let path = UNIQUE_TWO_PATHS.get_unchecked(path_idx as usize);
 
                 if (backtrack_board & path.1).is_not_empty() {
                     continue;
@@ -610,12 +610,12 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
         } else if current_piece_type == THREE_PIECE {
             let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_piece];
 
-            let valid_paths_idx = THREE_MAP[current_piece][intercept_bb.0 as usize % 11007];
-            let valid_paths = UNIQUE_THREE_PATH_LISTS[valid_paths_idx as usize];
+            let valid_paths_idx = THREE_MAP.get_unchecked(current_piece).get_unchecked(intercept_bb.0 as usize % 11007);
+            let valid_paths = UNIQUE_THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
 
             for i in 0..valid_paths[THREE_PATH_COUNT_IDX] {
                 let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_THREE_PATHS[path_idx as usize];
+                let path = UNIQUE_THREE_PATHS.get_unchecked(path_idx as usize);
 
                 if (backtrack_board & path.1).is_not_empty() {
                     continue;
