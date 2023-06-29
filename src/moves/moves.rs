@@ -1,5 +1,6 @@
 use std::cmp::Ordering;
 
+use crate::board::bitboard::BitBoard;
 use crate::board::{board::*};
 use crate::moves::move_gen::*;
 
@@ -145,44 +146,54 @@ impl RootMove {
 
 }
 
-pub struct BitMove {
-    pub data: [u64; 3],
+pub fn guess_mv_score(mv: Move, board: &BoardState, player: f64, pv: &Vec<Entry>) -> (Move, f64) {
+    let mut sort_val: f64;
+    let mut new_board = board.make_move(&mv);
+   
+    // If move is in the PV then sort it first.
+    for e in pv {
+        if Move::from(e.bestmove ) == mv {
+            sort_val = 500_000.0;
+            return (mv, sort_val);
 
-}
+        }
 
-impl BitMove {
-    // pub fn new(mv: Move) -> BitMove {
-    //     let mut data: u128 = 0;
+    } 
 
-    //     let step1 = [mv.data[0], mv.data[1]];
-    //     let step2 = [mv.data[2], mv.data[3]];
-    //     let step3 = [mv.data[4], mv.data[5]];
-        
-    //     if mv.flag == MoveType::Drop {
-    //         data[]
+    // If move is not the PV then guess how good it is.
+    sort_val = -1.0 * unsafe { valid_move_count(&mut new_board, -player)} as f64;
 
-    //         data[step1[1]] = step1[0];
+    // If a move has less then 5 threats then penalize it.
+    let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
+    if threat_count <= 5_usize {
+        sort_val -= 1000.0 * (5 - threat_count) as f64;
 
-    //         data[step2[1]] = step2[0];
-        
-    //         data[step3[1]] = step3[0];
-            
-    //     } else if mv.flag == MoveType::Bounce {
-    //         data[step1[1]] = step1[0];
+    }
 
-    //         data[step2[1]] = step2[0];
+    // Lower the score if there are pieces that cant reach anything or are unreachable on your active line.
+    // sort_val -= activeline_cant_reach(board, player) as f64 * 1000.0;
+    // sort_val -= activeline_unreachable(board, player) as f64 * 500.0;
 
-    //     }
+    // Lower the score of moves that leave the piece where it cant reach anything.
+    // let end_pos: usize = if mv.flag == MoveType::Drop { 
+    //     mv.data[5] 
 
-    //     return BitMove {
-    //         data
+    // } else { 
+    //     mv.data[3] 
 
-    //     };
+    // };
+    // let end_type = new_board.data[end_pos];
+
+    
+    // if piece_cant_reach(board, end_pos, end_type) {
+    //     sort_val -= (4 - end_type) as f64 * 1000.0
 
     // }
 
-}
+    (mv, sort_val)
 
+
+}
 
 /// Orders a list of moves.
 pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &Vec<Entry>) -> Vec<Move> {
@@ -190,7 +201,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
     let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
         let mut sort_val: f64;
         let mut new_board = board.make_move(&mv);
-       
+        
         // If move is in the PV then sort it first.
         for e in pv {
             if Move::from(e.bestmove ) == mv {
@@ -201,6 +212,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 
         } 
 
+        
         // If move is not the PV then guess how good it is.
         sort_val = -1.0 * unsafe { valid_move_count(&mut new_board, -player)} as f64;
 

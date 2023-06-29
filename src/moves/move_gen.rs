@@ -1299,15 +1299,6 @@ mod move_gen_bench {
         b.iter(|| unsafe{ valid_moves(&mut board, PLAYER_1) }.moves(&board));
 
     }
-
-    #[bench]
-    fn bench_old_valid_moves(b: &mut Bencher) {
-        let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
-
-        b.iter(|| unsafe{ old_valid_moves(&mut board, PLAYER_1) }.moves(&board));
-
-    }
-
     #[bench]
     fn bench_valid_move_count(b: &mut Bencher) {
         let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
@@ -1317,26 +1308,10 @@ mod move_gen_bench {
     }
 
     #[bench]
-    fn bench_old_valid_move_count(b: &mut Bencher) {
-        let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
-
-        b.iter(|| unsafe{ old_valid_move_count(&mut board, PLAYER_1) });
-
-    }
-
-    #[bench]
     fn bench_threat_count(b: &mut Bencher) {
         let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
 
         b.iter(|| unsafe{ valid_threat_count(&mut board, PLAYER_1) });
-
-    }
-
-    #[bench]
-    fn bench_old_bench_threat_count(b: &mut Bencher) {
-        let mut board = BoardState::from(BENCH_BOARD, PLAYER_1);
-        
-        b.iter(|| unsafe{ old_valid_threat_count(&mut board, PLAYER_1) });
 
     }
 

@@ -117,7 +117,7 @@ impl Searcher {
         }
 
         let (valid, entry) = unsafe { tt().probe(board_hash) };
-        if valid && !is_pv && entry.depth >= depth {
+        if !is_pv && valid && entry.depth >= depth {
             self.search_data.tt_hits += 1;
 
             if entry.bound == NodeBound::ExactValue {
@@ -143,7 +143,6 @@ impl Searcher {
 
         }
 
-
         self.search_data.branches += 1;
 
         // Generate the Raw move list for this node.
@@ -155,17 +154,6 @@ impl Searcher {
             
         }
 
-        // Use the previous search to order the moves, otherwise generate and order them.
-        let mut current_player_moves: Vec<Move>;
-        if is_root {
-            current_player_moves = self.root_moves.as_vec();
-            
-        } else {
-            current_player_moves = move_list.moves(board);
-            current_player_moves = order_moves(current_player_moves, board, player, &self.pv);
-            
-        }
-       
         // Null Move Pruning
         let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
         if !is_pv && cut_node && r_depth >= 1 {
@@ -177,9 +165,19 @@ impl Searcher {
             }
 
         }
+
+        // Use the previous search to order the moves, otherwise generate and order them.
+        let current_player_moves: Vec<Move> = if is_root {
+            self.root_moves.as_vec()
+            
+        } else {
+            let moves = move_list.moves(board);
+            order_moves(moves, board, player, &self.pv)
+            
+        };
         
         // Multi Cut - Dosent Work
-        // let r_depth = depth - 1 - MULTI_CUT_REDUCTION;
+        // let r_depth = depth - 1 - 1;
         // if r_depth > 0 && cut_node {
         //     let mut cuts = 0;
 
@@ -212,7 +210,7 @@ impl Searcher {
             let mut lmr = 0;
 
             // Check for a LMR
-            // if i > (current_player_moves.len() as f64 * 0.65) as usize && !is_pv && depth >= 3 {
+            // if i > (current_player_moves.len() as f64 * 0.7) as usize && !is_pv && depth >= 3 {
             //     lmr += 2;
                 
             // }
