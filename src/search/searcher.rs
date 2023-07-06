@@ -1,3 +1,4 @@
+use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
 use std::fmt::Display;
@@ -22,30 +23,47 @@ pub struct Searcher {
     pub search_data: SearchData,
     pub root_moves: RootMoveList,
 
-    pub dataout: Sender<SearchData>
+    pub options: SearchOptions,
+    pub stop_in: Receiver<bool>,
+    pub stop: bool
 
 }
 
 impl Searcher {
-    pub fn new(dataout: Sender<SearchData>) -> Searcher {
+    pub fn new(stop_in: Receiver<bool>, options: SearchOptions) -> Searcher {
         Searcher {
             best_move: RootMove::new_null(),
             pv: vec![],
             current_ply: 0,
 
+            options, 
             search_data: SearchData::new(0),
             root_moves: RootMoveList::new(),
 
-            dataout
+            stop_in,
+            stop: false
 
         }
 
     }
 
     /// Sends search data over the dataout. This can be recived by the main thread.
-    pub fn output_search_data(&mut self) {
-        self.dataout.send(self.search_data.clone()).unwrap();
+    pub fn ugi_output(&mut self) {
+        println!("info depth {} nodes {} time {} bestmove {} score {}", self.search_data.ply, self.search_data.branches + self.search_data.leafs, self.search_data.search_time, self.search_data.best_move.as_human(), self.search_data.best_move.score);
         
+    }
+
+    // Checks to see if the engine should stop the search
+    pub fn check_stop(&mut self) {
+        match self.stop_in.try_recv() {
+            Ok(_) => {
+                self.stop = true;
+
+            }
+            Err(_) => {}
+
+        }
+
     }
 
     /// Updates the search data based on the collected data.
@@ -74,8 +92,10 @@ impl Searcher {
     }
 
     /// Iterative deepening search.
-    pub fn iterative_deepening_search(&mut self, board: &mut BoardState, max_ply: i8) {
-        println!("START");
+    pub fn iterative_deepening_search(&mut self) {
+        self.stop = false;
+
+        let board = &mut self.options.board.clone();
 
         self.root_moves = RootMoveList::new();
         self.root_moves.setup(board);
@@ -85,16 +105,15 @@ impl Searcher {
             self.search_data = SearchData::new(self.current_ply);
 
             self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false);
-            self.update_search_stats(board);
-
-            // self.output_search_data();
-            println!("{}", self.search_data);
-
-            self.current_ply += 2;
-            if self.current_ply > max_ply {
+            if self.stop {
                 break;
 
             }
+
+            self.update_search_stats(board);
+            self.ugi_output();
+
+            self.current_ply += 1;
 
         }
 
@@ -107,6 +126,17 @@ impl Searcher {
         let is_pv: bool = N::is_pv();
         let board_hash = board.hash();
 
+        if self.stop {
+            return 0.0;
+    
+        } else {
+            if self.search_data.leafs % 1000 == 0 {
+                self.check_stop();
+    
+            }
+
+        }
+       
         if is_leaf {
             self.search_data.leafs += 1;
 
@@ -155,16 +185,16 @@ impl Searcher {
         }
 
         // Null Move Pruning
-        let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
-        if !is_pv && cut_node && r_depth >= 1 {
-            let mut null_move_board = board.make_null();
-            let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
-            if score >= beta {
-                return beta;
+        // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
+        // if !is_pv && cut_node && r_depth >= 1 {
+        //     let mut null_move_board = board.make_null();
+        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
+        //     if score >= beta {
+        //         return beta;
     
-            }
+        //     }
 
-        }
+        // }
 
         // Use the previous search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {
@@ -363,13 +393,30 @@ impl Display for SearchData {
 
 }
 
+#[derive(Clone)]
+pub struct SearchOptions {
+    pub board: BoardState,
+
+}
+
+impl SearchOptions {
+    pub fn new() -> SearchOptions {
+        SearchOptions {
+            board: BoardState::from(TEST_BOARD, PLAYER_1)
+
+        }
+
+    }
+
+}
+
 /// Uses the trasposition table to calculate the PV.
 pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
     let mut pv = vec![];
 
     let mut temp_board = *board;
 
-    for _ in 0..max_ply {
+    for d in 0..max_ply {
         let board_hash = temp_board.hash();
         let (vaild, entry) = unsafe { tt().probe(board_hash) };
         if vaild {

@@ -193,23 +193,6 @@ pub fn get_positional_eval(board: &mut BoardState) -> f64 {
 
 }
 
-// / Sums the value of every piece that the player can touch.
-// pub fn control_score(board: &mut BoardState, player: f64) -> f64 {
-//     let current_moves = unsafe{ valid_moves(board, player) };
-
-//     let mut score = 0.0;
-//     for board_pos in 0..36 {
-//         if current_moves.piece_replaceable(board_pos) && board.data[board_pos] != 0 {
-//             score += PIECE_SCORES[board.data[board_pos] - 1]
-            
-//         }
-
-//     }
-
-//     score
-
-// }
-
 pub fn unreaceable_positions(board: &mut BoardState) -> BitBoard {
     let mut piece_board = board.piece_bb;
     let piece_positions = piece_board.get_data();
@@ -233,7 +216,6 @@ pub fn unreaceable_positions(board: &mut BoardState) -> BitBoard {
     !reach_positions
 
 }
-
 
 pub fn piece_cant_reach(board: &mut BoardState, pos: usize, piece: usize) -> bool {
     if piece == 3 {
@@ -295,19 +277,38 @@ pub fn activeline_cant_reach(board: &mut BoardState, player: f64) -> usize {
 
 }
 
+pub const PIECE_CONTROL_SCORES: [f64; 3] = [200.0, 150.0, 100.0];
+
+pub fn control_score(board: &mut BoardState, player: f64) -> f64 {
+    let control_board = unsafe{ controlled_pieces(board, player) };
+    let opp_control_board = unsafe{ controlled_pieces(board, -player) };
+    
+    let mut unique_control_board = control_board & !opp_control_board;
+
+    let positions = unique_control_board.get_data();
+
+    let mut score = 0.0;
+    for pos in positions {
+        let piece = board.data[pos];
+        score += PIECE_CONTROL_SCORES[piece - 1];
+
+    }
+
+    score
+
+}
 
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
-    // Calculates the difference in move count between player 1 and player 2.
-    
-    
     // Determins the number of peices that cant theoriticaly reach anything on player 1 and player 2's active lines.
     // let cant_reach_eval = 1000.0 * (activeline_cant_reach(board, PLAYER_2) as f64 - activeline_cant_reach(board, PLAYER_1) as f64);
 
     // Determins the number of peices that are theoriticaly unreachable on player 1 and player 2's active lines.
     // let unreachable_eval = 500.0 * (activeline_unreachable(board, PLAYER_2) as f64 - activeline_unreachable(board, PLAYER_1) as f64);
 
-    // let eval = move_count_eval + cant_reach_eval + unreachable_eval;
+    let move_count_eval = unsafe{ valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64 };
 
-    unsafe{ valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64 }
+    // let control_eval = control_score(board, PLAYER_1) - control_score(board, PLAYER_2);
+
+    (move_count_eval * 1.0)// + (control_eval * 0.4)
 
 } 

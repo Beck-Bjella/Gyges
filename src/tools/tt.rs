@@ -23,7 +23,6 @@ pub enum NodeBound {
     ExactValue,
     UpperBound,
     LowerBound,
-    None
 
 }
 
@@ -260,10 +259,12 @@ pub fn tt() -> &'static TranspositionTable {
 }
 
 /// Initalizes the global transposition table.
-pub fn init_tt() {
+/// 
+/// Size must be a power of 2
+pub fn init_tt(size: usize) {
     unsafe {
         let tt = &mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable;
-        ptr::write(tt, TranspositionTable::new(2usize.pow(24)));
+        ptr::write(tt, TranspositionTable::new(size));
 
     }
 

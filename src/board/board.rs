@@ -235,3 +235,13 @@ impl Display for BoardState {
     }
 
 }
+
+pub const COL_LETTER: [&str; 6] = ["a", "b", "c", "d", "e", "f"];
+
+pub fn human_cord(pos: usize) -> String {
+    let y = (pos as f64 / 6.0).floor() as usize;
+    let x: usize = pos - (y * 6);
+
+    COL_LETTER[x].to_string() + &(y + 1).to_string()
+
+} 

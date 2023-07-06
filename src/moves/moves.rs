@@ -144,6 +144,17 @@ impl RootMove {
 
     }
 
+    pub fn as_human(&self) -> String {
+        if self.mv.flag == MoveType::Bounce {
+            return human_cord(self.mv.data[1]) + &human_cord(self.mv.data[3]);
+
+        } else {
+            human_cord(self.mv.data[1]) + &human_cord(self.mv.data[3]) + &human_cord(self.mv.data[5])
+
+        }
+
+    }
+
 }
 
 pub fn guess_mv_score(mv: Move, board: &BoardState, player: f64, pv: &Vec<Entry>) -> (Move, f64) {
