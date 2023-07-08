@@ -2,10 +2,12 @@ use std::io::{self, BufRead};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
+use crate::moves::move_gen::controlled_squares;
 use crate::tools::tt::init_tt;
 use crate::board::board::*;
 use crate::consts::*;
 use crate::search::searcher::*;
+use crate::search::evaluation::*;
 
 pub struct Ugi {
     pub searcher_stop: Option<Sender<bool>>,
@@ -34,11 +36,25 @@ impl Ugi {
             match commands.get(0).copied() {
                 Some("ugi") => {
                     println!("id name nova");
-                    println!("id author beck_bjella");
+                    println!("id author beck bjella");
     
                 }
+                Some("test") => {
+                    unsafe {
+                        let b = &mut BoardState::from(TEST_BOARD, PLAYER_1);
+                        let p1 = controlled_squares(b, PLAYER_1);
+                        let p2 = controlled_squares(b, PLAYER_2);
+                        println!("{}", p1);
+                        println!("{}", p2);
+                        println!("{}", p1 & !p2);
+                        println!("{}", p2 & !p1);
+                        get_evalulation(b);    
+
+                    }
+                    
+                }
                 Some("setoption") => {
-                    self.go();
+                    
     
                 }
                 Some("setpos") => {
@@ -104,7 +120,5 @@ impl Ugi {
         }
 
     }
-    
 
 }
-

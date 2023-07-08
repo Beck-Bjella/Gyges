@@ -4,11 +4,6 @@ use crate::board::board::*;
 use crate::moves::move_gen::*;
 
 
-fn in_bounds(pos: usize) -> bool {
-    pos <= 35
-
-}
-
 fn on_top_edge(pos: usize) -> bool {
     pos + 6 > 35
 
@@ -277,9 +272,11 @@ pub fn activeline_cant_reach(board: &mut BoardState, player: f64) -> usize {
 
 }
 
+
+
 pub const PIECE_CONTROL_SCORES: [f64; 3] = [200.0, 150.0, 100.0];
 
-pub fn control_score(board: &mut BoardState, player: f64) -> f64 {
+pub fn unique_controlled_pieces_score(board: &mut BoardState, player: f64) -> f64 {
     let control_board = unsafe{ controlled_pieces(board, player) };
     let opp_control_board = unsafe{ controlled_pieces(board, -player) };
     
@@ -298,17 +295,23 @@ pub fn control_score(board: &mut BoardState, player: f64) -> f64 {
 
 }
 
+pub fn unique_controlled_squares_score(board: &mut BoardState, player: f64) -> f64 {
+    let control_board = unsafe{ controlled_squares(board, player) };
+    let opp_control_board = unsafe{ controlled_squares(board, -player) };
+    
+    let unique_control_board = control_board & !opp_control_board;
+
+    unique_control_board.pop_count() as f64 * 25.0
+
+}
+
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
-    // Determins the number of peices that cant theoriticaly reach anything on player 1 and player 2's active lines.
-    // let cant_reach_eval = 1000.0 * (activeline_cant_reach(board, PLAYER_2) as f64 - activeline_cant_reach(board, PLAYER_1) as f64);
+    let move_count_eval = unsafe{valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64};
 
-    // Determins the number of peices that are theoriticaly unreachable on player 1 and player 2's active lines.
-    // let unreachable_eval = 500.0 * (activeline_unreachable(board, PLAYER_2) as f64 - activeline_unreachable(board, PLAYER_1) as f64);
+    let controlled_pieces_eval = unique_controlled_pieces_score(board, PLAYER_1) - unique_controlled_pieces_score(board, PLAYER_2);
 
-    let move_count_eval = unsafe{ valid_move_count(board, PLAYER_1) as f64 - valid_move_count(board, PLAYER_2) as f64 };
+    let controlled_squares_eval = unique_controlled_squares_score(board, PLAYER_1) - unique_controlled_squares_score(board, PLAYER_2);
 
-    // let control_eval = control_score(board, PLAYER_1) - control_score(board, PLAYER_2);
-
-    (move_count_eval * 1.0)// + (control_eval * 0.4)
+    move_count_eval + controlled_pieces_eval + controlled_squares_eval
 
 } 

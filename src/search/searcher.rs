@@ -73,6 +73,7 @@ impl Searcher {
         self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
         self.search_data.average_branching_factor = ((self.search_data.branches + self.search_data.leafs) as f64).powf(1.0 / self.search_data.ply as f64);
 
+        self.root_moves.sort();
         self.search_data.best_move = self.root_moves.first();
 
         if self.search_data.best_move.score == f64::INFINITY {
@@ -104,7 +105,7 @@ impl Searcher {
         while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
 
-            self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false);
+            self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, true);
             if self.stop {
                 break;
 
@@ -113,7 +114,7 @@ impl Searcher {
             self.update_search_stats(board);
             self.ugi_output();
 
-            self.current_ply += 1;
+            self.current_ply += 2;
 
         }
 
@@ -185,20 +186,22 @@ impl Searcher {
         }
 
         // Null Move Pruning
-        // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
-        // if !is_pv && cut_node && r_depth >= 1 {
-        //     let mut null_move_board = board.make_null();
-        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
-        //     if score >= beta {
-        //         return beta;
+        let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
+        if r_depth > 0 {
+            let mut null_move_board = board.make_null();
+            let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
+            if score >= beta {
+                return beta;
     
-        //     }
+            }
 
-        // }
+        }
 
         // Use the previous search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {
             self.root_moves.as_vec()
+            // let moves = move_list.moves(board);
+            // order_moves(moves, board, player, &self.pv)
             
         } else {
             let moves = move_list.moves(board);
@@ -241,7 +244,7 @@ impl Searcher {
 
             // Check for a LMR
             // if i > (current_player_moves.len() as f64 * 0.7) as usize && !is_pv && depth >= 3 {
-            //     lmr += 2;
+            //     lmr += 1;
                 
             // }
 
@@ -423,6 +426,11 @@ pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
             pv.push(*entry);
 
             temp_board = temp_board.make_move(&Move::from(entry.bestmove));
+
+            if d == max_ply-1 {
+                println!("{}", temp_board);
+
+            }
 
         } else {
             break;
