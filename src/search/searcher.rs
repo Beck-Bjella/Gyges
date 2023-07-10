@@ -114,7 +114,7 @@ impl Searcher {
             self.update_search_stats(board);
             self.ugi_output();
 
-            self.current_ply += 2;
+            self.current_ply += 1;
 
         }
 
@@ -427,10 +427,10 @@ pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
 
             temp_board = temp_board.make_move(&Move::from(entry.bestmove));
 
-            if d == max_ply-1 {
-                println!("{}", temp_board);
+            // if d == max_ply-1 {
+            //     println!("{}", temp_board);
 
-            }
+            // }
 
         } else {
             break;

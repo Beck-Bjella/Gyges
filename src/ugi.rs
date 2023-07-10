@@ -48,7 +48,7 @@ impl Ugi {
                         println!("{}", p2);
                         println!("{}", p1 & !p2);
                         println!("{}", p2 & !p1);
-                        get_evalulation(b);    
+                        // get_evalulation(b);    
 
                     }
                     

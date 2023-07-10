@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use crate::board::bitboard::BitBoard;
 use crate::board::{board::*};
 use crate::moves::move_gen::*;
+use crate::search::evaluation::*;
 
 use crate::tools::tt::*;
 use crate::consts::*;
@@ -157,60 +158,11 @@ impl RootMove {
 
 }
 
-pub fn guess_mv_score(mv: Move, board: &BoardState, player: f64, pv: &Vec<Entry>) -> (Move, f64) {
-    let mut sort_val: f64;
-    let mut new_board = board.make_move(&mv);
-   
-    // If move is in the PV then sort it first.
-    for e in pv {
-        if Move::from(e.bestmove ) == mv {
-            sort_val = 500_000.0;
-            return (mv, sort_val);
-
-        }
-
-    } 
-
-    // If move is not the PV then guess how good it is.
-    sort_val = -1.0 * unsafe { valid_move_count(&mut new_board, -player)} as f64;
-
-    // If a move has less then 5 threats then penalize it.
-    let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
-    if threat_count <= 5_usize {
-        sort_val -= 1000.0 * (5 - threat_count) as f64;
-
-    }
-
-    // Lower the score if there are pieces that cant reach anything or are unreachable on your active line.
-    // sort_val -= activeline_cant_reach(board, player) as f64 * 1000.0;
-    // sort_val -= activeline_unreachable(board, player) as f64 * 500.0;
-
-    // Lower the score of moves that leave the piece where it cant reach anything.
-    // let end_pos: usize = if mv.flag == MoveType::Drop { 
-    //     mv.data[5] 
-
-    // } else { 
-    //     mv.data[3] 
-
-    // };
-    // let end_type = new_board.data[end_pos];
-
-    
-    // if piece_cant_reach(board, end_pos, end_type) {
-    //     sort_val -= (4 - end_type) as f64 * 1000.0
-
-    // }
-
-    (mv, sort_val)
-
-
-}
-
 /// Orders a list of moves.
 pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &Vec<Entry>) -> Vec<Move> {
     // For every move calculate a value to sort it by.
     let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
-        let mut sort_val: f64;
+        let mut sort_val: f64 = 0.0;
         let mut new_board = board.make_move(&mv);
         
         // If move is in the PV then sort it first.
@@ -223,10 +175,9 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 
         } 
 
-        
         // If move is not the PV then guess how good it is.
-        sort_val = -1.0 * unsafe { valid_move_count(&mut new_board, -player)} as f64;
-
+        sort_val -= unsafe { valid_move_count(&mut new_board, -player)} as f64;
+        
         // If a move has less then 5 threats then penalize it.
         let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
         if threat_count <= 5_usize {
