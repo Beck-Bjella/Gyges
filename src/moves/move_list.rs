@@ -120,14 +120,16 @@ impl RootMoveList {
                 Ordering::Less
                 
             } else if a.score == b.score {
-                match a.threats.cmp(&b.threats) {
-                    Ordering::Greater => Ordering::Less,
+                // match a.threats.cmp(&b.threats) {
+                //     Ordering::Greater => Ordering::Less,
                     
-                    Ordering::Less => Ordering::Greater,
+                //     Ordering::Less => Ordering::Greater,
 
-                    Ordering::Equal => Ordering::Equal
+                //     Ordering::Equal => Ordering::Equal
 
-                }
+                // }
+
+                Ordering::Equal
     
             } else {
                 Ordering::Greater

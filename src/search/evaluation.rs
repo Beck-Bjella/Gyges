@@ -468,18 +468,31 @@ pub fn unique_controlled_squares_score(board: &mut BoardState, player: f64) -> f
 
 }
 
+pub fn mobility_eval(board: &mut BoardState, player: f64) -> f64 {
+    let mut eval = 0.0;
 
-pub const TEMPO_BONUS: f64 = 3000.0;
+    eval += unsafe{ valid_move_count(board, player) } as f64;
+
+    eval
+
+}
+
+pub fn control_eval(board: &mut BoardState, player: f64) -> f64 {
+    let mut eval = 0.0;
+
+    eval +=  unique_controlled_pieces_score(board, player);
+    eval +=  unique_controlled_squares_score(board, player);
+
+    eval
+
+}
 
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
     let mut eval = 0.0;
+
+    eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
+    eval += control_eval(board, PLAYER_1) - control_eval(board, PLAYER_2);
     
-    eval += unsafe{ valid_move_count(board, PLAYER_1) } as f64 - unsafe{ valid_move_count(board, PLAYER_2) } as f64;
-    eval +=  unique_controlled_pieces_score(board, PLAYER_1) - unique_controlled_pieces_score(board, PLAYER_2);
-    eval +=  unique_controlled_squares_score(board, PLAYER_1) - unique_controlled_squares_score(board, PLAYER_2);
-
-    // eval += board.player * TEMPO_BONUS;
-
     eval
 
 } 
