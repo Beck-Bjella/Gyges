@@ -1,5 +1,3 @@
-use std::f32::consts::E;
-
 use crate::board::bitboard::BitBoard;
 use crate::{consts::*, board};
 use crate::board::board::*;
@@ -31,12 +29,13 @@ fn on_left_edge(pos: usize) -> bool {
 }
 
 
+// OLD TESTS
 pub fn unreaceable_positions(board: &mut BoardState) -> BitBoard {
     let mut piece_board = board.piece_bb;
     let piece_positions = piece_board.get_data();
 
     let mut reach_positions = EMPTY;
-
+    
     for pos in piece_positions {
         if board.data[pos] == 1 {
             reach_positions |= ONE_ENDS[pos];
@@ -115,329 +114,200 @@ pub fn activeline_cant_reach(board: &mut BoardState, player: f64) -> usize {
 
 }
 
-// pub fn p1_positional_eval(board: &mut BoardState, p1_piece_control: BitBoard, p2_piece_control: BitBoard) -> f64 {
-//     let mut one_conectivity = 0.0;
-//     let mut one_safety = 0.0;
-//     let mut two_protection = 0.0;
+pub const CONNECETED_BONUSES: [f64; 3] = [15.0, 5.0, 5.0];
 
-//     let mut p1_unique = p1_piece_control & !p2_piece_control;
-//     let mut p2_unique = p2_piece_control & !p1_piece_control;
+pub fn ones_connectivity_score(board: &mut BoardState, player: f64) -> f64 {
+    let mut connectivity: f64 = 0.0;
 
-//     for pos in p1_piece_control.clone().get_data() {
-//         let current_piece = board.data[pos];
+    let mut pieces = unsafe{ controlled_pieces(board, player) };
+    let positions = pieces.get_data();
 
-//         let mut n_piece = NULL;
-//         let mut ne_piece = NULL;
-//         let mut e_piece = NULL;
-//         let mut se_piece = NULL;
-//         let mut s_piece = NULL;
-//         let mut sw_piece = NULL;
-//         let mut w_piece = NULL;
-//         let mut nw_piece = NULL;
+    for pos in positions {
+        let piece = board.data[pos];
 
-//         // Check if north is vaild
-//         if !on_top_edge(pos) {
-//             n_piece = board.data[pos + 6];
+        if piece == 1 {
+            let mut adjecent_pieces = vec![];
 
-//         }
-//         // Check if north-east is vaild
-//         if !on_top_edge(pos) && !on_right_edge(pos) {
-//             ne_piece = board.data[pos + 7];
+            if !on_top_edge(pos) && board.data[pos + 6] != 0 { adjecent_pieces.push(board.data[pos + 6]) }; // N
+            if !on_top_edge(pos) && !on_right_edge(pos) && board.data[pos + 7] != 0 { adjecent_pieces.push(board.data[pos + 7]) }; // NE
+            if !on_right_edge(pos) && board.data[pos + 1] != 0  { adjecent_pieces.push(board.data[pos + 1]) }; // E
+            if !on_right_edge(pos) && !on_bottom_edge(pos) && board.data[pos - 5] != 0 { adjecent_pieces.push(board.data[pos - 5]) }; // SE
+            if !on_bottom_edge(pos) && board.data[pos - 6] != 0  { adjecent_pieces.push(board.data[pos - 6]) }; // S
+            if !on_bottom_edge(pos) && !on_left_edge(pos) && board.data[pos - 7] != 0  { adjecent_pieces.push(board.data[pos - 7]) }; // SW
+            if !on_left_edge(pos) && board.data[pos - 1] != 0 { adjecent_pieces.push(board.data[pos - 1]) }; // W
+            if !on_left_edge(pos) && !on_top_edge(pos) && board.data[pos + 5] != 0 { adjecent_pieces.push(board.data[pos + 5]) }; // NW
             
-//         }
-//         // Check if east is vaild
-//         if !on_right_edge(pos) {
-//             e_piece = board.data[pos + 1];
+            for adj_piece in adjecent_pieces {
+                connectivity += CONNECETED_BONUSES[adj_piece - 1];
+    
+            }
 
-//         }
-//         // Check if south-east is vaild
-//         if !on_right_edge(pos) && !on_bottom_edge(pos){
-//             se_piece = board.data[pos - 5];
+        }
 
-//         }
-//         // Check if south is vaild
-//         if !on_bottom_edge(pos){
-//             s_piece = board.data[pos - 6];
+    }
 
-//         }
-//         // Check if south-west is vaild
-//         if !on_bottom_edge(pos) && !on_left_edge(pos) {
-//             sw_piece = board.data[pos - 7];
+    connectivity
 
-//         }
-//         // Check if west is vaild
-//         if !on_left_edge(pos) {
-//             w_piece = board.data[pos - 1];
+}
 
-//         }
-//         // Check if north-west is vaild
-//         if !on_left_edge(pos) && !on_top_edge(pos) {
-//             nw_piece = board.data[pos + 5];
+pub fn ones_safety_score(board: &mut BoardState, player: f64) -> f64 {
+    let mut safety = 0.0;
 
-//         }
+    safety
 
-//         if current_piece == 1 {
-//             let unique = (p1_unique & 1 << pos).is_not_empty();
-//             let unique_bonus = if unique {
-//                 3.0
+}
 
-//             } else {
-//                 1.0
+pub const PROTECTED_PIECE_SCORES: [f64; 3] = [250.0, 25.0, 100.0];
 
-//             };
+pub const HALF_OFFSET_SCORE: f64 = 300.0;
 
-//             // One Connectivity
-//             if n_piece == 1 {
-//                 one_conectivity += 1.0;
+pub fn wall_depth_offset(board: &mut BoardState) -> f64 {
+    let mut total_depth = 0.0;
 
-//             }
-//             if e_piece == 1 {
-//                 one_conectivity += 1.0;
+    for pos in 0..36 {
+        let piece = board.data[pos];
 
-//             }
-//             if s_piece == 1 {
-//                 one_conectivity += 1.0;
+        if piece == 2 {
+            let col = (pos as f64 / 6.0).floor();
+            total_depth += col;
 
-//             }
-//             if w_piece == 1 {
-//                 one_conectivity += 1.0;
+        }
 
-//             }
+    }
 
+    (total_depth / 4.0) - 2.5
 
-//             // One Safety
-//             if n_piece == 2 {
-//                 one_safety += 2.0 * unique_bonus;
+}
 
-//             }
+pub fn wall_strength(board: &mut BoardState) -> f64 {
+    let mut strength = 0.0;
 
-//             if nw_piece == 2 && (p2_piece_control & 1 << pos).is_empty() {
-//                 one_safety += 1.0 * unique_bonus;
+    for pos in 0..36 {
+        let piece = board.data[pos];
 
-//             }
-//             if ne_piece == 2 && (p2_piece_control & 1 << pos).is_empty() {
-//                 one_safety += 1.0  * unique_bonus;
-
-//             }
-
-//         }
-
-//         if current_piece == 2 {
-//             let mut protection = 0.0;
-
-//             if n_piece == 0 {
-//                 protection += 3.0;
-
-//             }
-
-//             // Gather consecutive down pieces
-//             let mut down_pieces = vec![];
-//             let mut current_pos_clone = pos;
-//             if in_bounds(current_pos_clone - 6)  {
-//                 current_pos_clone -= 6;
-
-//                 while in_bounds(current_pos_clone) && board.data[current_pos_clone] != 0 {
-//                     down_pieces.push(board.data[current_pos_clone]);
-//                     current_pos_clone -= 6;
-
-//                 }
-
-//             }
-
-//             for piece in down_pieces.iter() {
-//                 if piece == &1 {
-//                     protection += 3.0;
-
-//                 }
-//                 if piece == &2 {
-//                     protection -= 2.0;
-
-//                 }
-//                 if piece == &3 {
-//                     protection += 1.0;
-
-//                 }
-
-//             }
-
-//             if w_piece == 2 {
-//                 protection += 2.0;
-
-//             }
-//             if e_piece == 2 {
-//                 protection += 2.0;
-                
-//             }
-        
-        
-//             two_protection += protection;
-
-//         }
-
-//     }
-
-//     (two_protection * 300.0) + (one_conectivity * 20.0) + (one_safety * 80.0)
-
-// }
-
-// pub fn p2_positional_eval(board: &mut BoardState, p1_piece_control: BitBoard, p2_piece_control: BitBoard) -> f64 {
-//     let mut one_conectivity = 0.0;
-//     let mut one_safety = 0.0;
-//     let mut two_protection = 0.0;
-
-//     let mut p1_unique = p1_piece_control & !p2_piece_control;
-//     let mut p2_unique = p2_piece_control & !p1_piece_control;
-
-//     for pos in p2_piece_control.clone().get_data() {
-//         let current_piece: usize = board.data[pos];
-
-//         let mut n_piece = NULL;
-//         let mut ne_piece = NULL;
-//         let mut e_piece = NULL;
-//         let mut se_piece = NULL;
-//         let mut s_piece = NULL;
-//         let mut sw_piece = NULL;
-//         let mut w_piece = NULL;
-//         let mut nw_piece = NULL;
-
-//         // Check if north is vaild
-//         if !on_top_edge(pos) {
-//             n_piece = board.data[pos + 6];
-
-//         }
-//         // Check if north-east is vaild
-//         if !on_top_edge(pos) && !on_right_edge(pos) {
-//             ne_piece = board.data[pos + 7];
+        if piece == 2 {
+            let ne_piece = if !on_top_edge(pos) && !on_right_edge(pos) { board.data[pos + 7] } else { NULL };
+            let e_piece = if !on_right_edge(pos) { board.data[pos + 1] } else { NULL };
+            let se_piece = if !on_right_edge(pos) && !on_bottom_edge(pos){ board.data[pos - 5] } else { NULL };
             
-//         }
-//         // Check if east is vaild
-//         if !on_right_edge(pos) {
-//             e_piece = board.data[pos + 1];
-
-//         }
-//         // Check if south-east is vaild
-//         if !on_right_edge(pos) && !on_bottom_edge(pos){
-//             se_piece = board.data[pos - 5];
-
-//         }
-//         // Check if south is vaild
-//         if !on_bottom_edge(pos){
-//             s_piece = board.data[pos - 6];
-
-//         }
-//         // Check if south-west is vaild
-//         if !on_bottom_edge(pos) && !on_left_edge(pos) {
-//             sw_piece = board.data[pos - 7];
-
-//         }
-//         // Check if west is vaild
-//         if !on_left_edge(pos) {
-//             w_piece = board.data[pos - 1];
-
-//         }
-//         // Check if north-west is vaild
-//         if !on_left_edge(pos) && !on_top_edge(pos) {
-//             nw_piece = board.data[pos + 5];
-
-//         }
-
-//         if current_piece == 1 {
-//             let unique = (p1_unique & 1 << pos).is_not_empty();
-//             let unique_bonus = if unique {
-//                 3.0
-
-//             } else {
-//                 1.0
-
-//             };
-
-//             // One Connectivity
-//             if n_piece == 1 {
-//                 one_conectivity += 1.0;
-
-//             }
-//             if e_piece == 1 {
-//                 one_conectivity += 1.0;
-
-//             }
-//             if s_piece == 1 {
-//                 one_conectivity += 1.0;
-
-//             }
-//             if w_piece == 1 {
-//                 one_conectivity += 1.0;
-
-//             }
-
-
-//             // One Safety
-//             if s_piece == 2 {
-//                 one_safety += 2.0 * unique_bonus;
-
-//             }
-
-//             if sw_piece == 2 && (p1_piece_control & 1 << pos).is_empty() {
-//                 one_safety += 1.0 * unique_bonus;
-
-//             }
-//             if se_piece == 2 && (p1_piece_control & 1 << pos).is_empty() {
-//                 one_safety += 1.0 * unique_bonus;
-
-//             }
-
-//         }
-
-//         if current_piece == 2 {
-//             let mut protection = 0.0;
-
-//             if s_piece == 0 {
-//                 protection += 3.0;
-
-//             }
-
-//             // Gather consecutive up pieces
-//             let mut up_pieces = vec![];
-//             let mut current_pos_clone = pos;
-//             if in_bounds(current_pos_clone + 6) {
-//                 current_pos_clone += 6;
-
-//                 while in_bounds(current_pos_clone) && board.data[current_pos_clone] != 0{
-//                     up_pieces.push(board.data[current_pos_clone]);
-//                     current_pos_clone += 6;
-
-//                 }
-
-//             }
-
-//             for piece in up_pieces.iter() {
-//                 if piece == &1 {
-//                     protection += 3.0;
-
-//                 }
-//                 if piece == &2 {
-//                     protection -= 2.0;
-
-//                 }
-//                 if piece == &3 {
-//                     protection += 1.0;
-
-//                 }
-
-//             }
+            let sw_piece = if !on_bottom_edge(pos) && !on_left_edge(pos) { board.data[pos - 7] } else { NULL };
+            let w_piece = if !on_left_edge(pos) { board.data[pos - 1] } else { NULL };
+            let nw_piece =  if !on_left_edge(pos) && !on_top_edge(pos) { board.data[pos + 5] } else { NULL };
         
-//             two_protection += protection;
+            if ne_piece == 2 {
+                strength += 1.0;
 
-//         }
+            } 
+            if se_piece == 2 {
+                strength += 1.0;
 
-//     }
+            } 
+            if e_piece == 2 {
+                strength += 2.0;
 
-//     (two_protection * 300.0) + (one_conectivity * 20.0) + (one_safety * 80.0)
+            }
+            
+            if nw_piece == 2 {
+                strength += 1.0;
 
-// }
+            } 
+            if sw_piece == 2 {
+                strength += 1.0;
 
-pub const PIECE_CONTROL_SCORES: [f64; 3] = [300.0, 100.0, 50.0];
+            } 
+            if w_piece == 2 {
+                strength += 2.0;
 
-pub const SQUARE_CONTROL_SCORE: f64 = 20.0;
+            }
+
+        }
+
+    }
+
+    strength
+
+}
+
+pub fn p1_wall_score(board: &mut BoardState) -> f64 {
+    let mut protected_pieces_score: f64 = 0.0;
+    let mut test = 0.0;
+
+    for pos in 0..36 {
+        let piece = board.data[pos];
+
+        if piece == 2 {
+            let mut down_pieces = vec![];
+            let mut current_pos_clone = pos;
+            if in_bounds(current_pos_clone - 6)  {
+                current_pos_clone -= 6;
+
+                while in_bounds(current_pos_clone) && board.data[current_pos_clone] != 0 {
+                    down_pieces.push(board.data[current_pos_clone]);
+                    current_pos_clone -= 6;
+
+                }
+
+            }
+
+            for d_piece in down_pieces {
+                protected_pieces_score += PROTECTED_PIECE_SCORES[d_piece - 1];
+
+            }
+
+        }
+
+    }
+
+    let wall_offset = wall_depth_offset(board);
+    let offset_score = HALF_OFFSET_SCORE * wall_offset;
+
+    protected_pieces_score + offset_score + test
+    
+}
+
+pub fn p2_wall_score(board: &mut BoardState) -> f64 {
+    let mut protected_pieces_score: f64 = 0.0;
+    let mut test = 0.0;
+
+    for pos in 0..36 {
+        let piece = board.data[pos];
+
+        if piece == 2 {
+            let mut up_pieces = vec![];
+            let mut current_pos_clone = pos;
+            if in_bounds(current_pos_clone + 6) {
+                current_pos_clone += 6;
+
+                while in_bounds(current_pos_clone) && board.data[current_pos_clone] != 0{
+                    up_pieces.push(board.data[current_pos_clone]);
+                    current_pos_clone += 6;
+
+                }
+
+            }
+            
+
+            for u_piece in up_pieces {
+                protected_pieces_score += PROTECTED_PIECE_SCORES[u_piece - 1];
+
+            }
+
+        }
+
+    }
+
+    let wall_offset = wall_depth_offset(board);
+    let offset_score = HALF_OFFSET_SCORE * -wall_offset;
+
+    protected_pieces_score + offset_score + test
+    
+}
+
+pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [300.0, 100.0, 50.0];
+pub const SHARED_PIECE_CONTROL_SCORES: [f64; 3] = [75.0, 50.0, 25.0];
+
+pub const UNIQUE_SQUARE_CONTROL_SCORE: f64 = 20.0;
+pub const SHARED_SQUARE_CONTROL_SCORE: f64 = 5.0;
 
 pub fn unique_controlled_pieces_score(board: &mut BoardState, player: f64) -> f64 {
     let pieces = unsafe{ controlled_pieces(board, player) };
@@ -450,7 +320,23 @@ pub fn unique_controlled_pieces_score(board: &mut BoardState, player: f64) -> f6
     let mut score = 0.0;
     for pos in positions {
         let piece = board.data[pos];
-        score += PIECE_CONTROL_SCORES[piece - 1];
+        score += UNIQUE_PIECE_CONTROL_SCORES[piece - 1];
+
+    }
+
+    score
+
+}
+
+pub fn shared_controlled_pieces_score(board: &mut BoardState, player: f64) -> f64 {
+    let mut pieces = unsafe{ controlled_pieces(board, player) };
+
+    let positions = pieces.get_data();
+
+    let mut score = 0.0;
+    for pos in positions {
+        let piece = board.data[pos];
+        score += SHARED_PIECE_CONTROL_SCORES[piece - 1];
 
     }
 
@@ -464,13 +350,20 @@ pub fn unique_controlled_squares_score(board: &mut BoardState, player: f64) -> f
     
     let unique_squares = squares & !opp_squares;
 
-    unique_squares.pop_count() as f64 * SQUARE_CONTROL_SCORE
+    unique_squares.pop_count() as f64 * UNIQUE_SQUARE_CONTROL_SCORE
 
 }
 
+pub fn shared_controlled_squares_score(board: &mut BoardState, player: f64) -> f64 {
+    let squares = unsafe{ controlled_squares(board, player) };
+    squares.pop_count() as f64 * SHARED_SQUARE_CONTROL_SCORE
+
+}
+
+
 pub fn mobility_eval(board: &mut BoardState, player: f64) -> f64 {
     let mut eval = 0.0;
-
+ 
     eval += unsafe{ valid_move_count(board, player) } as f64;
 
     eval
@@ -483,16 +376,33 @@ pub fn control_eval(board: &mut BoardState, player: f64) -> f64 {
     eval +=  unique_controlled_pieces_score(board, player);
     eval +=  unique_controlled_squares_score(board, player);
 
+    eval +=  shared_controlled_pieces_score(board, player);
+    eval +=  shared_controlled_squares_score(board, player);
+
+    eval
+
+}
+
+pub fn ones_eval(board: &mut BoardState, player: f64) -> f64 {
+    let mut eval = 0.0;
+
+    eval += ones_connectivity_score(board, player);
+    eval += ones_safety_score(board, player);
+
     eval
 
 }
 
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
     let mut eval = 0.0;
-
+    
     eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
     eval += control_eval(board, PLAYER_1) - control_eval(board, PLAYER_2);
-    
+
+    eval += (p1_wall_score(board) - p2_wall_score(board)) * wall_strength(board);
+
+    eval += ones_eval(board, PLAYER_1) - ones_eval(board, PLAYER_2);
+
     eval
 
 } 

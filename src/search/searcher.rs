@@ -51,6 +51,8 @@ impl Searcher {
     pub fn ugi_output(&mut self) {
         println!("info depth {} nodes {} time {} bestmove {} score {}", self.search_data.ply, self.search_data.branches + self.search_data.leafs, self.search_data.search_time, self.search_data.best_move.as_human(), self.search_data.best_move.score);
         
+        // println!("{}", self.search_data);
+
     }
 
     // Checks to see if the engine should stop the search
@@ -101,7 +103,7 @@ impl Searcher {
         self.root_moves = RootMoveList::new();
         self.root_moves.setup(board);
 
-        self.current_ply = 2;
+        self.current_ply = 1;
         while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
 
@@ -111,8 +113,8 @@ impl Searcher {
 
             }
 
-            // for (i, mv) in self.root_moves.moves.clone().iter().enumerate() {
-            //     println!("{}: {:?}", i, mv.mv);
+            // for (i, mv) in self.root_moves.moves.clone().iter().enumerate().take(10) {
+            //     println!("{}: {:?}", i , mv);
 
             // }
 
@@ -430,10 +432,10 @@ pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
 
             temp_board = temp_board.make_move(&Move::from(entry.bestmove));
 
-            // if d == max_ply-1 {
-            //     println!("{}", temp_board);
+            if d == max_ply-1 {
+                println!("{}", temp_board);
 
-            // }
+            }
 
         } else {
             break;

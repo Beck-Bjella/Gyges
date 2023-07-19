@@ -4,10 +4,12 @@ use std::thread;
 
 use crate::moves::move_gen::controlled_squares;
 use crate::tools::tt::init_tt;
-use crate::board::board::*;
+use crate::board::{board::*, self};
 use crate::consts::*;
 use crate::search::searcher::*;
 use crate::search::evaluation::*;
+
+use crate::moves::move_gen::per_piece_move_counts;
 
 pub struct Ugi {
     pub searcher_stop: Option<Sender<bool>>,
@@ -40,18 +42,14 @@ impl Ugi {
     
                 }
                 Some("test") => {
-                    unsafe {
-                        let b = &mut BoardState::from(TEST_BOARD, PLAYER_1);
-                        let p1 = controlled_squares(b, PLAYER_1);
-                        let p2 = controlled_squares(b, PLAYER_2);
-                        println!("{}", p1);
-                        println!("{}", p2);
-                        println!("{}", p1 & !p2);
-                        println!("{}", p2 & !p1);
-                        // get_evalulation(b);    
+                    println!("wall strength:{}", wall_strength(&mut self.search_options.board));
+                    println!("wall offset: {}", wall_depth_offset(&mut self.search_options.board));
+                    println!("p1 wall score: {}", p1_wall_score(&mut self.search_options.board));
+                    println!("p2 wall score: {}", p2_wall_score(&mut self.search_options.board));
 
-                    }
-                    
+                    println!("p1 one conn: {}", ones_connectivity_score(&mut self.search_options.board, PLAYER_1));
+                    println!("p2 one conn: {}", ones_connectivity_score(&mut self.search_options.board, PLAYER_2));
+
                 }
                 Some("setoption") => {
                     
@@ -71,7 +69,39 @@ impl Ugi {
         
                     let board: BoardState = BoardState::from(array_data, PLAYER_1);
                     self.search_options.board = board;
-    
+                    
+                }
+                Some("gamepos") => {
+                    let mut board = BoardState::new();
+                    board.set(
+                        [0, 2, 1, 0, 0, 0],
+                        [0, 0, 1, 0, 0, 0],
+                        [0, 0, 3, 0, 0, 0],
+                        [0, 0, 2, 0, 0, 0],
+                        [0, 0, 1, 2, 0, 0],
+                        [1, 3, 3, 2, 0, 3],
+                        [0, 0],
+                        PLAYER_1
+                    );
+
+                    self.search_options.board = board;
+                        
+                }
+                Some("testpos") => {
+                    let mut board = BoardState::new();
+                    board.set(
+                        [0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0],
+                        [0, 0, 3, 1, 3, 3],
+                        [0, 0, 2, 1, 1, 1],
+                        [0, 0, 0, 2, 2, 2],
+                        [0, 3, 0, 0, 0, 0],
+                        [0, 0],
+                        PLAYER_1
+                    );
+
+                    self.search_options.board = board;
+
                 }
                 Some("showpos") => {
                     println!("{}", self.search_options.board);
@@ -104,7 +134,7 @@ impl Ugi {
         self.searcher_stop = Some(ss);
 
         let search_options = self.search_options.clone();
-    
+
         thread::spawn(move || {
             let mut searcher: Searcher = Searcher::new(sr, search_options);
             searcher.iterative_deepening_search();
