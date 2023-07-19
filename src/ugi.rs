@@ -2,14 +2,10 @@ use std::io::{self, BufRead};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-use crate::moves::move_gen::controlled_squares;
 use crate::tools::tt::init_tt;
-use crate::board::{board::*, self};
+use crate::board::board::*;
 use crate::consts::*;
 use crate::search::searcher::*;
-use crate::search::evaluation::*;
-
-use crate::moves::move_gen::per_piece_move_counts;
 
 pub struct Ugi {
     pub searcher_stop: Option<Sender<bool>>,
@@ -33,89 +29,51 @@ impl Ugi {
     
         loop {
             let line = lines.next().unwrap().unwrap();
-            let commands: Vec<&str> = line.split_whitespace().collect();
+            let raw_commands: Vec<&str> = line.split_whitespace().collect();
+
+            let mut data: Vec<&str> = vec![];
+            for cmd in raw_commands {
+                data.push(cmd.clone());
+
+            }
     
-            match commands.get(0).copied() {
-                Some("ugi") => {
+            match data[0] {
+                "ugi" => {
                     println!("id name nova");
                     println!("id author beck bjella");
-    
-                }
-                Some("test") => {
-                    println!("wall strength:{}", wall_strength(&mut self.search_options.board));
-                    println!("wall offset: {}", wall_depth_offset(&mut self.search_options.board));
-                    println!("p1 wall score: {}", p1_wall_score(&mut self.search_options.board));
-                    println!("p2 wall score: {}", p2_wall_score(&mut self.search_options.board));
 
-                    println!("p1 one conn: {}", ones_connectivity_score(&mut self.search_options.board, PLAYER_1));
-                    println!("p2 one conn: {}", ones_connectivity_score(&mut self.search_options.board, PLAYER_2));
+                    println!("ugiok");
 
                 }
-                Some("setoption") => {
-                    
-    
-                }
-                Some("setpos") => {
-                    let board_str = *commands.get(1).unwrap();
+                "setoption" => {
+                    match data[1] {
+                        "maxply" => {
+                            self.search_options.maxply = data[2].parse().unwrap();
 
-                    let array_data: [usize; 38] = {
-                        let mut arr = [0; 38];
-                        for (i, c) in board_str.chars().take(38).enumerate() {
-                            arr[i] = c.to_digit(10).unwrap() as usize;
                         }
-                        arr
+                        _ => {}
 
-                    };
-        
-                    let board: BoardState = BoardState::from(array_data, PLAYER_1);
+                    }
+
+                    println!("ugiok");
+                    
+                }
+                "setpos" => {
+                    let board_str = data[1];
+                    let board = str_to_board(board_str, PLAYER_1);
+
                     self.search_options.board = board;
                     
                 }
-                Some("gamepos") => {
-                    let mut board = BoardState::new();
-                    board.set(
-                        [0, 2, 1, 0, 0, 0],
-                        [0, 0, 1, 0, 0, 0],
-                        [0, 0, 3, 0, 0, 0],
-                        [0, 0, 2, 0, 0, 0],
-                        [0, 0, 1, 2, 0, 0],
-                        [1, 3, 3, 2, 0, 3],
-                        [0, 0],
-                        PLAYER_1
-                    );
-
-                    self.search_options.board = board;
-                        
-                }
-                Some("testpos") => {
-                    let mut board = BoardState::new();
-                    board.set(
-                        [0, 0, 0, 0, 0, 0],
-                        [0, 0, 0, 0, 0, 0],
-                        [0, 0, 3, 1, 3, 3],
-                        [0, 0, 2, 1, 1, 1],
-                        [0, 0, 0, 2, 2, 2],
-                        [0, 3, 0, 0, 0, 0],
-                        [0, 0],
-                        PLAYER_1
-                    );
-
-                    self.search_options.board = board;
-
-                }
-                Some("showpos") => {
-                    println!("{}", self.search_options.board);
-                    
-                }
-                Some("go") => {
+                "go" => {
                     self.go();
     
                 }
-                Some("stop") => {
+                "stop" => {
                     self.stop();
     
                 }
-                Some("quit") => {
+                "quit" => {
                     break;
     
                 }
@@ -150,5 +108,19 @@ impl Ugi {
         }
 
     }
+    
+}
+
+pub fn str_to_board(data: &str, player: f64) -> BoardState {
+    let array_data: [usize; 38] = {
+        let mut arr = [0; 38];
+        for (i, c) in data.chars().take(38).enumerate() {
+            arr[i] = c.to_digit(10).unwrap() as usize;
+        }
+        arr
+
+    };
+
+    BoardState::from(array_data, player)
 
 }

@@ -11,6 +11,8 @@ use crate::moves::move_gen::*;
 use crate::moves::move_list::*;
 use crate::tools::tt::*;
 
+pub const MAXPLY: i8 = 99;
+
 // pub const MULTI_CUT_REDUCTION: i8 = 1;
 pub const NULL_MOVE_REDUCTION: i8 = 1;
 
@@ -50,8 +52,6 @@ impl Searcher {
     /// Sends search data over the dataout. This can be recived by the main thread.
     pub fn ugi_output(&mut self) {
         println!("info depth {} nodes {} time {} bestmove {} score {}", self.search_data.ply, self.search_data.branches + self.search_data.leafs, self.search_data.search_time, self.search_data.best_move.as_human(), self.search_data.best_move.score);
-        
-        // println!("{}", self.search_data);
 
     }
 
@@ -122,6 +122,11 @@ impl Searcher {
             self.ugi_output();
 
             self.current_ply += 2;
+
+            if self.current_ply > self.options.maxply {
+                break;
+
+            }
 
         }
 
@@ -394,6 +399,7 @@ impl Display for SearchData {
             writeln!(f, "      - {}: {:?}, {}", i, e.bestmove, e.score)?;
 
         }
+        writeln!(f, "")?;
     
         Result::Ok(())
 
@@ -404,15 +410,30 @@ impl Display for SearchData {
 #[derive(Clone)]
 pub struct SearchOptions {
     pub board: BoardState,
+    pub maxply: i8
 
 }
 
 impl SearchOptions {
     pub fn new() -> SearchOptions {
         SearchOptions {
-            board: BoardState::from(TEST_BOARD, PLAYER_1)
+            board: BoardState::from(TEST_BOARD, PLAYER_1),
+            maxply: MAXPLY
 
         }
+
+    }
+
+}
+
+impl Display for SearchOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Search Options")?;
+        writeln!(f, "  - Board:")?;
+        writeln!(f, "{}", self.board)?;
+        writeln!(f, "  - MaxPly: {:?}", self.maxply)?;
+        
+        Result::Ok(())
 
     }
 
@@ -432,10 +453,10 @@ pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
 
             temp_board = temp_board.make_move(&Move::from(entry.bestmove));
 
-            if d == max_ply-1 {
-                println!("{}", temp_board);
+            // if d == max_ply-1 {
+            //     println!("{}", temp_board);
 
-            }
+            // }
 
         } else {
             break;

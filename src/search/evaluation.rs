@@ -1,5 +1,5 @@
 use crate::board::bitboard::BitBoard;
-use crate::{consts::*, board};
+use crate::consts::*;
 use crate::board::board::*;
 use crate::moves::move_gen::*;
 

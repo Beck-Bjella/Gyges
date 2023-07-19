@@ -194,7 +194,6 @@ impl BoardState {
 
 impl Display for BoardState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, " ")?;
         if self.data[37] == 0 {
             writeln!(f, "                .")?;
 
@@ -228,7 +227,6 @@ impl Display for BoardState {
             writeln!(f, "                {}", self.data[36])?;
 
         }
-        writeln!(f, " ")?;
 
         Result::Ok(())
 
