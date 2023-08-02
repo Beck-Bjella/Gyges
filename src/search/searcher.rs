@@ -1,3 +1,4 @@
+use std::f32::consts::E;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::time::Instant;
@@ -51,7 +52,7 @@ impl Searcher {
 
     /// Sends search data over the dataout. This can be recived by the main thread.
     pub fn ugi_output(&mut self) {
-        println!("info depth {} nodes {} time {} bestmove {} score {}", self.search_data.ply, self.search_data.branches + self.search_data.leafs, self.search_data.search_time, self.search_data.best_move.as_human(), self.search_data.best_move.score);
+        println!("info depth {} nodes {} nps {} time {} bestmove {} score {}", self.search_data.ply, self.search_data.branches + self.search_data.leafs,  self.search_data.bps + self.search_data.lps, self.search_data.search_time, self.search_data.best_move.as_human(), self.search_data.best_move.score);
 
     }
 
@@ -92,7 +93,7 @@ impl Searcher {
         self.pv = pv.clone();
         self.search_data.pv = pv;
 
-    }
+    } 
 
     /// Iterative deepening search.
     pub fn iterative_deepening_search(&mut self) {
@@ -103,28 +104,56 @@ impl Searcher {
         self.root_moves = RootMoveList::new();
         self.root_moves.setup(board);
 
-        self.current_ply = 1;
-        while !self.search_data.game_over {
-            self.search_data = SearchData::new(self.current_ply);
+        let mut window_alpha: f64 = f64::NEG_INFINITY;
+        let mut window_beta: f64 = f64::INFINITY;
+        let mut a_delta: f64 = 400.0;
+        let mut b_delta: f64 = 400.0;
 
-            self.search::<PV>(board,f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply);
-            if self.stop {
-                break;
+        self.current_ply = 1;
+        'iterative_deepening: while !self.search_data.game_over {
+            self.search_data = SearchData::new(self.current_ply);
+            
+            'aspiration_windows: loop {
+                let alpha = window_alpha - a_delta;
+                let beta = window_beta + b_delta;
+
+                let eval = self.search::<PV>(board, alpha, beta, PLAYER_1, self.current_ply);
+                if self.stop {
+                    break 'aspiration_windows;
+        
+                }
+
+                if eval <= alpha {
+                    a_delta *= 2.0;
+
+                } else if eval >= beta { 
+                    b_delta *= 2.0;
+       
+                } else {
+                    a_delta = 400.0;
+                    b_delta = 400.0;
+
+                    window_alpha = eval;
+                    window_beta = eval;
+
+                    break;
+
+                }
 
             }
 
-            // for (i, mv) in self.root_moves.moves.clone().iter().enumerate().take(10) {
-            //     println!("{}: {:?}", i , mv);
-
-            // }
+            if self.stop {
+                break 'iterative_deepening;
+    
+            }
 
             self.update_search_stats(board);
             self.ugi_output();
 
-            self.current_ply += 2;
+            self.current_ply += 1;
 
             if self.current_ply > self.options.maxply {
-                break;
+                break 'iterative_deepening;
 
             }
 
@@ -198,16 +227,16 @@ impl Searcher {
         }
 
         // Null Move Pruning
-        let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
-        if r_depth > 0 && !is_pv {
-            let mut null_move_board = board.make_null();
-            let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth);
-            if score >= beta {
-                return beta;
+        // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
+        // if r_depth >= 0 && !is_pv {
+        //     let mut null_move_board = board.make_null();
+        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth);
+        //     if score >= beta {
+        //         return beta;
     
-            }
+        //     }
 
-        }
+        // }
 
         // Use the previous search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {
@@ -218,55 +247,21 @@ impl Searcher {
             order_moves(moves, board, player, &self.pv)
             
         };
-        
-        // Multi Cut - Dosent Work
-        // let r_depth = depth - 1 - 1;
-        // if r_depth > 0 && cut_node {
-        //     let mut cuts = 0;
-
-        //     'test: for (i, mv) in current_player_moves.iter().enumerate() {
-        //         if i >= 50 {
-        //             break 'test;
-        //         }
-                
-        //         let mut new_board = board.make_move(&mv);
-     
-        //         let score = -self.search::<NonPV>(&mut new_board, -alpha - 1.0, -alpha, -player, r_depth, !cut_node);
-        //         if score >= beta {
-        //             cuts += 1;
-        //             if cuts >= 40 {
-        //                 return beta; // mc-prune
-
-        //             }
-                      
-        //         }
-                
-        //     }
-
-        // }
 
         let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
-            
-            let mut lmr = if i > 3 as usize && !is_pv && depth >= 2 {
-                0
-                
-            } else {
-                0
-
-            };
-
+        
             let score: f64 = if i == 0 && is_pv {
-                -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1 - lmr)
+                -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1)
 
             } else {
-                -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1 - lmr)
+                -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1)
 
             };
 
-            // Update the score of the corosponding rootnode.
+            // Update the score of the rootnode.
             if is_root {
                 self.root_moves.update_move(*mv, score, self.current_ply);
 
@@ -293,11 +288,11 @@ impl Searcher {
         let node_bound: NodeBound = if best_score >= beta {
             NodeBound::LowerBound
 
-        } else if is_pv && !best_move.is_null() {
-            NodeBound::ExactValue
+        } else if best_score <= alpha  {
+            NodeBound::UpperBound
 
         } else {
-            NodeBound::UpperBound
+            NodeBound::ExactValue
 
         };
 

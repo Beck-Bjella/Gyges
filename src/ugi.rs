@@ -42,8 +42,6 @@ impl Ugi {
                     println!("id name nova");
                     println!("id author beck bjella");
 
-                    println!("ugiok");
-
                 }
                 "setoption" => {
                     match data[1] {
@@ -54,13 +52,43 @@ impl Ugi {
                         _ => {}
 
                     }
-
-                    println!("ugiok");
                     
                 }
                 "setpos" => {
                     let board_str = data[1];
                     let board = str_to_board(board_str, PLAYER_1);
+
+                    self.search_options.board = board;
+                    
+                }
+                "gamepos" => {
+                    let mut board = BoardState::new();
+                    board.set(
+                        [3, 0, 0, 2, 0, 0], 
+                        [0, 0, 1, 2, 0, 0], 
+                        [0, 0, 3, 0, 0, 0], 
+                        [1, 0, 2, 0, 0, 0], 
+                        [3, 0, 0, 0, 0, 0], 
+                        [2, 0, 0, 1, 3, 1], 
+                        [0, 0], 
+                        PLAYER_1
+                    );
+
+                    self.search_options.board = board;
+                    
+                }
+                "startpos" => {
+                    let mut board = BoardState::new();
+                    board.set(
+                        [3, 2, 1, 1, 2, 3], 
+                        [0, 0, 0, 0, 0, 0], 
+                        [0, 0, 0, 0, 0, 0], 
+                        [0, 0, 0, 0, 0, 0], 
+                        [0, 0, 0, 0, 0, 0], 
+                        [3, 2, 1, 1, 2, 3], 
+                        [0, 0], 
+                        PLAYER_1
+                    );
 
                     self.search_options.board = board;
                     

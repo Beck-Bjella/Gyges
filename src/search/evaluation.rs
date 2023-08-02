@@ -230,7 +230,6 @@ pub fn wall_strength(board: &mut BoardState) -> f64 {
 
 pub fn p1_wall_score(board: &mut BoardState) -> f64 {
     let mut protected_pieces_score: f64 = 0.0;
-    let mut test = 0.0;
 
     for pos in 0..36 {
         let piece = board.data[pos];
@@ -261,13 +260,12 @@ pub fn p1_wall_score(board: &mut BoardState) -> f64 {
     let wall_offset = wall_depth_offset(board);
     let offset_score = HALF_OFFSET_SCORE * wall_offset;
 
-    protected_pieces_score + offset_score + test
+    protected_pieces_score + offset_score
     
 }
 
 pub fn p2_wall_score(board: &mut BoardState) -> f64 {
     let mut protected_pieces_score: f64 = 0.0;
-    let mut test = 0.0;
 
     for pos in 0..36 {
         let piece = board.data[pos];
@@ -278,7 +276,7 @@ pub fn p2_wall_score(board: &mut BoardState) -> f64 {
             if in_bounds(current_pos_clone + 6) {
                 current_pos_clone += 6;
 
-                while in_bounds(current_pos_clone) && board.data[current_pos_clone] != 0{
+                while in_bounds(current_pos_clone) && board.data[current_pos_clone] != 0 {
                     up_pieces.push(board.data[current_pos_clone]);
                     current_pos_clone += 6;
 
@@ -286,7 +284,6 @@ pub fn p2_wall_score(board: &mut BoardState) -> f64 {
 
             }
             
-
             for u_piece in up_pieces {
                 protected_pieces_score += PROTECTED_PIECE_SCORES[u_piece - 1];
 
@@ -299,7 +296,7 @@ pub fn p2_wall_score(board: &mut BoardState) -> f64 {
     let wall_offset = wall_depth_offset(board);
     let offset_score = HALF_OFFSET_SCORE * -wall_offset;
 
-    protected_pieces_score + offset_score + test
+    protected_pieces_score + offset_score
     
 }
 
@@ -393,15 +390,27 @@ pub fn ones_eval(board: &mut BoardState, player: f64) -> f64 {
 
 }
 
+pub fn tempo_bonus(current_player: f64) -> f64 {
+    if current_player == PLAYER_1 {
+        2700.0
+    } else {
+        -2700.0
+
+    }
+
+}
+
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
     let mut eval = 0.0;
-    
+
     eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
     eval += control_eval(board, PLAYER_1) - control_eval(board, PLAYER_2);
 
-    eval += (p1_wall_score(board) - p2_wall_score(board)) * wall_strength(board);
+    eval += (p1_wall_score(board) - p2_wall_score(board)) * (wall_strength(board) / 4.0);
 
     eval += ones_eval(board, PLAYER_1) - ones_eval(board, PLAYER_2);
+
+    eval += tempo_bonus(board.player);
 
     eval
 
