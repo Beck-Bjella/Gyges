@@ -1,6 +1,4 @@
-use std::f32::consts::E;
 use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
 use std::time::Instant;
 use std::fmt::Display;
 
@@ -11,6 +9,7 @@ use crate::moves::moves::*;
 use crate::moves::move_gen::*;
 use crate::moves::move_list::*;
 use crate::tools::tt::*;
+use crate::ugi;
 
 pub const MAXPLY: i8 = 99;
 
@@ -47,12 +46,6 @@ impl Searcher {
             stop: false
 
         }
-
-    }
-
-    /// Sends search data over the dataout. This can be recived by the main thread.
-    pub fn ugi_output(&mut self) {
-        println!("info depth {} nodes {} nps {} time {} bestmove {} score {}", self.search_data.ply, self.search_data.branches + self.search_data.leafs,  self.search_data.bps + self.search_data.lps, self.search_data.search_time, self.search_data.best_move.as_human(), self.search_data.best_move.score);
 
     }
 
@@ -113,34 +106,34 @@ impl Searcher {
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
             
-            'aspiration_windows: loop {
-                let alpha = window_alpha - a_delta;
-                let beta = window_beta + b_delta;
+            // 'aspiration_windows: loop {
+            //     let alpha = window_alpha - a_delta;
+            //     let beta = window_beta + b_delta;
 
-                let eval = self.search::<PV>(board, alpha, beta, PLAYER_1, self.current_ply);
-                if self.stop {
-                    break 'aspiration_windows;
+            let eval = self.search::<PV>(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply);
+            //     if self.stop {
+            //         break 'aspiration_windows;
         
-                }
+            //     }
 
-                if eval <= alpha {
-                    a_delta *= 2.0;
+            //     if eval <= alpha {
+            //         a_delta *= 2.0;
 
-                } else if eval >= beta { 
-                    b_delta *= 2.0;
+            //     } else if eval >= beta { 
+            //         b_delta *= 2.0;
        
-                } else {
-                    a_delta = 400.0;
-                    b_delta = 400.0;
+            //     } else {
+            //         a_delta = 400.0;
+            //         b_delta = 400.0;
 
-                    window_alpha = eval;
-                    window_beta = eval;
+            //         window_alpha = eval;
+            //         window_beta = eval;
 
-                    break;
+            //         break;
 
-                }
+            //     }
 
-            }
+            // }
 
             if self.stop {
                 break 'iterative_deepening;
@@ -148,9 +141,9 @@ impl Searcher {
             }
 
             self.update_search_stats(board);
-            self.ugi_output();
+            ugi::info_output(self.search_data.clone());
 
-            self.current_ply += 1;
+            self.current_ply += 2;
 
             if self.current_ply > self.options.maxply {
                 break 'iterative_deepening;
@@ -182,12 +175,13 @@ impl Searcher {
         if is_leaf {
             self.search_data.leafs += 1;
 
-            let eval = get_evalulation(board) * player;
+            let eval = get_basic_evalulation(board) * player;
 
             return eval;
 
         }
 
+        // Handle Transposition Table
         let (valid, entry) = unsafe { tt().probe(board_hash) };
         if !is_pv && valid && entry.depth >= depth {
             self.search_data.tt_hits += 1;
@@ -412,7 +406,7 @@ pub struct SearchOptions {
 impl SearchOptions {
     pub fn new() -> SearchOptions {
         SearchOptions {
-            board: BoardState::from(TEST_BOARD, PLAYER_1),
+            board: BoardState::from(TEST_BOARD),
             maxply: MAXPLY
 
         }
@@ -447,11 +441,6 @@ pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
             pv.push(*entry);
 
             temp_board = temp_board.make_move(&Move::from(entry.bestmove));
-
-            // if d == max_ply-1 {
-            //     println!("{}", temp_board);
-
-            // }
 
         } else {
             break;

@@ -5,7 +5,6 @@ use crate::moves::moves::*;
 use crate::board::board::*;
 use crate::moves::move_gen::*;
 use crate::consts::*;
-use crate::tools::tt::Entry;
 
 #[derive(Clone)]
 pub struct RawMoveList {

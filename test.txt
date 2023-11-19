@@ -1,7 +1,0 @@
-info depth 1 nodes 173 nps 42404 time 0.0040797 bestmove e1d1d4 score -1501
-info depth 2 nodes 2159 nps 78389 time 0.027542 bestmove e1f1b2 score -6871
-info depth 3 nodes 8590 nps 15267 time 0.5626175 bestmove e1d1b2 score -319
-info depth 4 nodes 152584 nps 64930 time 2.3499457 bestmove f1e1b1 score -5754
-info depth 5 nodes 276032 nps 21902 time 12.6025996 bestmove e1d1b1 score -44
-info depth 6 nodes 2524303 nps 65558 time 38.5045625 bestmove e1d1b1 score -6916
-info depth 7 nodes 4128846 nps 17016 time 242.6337113 bestmove e1d1b1 score -667

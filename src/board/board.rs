@@ -51,28 +51,6 @@ impl BoardState {
 
     }
 
-    pub fn from(data: [usize; 38], player: f64) -> BoardState {
-        let hash = get_uni_hash(data);
-
-        let mut piece_bb = BitBoard(0);
-        for (i, piece) in data.iter().enumerate().take(36) {
-            if *piece != 0 {
-                piece_bb.set_bit(i);
-
-            }
-
-        }
-
-        BoardState {
-            data,
-            piece_bb,
-            player,
-            hash
-
-        }
-
-    }
-
     pub fn make_move(self, mv: &Move) -> BoardState {
         let mut data = self.data;
         let mut piece_bb = self.piece_bb;
@@ -101,7 +79,6 @@ impl BoardState {
             piece_bb.set_bit(step3[1]);
             
         } else if mv.flag == MoveType::Bounce {
-           
             hash ^= ZOBRIST_HASH_DATA[step1[1]][self.data[step1[1]]];
 
             hash ^= ZOBRIST_HASH_DATA[step2[1]][step2[0]];
@@ -187,6 +164,48 @@ impl BoardState {
         }
     
         self.data = temp_data;
+    
+    }
+
+}
+
+impl From<[usize; 38]> for BoardState {
+    fn from(data: [usize; 38]) -> Self {
+        let hash = get_uni_hash(data);
+
+        let mut piece_bb = BitBoard(0);
+        for (i, piece) in data.iter().enumerate().take(36) {
+            if *piece != 0 {
+                piece_bb.set_bit(i);
+
+            }
+
+        }
+
+        BoardState {
+            data,
+            piece_bb,
+            player: 1.0,
+            hash
+
+        }
+
+    }
+
+}
+
+impl From<&str> for BoardState {
+   fn from(value: &str) -> BoardState {
+        let array_data: [usize; 38] = {
+            let mut arr: [usize; 38] = [0; 38];
+            for (i, c) in value.chars().take(38).enumerate() {
+                arr[i] = c.to_digit(10).unwrap() as usize;
+            }
+            arr
+
+        };
+
+        return BoardState::from(array_data);
     
     }
 

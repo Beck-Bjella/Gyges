@@ -670,6 +670,8 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
 }
 
 
+
+
 pub unsafe fn controlled_pieces(board: &mut BoardState, player: f64) -> BitBoard {
     let active_lines: [usize; 2] = board.get_active_lines();
     let mut controlled_pieces = BitBoard(0);
@@ -1076,7 +1078,6 @@ pub unsafe fn controlled_squares(board: &mut BoardState, player: f64) -> BitBoar
     controlled_squares & !board.piece_bb
 
 }
-
 
 pub unsafe fn per_piece_move_counts(board: &mut BoardState, player: f64) -> [usize; 6] {
     let active_lines: [usize; 2] = board.get_active_lines();

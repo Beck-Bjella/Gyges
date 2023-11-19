@@ -1,15 +1,15 @@
-use std::io::{self, BufRead};
+use std::io::{self};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
 use crate::tools::tt::init_tt;
 use crate::board::board::*;
-use crate::consts::*;
 use crate::search::searcher::*;
 
 pub struct Ugi {
     pub searcher_stop: Option<Sender<bool>>,
-    pub search_options: SearchOptions
+    pub search_options: SearchOptions,
+    pub searching_thread: Option<thread::JoinHandle<()>>,
 
 }
 
@@ -17,7 +17,8 @@ impl Ugi {
     pub fn new() -> Ugi {
         Ugi {
             searcher_stop: Option::None,
-            search_options: SearchOptions::new()
+            search_options: SearchOptions::new(),
+            searching_thread: Option::None,
 
         }
 
@@ -25,83 +26,45 @@ impl Ugi {
 
     pub fn start(&mut self) {
         let stdin = io::stdin();
-        let mut lines = stdin.lock().lines();
-    
-        loop {
-            let line = lines.next().unwrap().unwrap();
-            let raw_commands: Vec<&str> = line.split_whitespace().collect();
 
+        loop {
+            let mut input = String::new();
+            stdin.read_line(&mut input).expect("Failed to read line from stdin");
+            
+            let raw_commands: Vec<&str> = input.split_whitespace().collect();
             let mut data: Vec<&str> = vec![];
             for cmd in raw_commands {
                 data.push(cmd.clone());
 
             }
+
+            if data.len() == 0 {
+                continue;
+
+            }
     
             match data[0] {
-                "ugi" => {
-                    println!("id name nova");
-                    println!("id author beck bjella");
-
-                }
-                "setoption" => {
-                    match data[1] {
-                        "maxply" => {
-                            self.search_options.maxply = data[2].parse().unwrap();
-
-                        }
-                        _ => {}
-
-                    }
+                "ugi" => { // output
+                    id_output();
                     
                 }
-                "setpos" => {
-                    let board_str = data[1];
-                    let board = str_to_board(board_str, PLAYER_1);
-
-                    self.search_options.board = board;
+                "setoption" => { // input
+                    self.set_option(data[1].to_string(), data[2].to_string());
                     
                 }
-                "gamepos" => {
-                    let mut board = BoardState::new();
-                    board.set(
-                        [3, 0, 0, 2, 0, 0], 
-                        [0, 0, 1, 2, 0, 0], 
-                        [0, 0, 3, 0, 0, 0], 
-                        [1, 0, 2, 0, 0, 0], 
-                        [3, 0, 0, 0, 0, 0], 
-                        [2, 0, 0, 1, 3, 1], 
-                        [0, 0], 
-                        PLAYER_1
-                    );
+                "setpos" => { // input
+                    self.set_position(data[1]);
 
-                    self.search_options.board = board;
-                    
                 }
-                "startpos" => {
-                    let mut board = BoardState::new();
-                    board.set(
-                        [3, 2, 1, 1, 2, 3], 
-                        [0, 0, 0, 0, 0, 0], 
-                        [0, 0, 0, 0, 0, 0], 
-                        [0, 0, 0, 0, 0, 0], 
-                        [0, 0, 0, 0, 0, 0], 
-                        [3, 2, 1, 1, 2, 3], 
-                        [0, 0], 
-                        PLAYER_1
-                    );
-
-                    self.search_options.board = board;
-                    
-                }
-                "go" => {
+                "go" => { // input
                     self.go();
     
                 }
-                "stop" => {
+                "stop" => { // input
                     self.stop();
     
                 }
-                "quit" => {
+                "quit" => { // input
                     break;
     
                 }
@@ -121,17 +84,35 @@ impl Ugi {
 
         let search_options = self.search_options.clone();
 
-        thread::spawn(move || {
+        self.searching_thread = Some(thread::spawn(move || {
             let mut searcher: Searcher = Searcher::new(sr, search_options);
             searcher.iterative_deepening_search();
             
-        });
+        }));
     
     }
 
     pub fn stop(&mut self) {
         if self.searcher_stop.is_some() {
             _ = self.searcher_stop.clone().unwrap().send(true);
+            self.searching_thread.take().unwrap().join().unwrap();
+
+        }
+
+    }
+
+    pub fn set_position(&mut self, board_str: &str) {
+        self.search_options.board = BoardState::from(board_str);
+
+    }
+
+    pub fn set_option(&mut self, option: String, value: String) {
+        match option.as_str() {
+            "maxply" => {
+                self.search_options.maxply = value.parse().unwrap();
+
+            }
+            _ => {}
 
         }
 
@@ -139,16 +120,15 @@ impl Ugi {
     
 }
 
-pub fn str_to_board(data: &str, player: f64) -> BoardState {
-    let array_data: [usize; 38] = {
-        let mut arr = [0; 38];
-        for (i, c) in data.chars().take(38).enumerate() {
-            arr[i] = c.to_digit(10).unwrap() as usize;
-        }
-        arr
+pub fn info_output(search_data: SearchData) {
+    print!("info ");
+    print!("ply {} ", search_data.ply);
+    println!("bestmove {} ", search_data.best_move.as_ugi());
 
-    };
+}
 
-    BoardState::from(array_data, player)
+pub fn id_output() {
+    println!("id name nova");
+    println!("id author beck-bjella");
 
 }
