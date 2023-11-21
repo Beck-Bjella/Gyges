@@ -88,6 +88,34 @@ impl Searcher {
 
     } 
 
+    /// Search to a specific depth.
+    pub fn search_depth(&mut self, ply: i8) {
+        self.stop = false;
+
+        let board = &mut self.options.board.clone();
+
+        self.root_moves = RootMoveList::new();
+        self.root_moves.setup(board);
+
+        self.current_ply = ply;
+        self.search_data = SearchData::new(self.current_ply);
+        
+        self.search::<PV>(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, 0.0, 0.0);
+
+        if self.stop {
+            ugi::ugiok_output();
+            return;
+
+        }
+        
+        self.update_search_stats(board);
+        ugi::info_output(self.search_data.clone());
+        
+        ugi::ugiok_output();
+        
+
+    }
+
     /// Iterative deepening search.
     pub fn iterative_deepening_search(&mut self) {
         self.stop = false;
@@ -97,44 +125,12 @@ impl Searcher {
         self.root_moves = RootMoveList::new();
         self.root_moves.setup(board);
 
-        let mut window_alpha: f64 = f64::NEG_INFINITY;
-        let mut window_beta: f64 = f64::INFINITY;
-        let mut a_delta: f64 = 400.0;
-        let mut b_delta: f64 = 400.0;
-
         self.current_ply = 1;
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
-            
-            // 'aspiration_windows: loop {
-            //     let alpha = window_alpha - a_delta;
-            //     let beta = window_beta + b_delta;
-
-            let eval = self.search::<PV>(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply);
-            //     if self.stop {
-            //         break 'aspiration_windows;
-        
-            //     }
-
-            //     if eval <= alpha {
-            //         a_delta *= 2.0;
-
-            //     } else if eval >= beta { 
-            //         b_delta *= 2.0;
-       
-            //     } else {
-            //         a_delta = 400.0;
-            //         b_delta = 400.0;
-
-            //         window_alpha = eval;
-            //         window_beta = eval;
-
-            //         break;
-
-            //     }
-
-            // }
-
+         
+            self.search::<PV>(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, 0.0, 0.0);
+      
             if self.stop {
                 break 'iterative_deepening;
     
@@ -152,10 +148,12 @@ impl Searcher {
 
         }
 
+        ugi::ugiok_output();
+
     }
-    
+
     /// Main search function.
-    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8) -> f64 {
+    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, mut p1_tempo: f64, mut p2_tempo: f64) -> f64 {
         let is_root = depth == self.search_data.ply;
         let is_leaf = depth == 0;
         let is_pv: bool = N::is_pv();
@@ -175,7 +173,8 @@ impl Searcher {
         if is_leaf {
             self.search_data.leafs += 1;
 
-            let eval = get_basic_evalulation(board) * player;
+            let eval = get_basic_evalulation(board, p1_tempo, p2_tempo) * player;
+            // let eval = get_evalulation(board) * player;
 
             return eval;
 
@@ -246,14 +245,17 @@ impl Searcher {
         let mut best_score: f64 = f64::NEG_INFINITY;
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
-        
-            let score: f64 = if i == 0 && is_pv {
-                -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1)
+            
+            let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
+            if player == PLAYER_1 && threat_count > 1 {
+                p1_tempo += 1.0;
 
-            } else {
-                -self.search::<NonPV>(&mut new_board, -beta, -alpha, -player, depth - 1)
+            } else if player == PLAYER_2 && threat_count > 1 {
+                p2_tempo += 1.0;
 
-            };
+            }
+
+            let score: f64 = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, p1_tempo, p2_tempo);
 
             // Update the score of the rootnode.
             if is_root {

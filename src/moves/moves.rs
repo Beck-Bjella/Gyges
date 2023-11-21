@@ -184,7 +184,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
 
             }
 
-        } 
+        }
 
         // If move is not the PV then guess how good it is.
         sort_val -= unsafe { valid_move_count(&mut new_board, -player)} as f64;
