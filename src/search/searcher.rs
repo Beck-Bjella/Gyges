@@ -1,6 +1,7 @@
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 use std::fmt::Display;
+use std::vec;
 
 use crate::board::board::*;
 use crate::consts::*;
@@ -22,6 +23,7 @@ pub struct Searcher {
     pub pv: Vec<Entry>,
     pub current_ply: i8,
 
+    pub completed_search_data: Vec<SearchData>,
     pub search_data: SearchData,
     pub root_moves: RootMoveList,
 
@@ -37,11 +39,12 @@ impl Searcher {
             best_move: RootMove::new_null(),
             pv: vec![],
             current_ply: 0,
-
-            options, 
+            
+            completed_search_data: vec![],
             search_data: SearchData::new(0),
             root_moves: RootMoveList::new(),
 
+            options, 
             stop_in,
             stop: false
 
@@ -88,34 +91,6 @@ impl Searcher {
 
     } 
 
-    /// Search to a specific depth.
-    pub fn search_depth(&mut self, ply: i8) {
-        self.stop = false;
-
-        let board = &mut self.options.board.clone();
-
-        self.root_moves = RootMoveList::new();
-        self.root_moves.setup(board);
-
-        self.current_ply = ply;
-        self.search_data = SearchData::new(self.current_ply);
-        
-        self.search::<PV>(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, 0.0, 0.0);
-
-        if self.stop {
-            ugi::ugiok_output();
-            return;
-
-        }
-        
-        self.update_search_stats(board);
-        ugi::info_output(self.search_data.clone());
-        
-        ugi::ugiok_output();
-        
-
-    }
-
     /// Iterative deepening search.
     pub fn iterative_deepening_search(&mut self) {
         self.stop = false;
@@ -139,6 +114,8 @@ impl Searcher {
             self.update_search_stats(board);
             ugi::info_output(self.search_data.clone());
 
+            self.completed_search_data.push(self.search_data.clone());
+
             self.current_ply += 2;
 
             if self.current_ply > self.options.maxply {
@@ -147,8 +124,10 @@ impl Searcher {
             }
 
         }
-
-        ugi::ugiok_output();
+        
+        let best_search_data = self.completed_search_data.last().unwrap().clone();
+        ugi::info_output(best_search_data.clone());
+        ugi::best_move_output(best_search_data.clone());
 
     }
 

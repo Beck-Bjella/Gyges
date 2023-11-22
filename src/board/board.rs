@@ -5,7 +5,7 @@ use crate::tools::zobrist::*;
 use crate::moves::moves::*;
 use crate::consts::*;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct BoardState {
     pub data: [usize; 38],
     pub piece_bb: BitBoard,
@@ -210,6 +210,19 @@ impl From<&str> for BoardState {
     }
 
 }
+
+// impl ToString for BoardState {
+//     fn to_string(&self) -> String {
+//         let mut s = String::new();
+//         for i in 0..38 {
+//             s.push_str(&self.data[i].to_string());
+
+//         }
+//         s
+
+//     }
+
+// }
 
 impl Display for BoardState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
