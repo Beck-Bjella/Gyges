@@ -53,6 +53,18 @@ impl Move {
 
     }
 
+    /// Checks if a move wins the game
+    pub fn is_win(&self) -> bool {
+        if self.flag == MoveType::Bounce {
+            return (self.data[3] == PLAYER_1_GOAL) || (self.data[3] == PLAYER_2_GOAL)
+
+        } else {
+            return (self.data[5] == PLAYER_1_GOAL) || (self.data[5] == PLAYER_2_GOAL)
+
+        }
+
+    }
+
 }
 
 impl From<TTMove> for Move {

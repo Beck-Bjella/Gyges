@@ -97,6 +97,20 @@ impl Searcher {
 
         let board = &mut self.options.board.clone();
 
+        for mv in unsafe{ valid_moves(board, PLAYER_1).moves(board) } {
+            if mv.is_win() {
+                self.search_data.best_move = RootMove::new(mv, f64::INFINITY, 1, 1);
+                self.completed_search_data.push(self.search_data.clone());
+
+                let best_search_data = self.completed_search_data.last().unwrap().clone();
+                ugi::info_output(best_search_data.clone());
+                ugi::best_move_output(best_search_data.clone());
+                return;
+
+            }
+
+        }
+
         self.root_moves = RootMoveList::new();
         self.root_moves.setup(board);
 
@@ -152,7 +166,7 @@ impl Searcher {
         if is_leaf {
             self.search_data.leafs += 1;
 
-            let eval = get_basic_evalulation(board, p1_tempo, p2_tempo) * player;
+            let eval = get_evalulation(board) * player;
             // let eval = get_evalulation(board) * player;
 
             return eval;
