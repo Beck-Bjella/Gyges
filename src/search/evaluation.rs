@@ -410,6 +410,20 @@ pub fn get_evalulation(board: &mut BoardState) -> f64 {
 
     eval += ones_eval(board, PLAYER_1) - ones_eval(board, PLAYER_2);
 
+    eval
+
+} 
+
+pub fn get_evalulation_tempo(board: &mut BoardState) -> f64 {
+    let mut eval = 0.0;
+
+    eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
+    eval += control_eval(board, PLAYER_1) - control_eval(board, PLAYER_2);
+
+    eval += (p1_wall_score(board) - p2_wall_score(board)) * (wall_strength(board) / 4.0);
+
+    eval += ones_eval(board, PLAYER_1) - ones_eval(board, PLAYER_2);
+
     eval += tempo_bonus(board.player);
 
     eval
@@ -424,4 +438,3 @@ pub fn get_basic_evalulation(board: &mut BoardState) -> f64 {
     eval
 
 }
-

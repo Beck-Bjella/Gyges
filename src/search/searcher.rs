@@ -15,7 +15,7 @@ use crate::ugi;
 pub const MAXPLY: i8 = 99;
 
 // pub const MULTI_CUT_REDUCTION: i8 = 1;
-pub const NULL_MOVE_REDUCTION: i8 = 1;
+// pub const NULL_MOVE_REDUCTION: i8 = 1;
 
 /// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
 pub struct Searcher {
@@ -43,7 +43,7 @@ impl Searcher {
             start_time: Instant::now(),
             
             completed_searchs: vec![],
-            search_data: SearchData::new(0),
+            search_data: SearchData::new(1),
             root_moves: RootMoveList::new(),
 
             options, 
@@ -132,7 +132,7 @@ impl Searcher {
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
          
-            self.search::<PV>(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply);
+            self.search::<PV>(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, [0.0, 0.0]);
       
             if self.stop {
                 break 'iterative_deepening;
@@ -160,7 +160,7 @@ impl Searcher {
     }
 
     /// Main search function.
-    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8) -> f64 {
+    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, tempo: [f64; 2]) -> f64 {
         let is_root = depth == self.search_data.ply;
         let is_leaf = depth == 0;
         // let is_pv: bool = N::is_pv();
@@ -176,11 +176,20 @@ impl Searcher {
             }
 
         }
+
+        // Generate the Raw move list for this node.
+        let mut move_list: RawMoveList = unsafe { valid_moves(board, player) };
+
+        // If there is the threat for the current player return INF, because that move would eventualy be picked as best.
+        if move_list.has_threat(player) {
+            return f64::INFINITY;
+            
+        }
        
         if is_leaf {
             self.search_data.leafs += 1;
 
-            let eval = get_evalulation(board) * player;
+            let eval = get_evalulation_tempo(board) * player;
 
             return eval;
 
@@ -216,15 +225,6 @@ impl Searcher {
 
         self.search_data.branches += 1;
 
-        // Generate the Raw move list for this node.
-        let mut move_list: RawMoveList = unsafe { valid_moves(board, player) };
-
-        // If there is the threat for the current player return INF, because that move would eventualy be picked as best.
-        if move_list.has_threat(player) {
-            return f64::INFINITY;
-            
-        }
-
         // Null Move Pruning
         // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
         // if r_depth >= 0 && !is_pv {
@@ -252,7 +252,20 @@ impl Searcher {
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
 
-            let score: f64 = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1);
+            let mut new_tempo = tempo;
+            let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
+            if threat_count > 0 {
+                if player == PLAYER_1 {
+                    new_tempo[0] += 1.0;
+
+                } else {
+                    new_tempo[1] += 1.0;
+
+                }
+
+            }
+
+            let score: f64 = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, new_tempo);
 
             // Update the score of the rootnode.
             if is_root {

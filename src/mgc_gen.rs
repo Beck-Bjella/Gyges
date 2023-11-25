@@ -900,14 +900,6 @@ pub fn gen_one_map() -> Result<(), Error> {
 
 }
 
-
-
-
-
-
-
-
-
 pub fn gen_two_all_intercepts() -> Result<(), Error> {
     let path = Path::new("./two_all_intercepts.txt");
     let mut f = BufWriter::new(File::create(&path).unwrap());
