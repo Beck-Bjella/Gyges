@@ -416,14 +416,12 @@ pub fn get_evalulation(board: &mut BoardState) -> f64 {
 
 } 
 
-pub fn get_basic_evalulation(board: &mut BoardState, p1_tempo: f64, p2_tempo: f64) -> f64 {
+pub fn get_basic_evalulation(board: &mut BoardState) -> f64 {
     let mut eval = 0.0;
 
     eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
-    // eval += tempo_bonus(board.player);
-    // eval += (p1_tempo - p2_tempo);
-    // println!("p1 tempo: {}, p2 tempo: {}", p1_tempo, p2_tempo);
 
     eval
 
 }
+

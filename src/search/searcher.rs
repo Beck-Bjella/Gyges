@@ -22,8 +22,9 @@ pub struct Searcher {
     pub best_move: RootMove,
     pub pv: Vec<Entry>,
     pub current_ply: i8,
+    pub start_time: Instant,
 
-    pub completed_search_data: Vec<SearchData>,
+    pub completed_searchs: Vec<SearchData>,
     pub search_data: SearchData,
     pub root_moves: RootMoveList,
 
@@ -39,8 +40,9 @@ impl Searcher {
             best_move: RootMove::new_null(),
             pv: vec![],
             current_ply: 0,
+            start_time: Instant::now(),
             
-            completed_search_data: vec![],
+            completed_searchs: vec![],
             search_data: SearchData::new(0),
             root_moves: RootMoveList::new(),
 
@@ -54,12 +56,22 @@ impl Searcher {
 
     // Checks to see if the engine should stop the search
     pub fn check_stop(&mut self) {
+        // Check if the stop signal has been sent.
         match self.stop_in.try_recv() {
             Ok(_) => {
                 self.stop = true;
 
             }
             Err(_) => {}
+
+        }
+
+        // Check if the max time has been reached.
+        if let Some(maxtime) = self.options.maxtime {
+            if self.search_data.start_time.elapsed().as_secs_f64() >= maxtime {
+                self.stop = true;
+
+            }
 
         }
 
@@ -72,7 +84,7 @@ impl Searcher {
         self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
         self.search_data.average_branching_factor = ((self.search_data.branches + self.search_data.leafs) as f64).powf(1.0 / self.search_data.ply as f64);
 
-        self.root_moves.sort();
+        // self.root_moves.sort();
         self.search_data.best_move = self.root_moves.first();
 
         if self.search_data.best_move.score == f64::INFINITY {
@@ -100,9 +112,9 @@ impl Searcher {
         for mv in unsafe{ valid_moves(board, PLAYER_1).moves(board) } {
             if mv.is_win() {
                 self.search_data.best_move = RootMove::new(mv, f64::INFINITY, 1, 1);
-                self.completed_search_data.push(self.search_data.clone());
+                self.completed_searchs.push(self.search_data.clone());
 
-                let best_search_data = self.completed_search_data.last().unwrap().clone();
+                let best_search_data = self.completed_searchs.last().unwrap().clone();
                 ugi::info_output(best_search_data.clone());
                 ugi::best_move_output(best_search_data.clone());
                 return;
@@ -114,11 +126,13 @@ impl Searcher {
         self.root_moves = RootMoveList::new();
         self.root_moves.setup(board);
 
+        self.start_time = Instant::now();
+
         self.current_ply = 1;
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
          
-            self.search::<PV>(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, 0.0, 0.0);
+            self.search::<PV>(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply);
       
             if self.stop {
                 break 'iterative_deepening;
@@ -128,10 +142,10 @@ impl Searcher {
             self.update_search_stats(board);
             ugi::info_output(self.search_data.clone());
 
-            self.completed_search_data.push(self.search_data.clone());
+            self.completed_searchs.push(self.search_data.clone());
 
             self.current_ply += 2;
-
+            
             if self.current_ply > self.options.maxply {
                 break 'iterative_deepening;
 
@@ -139,18 +153,18 @@ impl Searcher {
 
         }
         
-        let best_search_data = self.completed_search_data.last().unwrap().clone();
+        let best_search_data = self.completed_searchs.last().unwrap().clone();
         ugi::info_output(best_search_data.clone());
         ugi::best_move_output(best_search_data.clone());
 
     }
 
     /// Main search function.
-    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, mut p1_tempo: f64, mut p2_tempo: f64) -> f64 {
+    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8) -> f64 {
         let is_root = depth == self.search_data.ply;
         let is_leaf = depth == 0;
-        let is_pv: bool = N::is_pv();
-        let board_hash = board.hash();
+        // let is_pv: bool = N::is_pv();
+        // let board_hash = board.hash();
 
         if self.stop {
             return 0.0;
@@ -167,39 +181,38 @@ impl Searcher {
             self.search_data.leafs += 1;
 
             let eval = get_evalulation(board) * player;
-            // let eval = get_evalulation(board) * player;
 
             return eval;
 
         }
 
-        // Handle Transposition Table
-        let (valid, entry) = unsafe { tt().probe(board_hash) };
-        if !is_pv && valid && entry.depth >= depth {
-            self.search_data.tt_hits += 1;
+        // // Handle Transposition Table
+        // let (valid, entry) = unsafe { tt().probe(board_hash) };
+        // if !is_pv && valid && entry.depth >= depth {
+        //     self.search_data.tt_hits += 1;
 
-            if entry.bound == NodeBound::ExactValue {
-                self.search_data.tt_exacts += 1;
-                return entry.score;
+        //     if entry.bound == NodeBound::ExactValue {
+        //         self.search_data.tt_exacts += 1;
+        //         return entry.score;
 
-            } else if entry.bound == NodeBound::LowerBound {
-                if entry.score > alpha {
-                    alpha = entry.score;
-                }
+        //     } else if entry.bound == NodeBound::LowerBound {
+        //         if entry.score > alpha {
+        //             alpha = entry.score;
+        //         }
                 
-            } else if entry.bound == NodeBound::UpperBound && entry.score < beta {
-                beta = entry.score;
+        //     } else if entry.bound == NodeBound::UpperBound && entry.score < beta {
+        //         beta = entry.score;
 
-            }
+        //     }
 
-            if alpha >= beta {
-                self.search_data.tt_cuts += 1;
+        //     if alpha >= beta {
+        //         self.search_data.tt_cuts += 1;
 
-                return entry.score;
+        //         return entry.score;
 
-            }
+        //     }
 
-        }
+        // }
 
         self.search_data.branches += 1;
 
@@ -233,22 +246,13 @@ impl Searcher {
             order_moves(moves, board, player, &self.pv)
             
         };
-
-        let mut best_move = Move::new_null();
+       
+        // let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
-            
-            let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
-            if player == PLAYER_1 && threat_count > 1 {
-                p1_tempo += 1.0;
 
-            } else if player == PLAYER_2 && threat_count > 1 {
-                p2_tempo += 1.0;
-
-            }
-
-            let score: f64 = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, p1_tempo, p2_tempo);
+            let score: f64 = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1);
 
             // Update the score of the rootnode.
             if is_root {
@@ -258,7 +262,7 @@ impl Searcher {
 
             if score > best_score {
                 best_score = score;
-                best_move = *mv;
+                // best_move = *mv;
             }
 
             if best_score > alpha {
@@ -274,19 +278,19 @@ impl Searcher {
 
         }
 
-        let node_bound: NodeBound = if best_score >= beta {
-            NodeBound::LowerBound
+        // let node_bound: NodeBound = if best_score >= beta {
+        //     NodeBound::LowerBound
 
-        } else if best_score <= alpha  {
-            NodeBound::UpperBound
+        // } else if best_score <= alpha  {
+        //     NodeBound::UpperBound
 
-        } else {
-            NodeBound::ExactValue
+        // } else {
+        //     NodeBound::ExactValue
 
-        };
+        // };
 
-        let new_entry = Entry::new(board_hash, best_score, depth, TTMove::from(best_move), node_bound);
-        unsafe { tt().insert(new_entry) };
+        // let new_entry = Entry::new(board_hash, best_score, depth, TTMove::from(best_move), node_bound);
+        // unsafe { tt().insert(new_entry) };
 
         best_score
 
@@ -394,15 +398,18 @@ impl Display for SearchData {
 #[derive(Clone)]
 pub struct SearchOptions {
     pub board: BoardState,
-    pub maxply: i8
+    pub maxply: i8,
+    pub maxtime: Option<f64>
+
 
 }
 
 impl SearchOptions {
     pub fn new() -> SearchOptions {
         SearchOptions {
-            board: BoardState::from(TEST_BOARD),
-            maxply: MAXPLY
+            board: BoardState::from(STARTING_BOARD),
+            maxply: MAXPLY,
+            maxtime: Option::None
 
         }
 

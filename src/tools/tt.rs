@@ -191,6 +191,14 @@ impl TranspositionTable {
 
     }
 
+    /// De-allocates the current heap.
+    unsafe fn de_alloc(&self) {
+        let layout = Layout::from_size_align(*self.cap.get(), 2).unwrap();
+        let ptr: *mut u8 = mem::transmute(*self.clusters.get());
+    
+        alloc::dealloc(ptr, layout);
+    }
+
 }
 
 impl Display for TranspositionTable {

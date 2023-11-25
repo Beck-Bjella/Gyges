@@ -57,6 +57,10 @@ impl Ugi {
                             self.search_options.maxply = value.parse().unwrap();
 
                         }
+                        "MaxTime" => {
+                            self.search_options.maxtime = Some(value.parse().unwrap());
+
+                        }
                         _ => {
                             println!("Unknown option: {}", name);
 
@@ -130,6 +134,7 @@ impl Ugi {
         println!("id name nova");
         println!("id author beck-bjella");                
         println!("option MaxPly");
+        println!("option MaxTime");
         println!("ugiok");
 
     }

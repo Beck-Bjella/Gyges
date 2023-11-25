@@ -170,10 +170,20 @@ impl RootMove {
 
     pub fn as_ugi(&self) -> String {
         if self.mv.flag == MoveType::Bounce {
-            return self.mv.data[1].to_string() + "|" + &self.mv.data[3].to_string();
+            return 
+            self.mv.data[0].to_string() + "|" + 
+            &self.mv.data[1].to_string() + "|" +
+            &self.mv.data[2].to_string() + "|" + 
+            &self.mv.data[3].to_string();
 
         } else {
-            return self.mv.data[1].to_string() + "|" + &self.mv.data[3].to_string() + "|" + &self.mv.data[5].to_string()
+            return 
+            self.mv.data[0].to_string() + "|" + 
+            &self.mv.data[1].to_string() + "|" + 
+            &self.mv.data[2].to_string() + "|" + 
+            &self.mv.data[3].to_string() + "|" + 
+            &self.mv.data[4].to_string() + "|" + 
+            &self.mv.data[5].to_string();
 
         }
 

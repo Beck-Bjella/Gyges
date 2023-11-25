@@ -26,6 +26,17 @@ pub const NULL_U8: u8 = 100;
 pub const NULL_BB: BitBoard = BitBoard(u64::MAX);
 
 // Board data
+pub const STARTING_BOARD: [usize; 38] = [
+    3, 2, 1, 1, 2, 3,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    3, 2, 1, 1, 2, 3,
+    0, 0
+
+];
+
 pub const TEST_BOARD: [usize; 38] = [
     2, 0, 2, 1, 1, 0,
     0, 0, 0, 3, 3, 0,
@@ -36,7 +47,6 @@ pub const TEST_BOARD: [usize; 38] = [
     0, 0
 
 ];
-
 
 pub const BENCH_BOARD: [usize; 38] = [
     2, 0, 2, 1, 1, 0,
