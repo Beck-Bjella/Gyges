@@ -1,13 +1,8 @@
 use std::cmp::Ordering;
 
-use crate::board::bitboard::BitBoard;
-use crate::board::{board::*};
+use crate::board::board::*;
 use crate::moves::move_gen::*;
-use crate::search::evaluation::*;
-
-use crate::tools::tt::*;
 use crate::consts::*;
-
 
 /// Designates the type of move.
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -67,48 +62,6 @@ impl Move {
 
 }
 
-impl From<TTMove> for Move {
-    fn from(mv: TTMove) -> Self {
-        let mut data = [0; 6];
-        for i in 0..mv.data.len() {
-            data[i] = mv.data[i] as usize
-
-        }
-
-        Move {
-            data,
-            flag: mv.flag
-
-        }
-
-    }
-}
-
-/// Structure that defines a move for the tt table.
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub struct TTMove {
-    pub data: [u8; 6],
-    pub flag: MoveType,
-
-}
-
-impl From<Move> for TTMove {
-    fn from(mv: Move) -> Self {
-        let mut data = [0; 6];
-        for i in 0..mv.data.len() {
-            data[i] = mv.data[i] as u8
-
-        }
-
-        TTMove {
-            data,
-            flag: mv.flag
-
-        }
-
-    }
-}
-
 /// Structure that defines a rootmove.
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct RootMove {
@@ -157,17 +110,6 @@ impl RootMove {
 
     }
 
-    pub fn as_human(&self) -> String {
-        if self.mv.flag == MoveType::Bounce {
-            return human_cord(self.mv.data[1]) + &human_cord(self.mv.data[3]);
-
-        } else {
-            human_cord(self.mv.data[1]) + &human_cord(self.mv.data[3]) + &human_cord(self.mv.data[5])
-
-        }
-
-    }
-
     pub fn as_ugi(&self) -> String {
         if self.mv.flag == MoveType::Bounce {
             return 
@@ -192,21 +134,11 @@ impl RootMove {
 }
 
 /// Orders a list of moves.
-pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &Vec<Entry>) -> Vec<Move> {
+pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<Move> {
     // For every move calculate a value to sort it by.
     let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
         let mut sort_val: f64 = 0.0;
         let mut new_board = board.make_move(&mv);
-        
-        // If move is in the PV then sort it first.
-        for e in pv {
-            if Move::from(e.bestmove ) == mv {
-                sort_val = 500_000.0;
-                return (mv, sort_val);
-
-            }
-
-        }
 
         // If move is not the PV then guess how good it is.
         sort_val -= unsafe { valid_move_count(&mut new_board, -player)} as f64;
@@ -217,26 +149,6 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64, pv: &V
             sort_val -= 1000.0 * (5 - threat_count) as f64;
 
         }
-
-        // Lower the score if there are pieces that cant reach anything or are unreachable on your active line.
-        // sort_val -= activeline_cant_reach(board, player) as f64 * 1000.0;
-        // sort_val -= activeline_unreachable(board, player) as f64 * 500.0;
-
-        // Lower the score of moves that leave the piece where it cant reach anything.
-        // let end_pos: usize = if mv.flag == MoveType::Drop { 
-        //     mv.data[5] 
-
-        // } else { 
-        //     mv.data[3] 
-
-        // };
-        // let end_type = new_board.data[end_pos];
-    
-        
-        // if piece_cant_reach(board, end_pos, end_type) {
-        //     sort_val -= (4 - end_type) as f64 * 1000.0
-
-        // }
 
         (mv, sort_val)
 

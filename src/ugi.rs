@@ -2,31 +2,30 @@ use std::io::{self};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-use crate::tools::tt::init_tt;
 use crate::board::board::*;
 use crate::search::searcher::*;
 
 pub struct Ugi {
-    pub searcher_stop: Option<Sender<bool>>,
-    pub search_options: SearchOptions,
-    pub searching_thread: Option<thread::JoinHandle<()>>,
-
+    searching_thread: Option<thread::JoinHandle<()>>,
+    searcher_stop: Option<Sender<bool>>,
+    searching: bool,
+    search_options: SearchOptions,
+   
 }
 
 impl Ugi {
     pub fn new() -> Ugi {
         Ugi {
-            searcher_stop: Option::None,
-            search_options: SearchOptions::new(),
             searching_thread: Option::None,
-
+            searcher_stop: Option::None,
+            searching: false, 
+            search_options: SearchOptions::new(),
+            
         }
 
     }
 
     pub fn start(&mut self) {
-        self.init();
-
         let stdin = io::stdin();
         loop {
             let mut input = String::new();
@@ -99,12 +98,9 @@ impl Ugi {
     
     }
 
-    pub fn init(&mut self) {
-        init_tt(2usize.pow(24));
-
-    }
-    
     pub fn go(&mut self) {
+        self.searching = true;
+
         let (ss, sr): (Sender<bool>, Receiver<bool>) = mpsc::channel();
         self.searcher_stop = Some(ss);
 
@@ -119,7 +115,7 @@ impl Ugi {
     }
 
     pub fn stop(&mut self) {
-        if self.searcher_stop.is_some() && self.searching_thread.is_some() {
+        if self.searching {
             _ = self.searcher_stop.clone().unwrap().send(true);
             self.searching_thread.take().unwrap().join().unwrap();
             
@@ -127,6 +123,7 @@ impl Ugi {
 
         self.searcher_stop = Option::None;
         self.searching_thread = Option::None;
+        self.searching = false;
     
     }
 

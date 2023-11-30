@@ -1,6 +1,5 @@
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
-use std::fmt::Display;
 use std::vec;
 
 use crate::board::board::*;
@@ -9,18 +8,13 @@ use crate::search::evaluation::*;
 use crate::moves::moves::*;
 use crate::moves::move_gen::*;
 use crate::moves::move_list::*;
-use crate::tools::tt::*;
 use crate::ugi;
 
 pub const MAXPLY: i8 = 99;
 
-// pub const MULTI_CUT_REDUCTION: i8 = 1;
-// pub const NULL_MOVE_REDUCTION: i8 = 1;
-
 /// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
 pub struct Searcher {
     pub best_move: RootMove,
-    pub pv: Vec<Entry>,
     pub current_ply: i8,
     pub start_time: Instant,
 
@@ -38,7 +32,6 @@ impl Searcher {
     pub fn new(stop_in: Receiver<bool>, options: SearchOptions) -> Searcher {
         Searcher {
             best_move: RootMove::new_null(),
-            pv: vec![],
             current_ply: 0,
             start_time: Instant::now(),
             
@@ -78,13 +71,13 @@ impl Searcher {
     }
 
     /// Updates the search data based on the collected data.
-    pub fn update_search_stats(&mut self, board: &mut BoardState) {
+    pub fn update_search_stats(&mut self) {
         self.search_data.search_time = self.search_data.start_time.elapsed().as_secs_f64();
         self.search_data.bps =(self.search_data.branches as f64 / self.search_data.search_time) as usize;
         self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
         self.search_data.average_branching_factor = ((self.search_data.branches + self.search_data.leafs) as f64).powf(1.0 / self.search_data.ply as f64);
 
-        // self.root_moves.sort();
+        self.root_moves.sort();
         self.search_data.best_move = self.root_moves.first();
 
         if self.search_data.best_move.score == f64::INFINITY {
@@ -96,10 +89,6 @@ impl Searcher {
             self.search_data.winner = 2;
 
         }
-
-        let pv = calc_pv_tt(board, self.current_ply);
-        self.pv = pv.clone();
-        self.search_data.pv = pv;
 
     } 
 
@@ -132,14 +121,14 @@ impl Searcher {
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
          
-            self.search::<PV>(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, [0.0, 0.0]);
+            self.search(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply);
       
             if self.stop {
                 break 'iterative_deepening;
     
             }
 
-            self.update_search_stats(board);
+            self.update_search_stats();
             ugi::info_output(self.search_data.clone());
 
             self.completed_searchs.push(self.search_data.clone());
@@ -160,11 +149,9 @@ impl Searcher {
     }
 
     /// Main search function.
-    fn search<N: Node>(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, depth: i8, tempo: [f64; 2]) -> f64 {
-        let is_root = depth == self.search_data.ply;
-        let is_leaf = depth == 0;
-        // let is_pv: bool = N::is_pv();
-        // let board_hash = board.hash();
+    fn search(&mut self, board: &mut BoardState, mut alpha: f64, beta: f64, player: f64, ply: i8) -> f64 {
+        let is_root = ply == self.search_data.ply;
+        let is_leaf = ply == 0;
 
         if self.stop {
             return 0.0;
@@ -189,53 +176,13 @@ impl Searcher {
         if is_leaf {
             self.search_data.leafs += 1;
 
-            let eval = get_evalulation_tempo(board) * player;
+            let eval = get_evalulation(board) * player;
 
             return eval;
 
         }
 
-        // // Handle Transposition Table
-        // let (valid, entry) = unsafe { tt().probe(board_hash) };
-        // if !is_pv && valid && entry.depth >= depth {
-        //     self.search_data.tt_hits += 1;
-
-        //     if entry.bound == NodeBound::ExactValue {
-        //         self.search_data.tt_exacts += 1;
-        //         return entry.score;
-
-        //     } else if entry.bound == NodeBound::LowerBound {
-        //         if entry.score > alpha {
-        //             alpha = entry.score;
-        //         }
-                
-        //     } else if entry.bound == NodeBound::UpperBound && entry.score < beta {
-        //         beta = entry.score;
-
-        //     }
-
-        //     if alpha >= beta {
-        //         self.search_data.tt_cuts += 1;
-
-        //         return entry.score;
-
-        //     }
-
-        // }
-
         self.search_data.branches += 1;
-
-        // Null Move Pruning
-        // let r_depth = depth - 1 - NULL_MOVE_REDUCTION;
-        // if r_depth >= 0 && !is_pv {
-        //     let mut null_move_board = board.make_null();
-        //     let score = -self.search::<NonPV>(&mut null_move_board, -alpha - 1.0, -alpha, -player, r_depth);
-        //     if score >= beta {
-        //         return beta;
-    
-        //     }
-
-        // }
 
         // Use the previous search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {
@@ -243,29 +190,15 @@ impl Searcher {
             
         } else {
             let moves = move_list.moves(board);
-            order_moves(moves, board, player, &self.pv)
+            order_moves(moves, board, player)
             
         };
        
-        // let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
-        for (i, mv) in current_player_moves.iter().enumerate() {
+        for mv in current_player_moves.iter() {
             let mut new_board = board.make_move(mv);
 
-            let mut new_tempo = tempo;
-            let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
-            if threat_count > 0 {
-                if player == PLAYER_1 {
-                    new_tempo[0] += 1.0;
-
-                } else {
-                    new_tempo[1] += 1.0;
-
-                }
-
-            }
-
-            let score: f64 = -self.search::<PV>(&mut new_board, -beta, -alpha, -player, depth - 1, new_tempo);
+            let score: f64 = -self.search(&mut new_board, -beta, -alpha, -player, ply - 1);
 
             // Update the score of the rootnode.
             if is_root {
@@ -291,20 +224,6 @@ impl Searcher {
 
         }
 
-        // let node_bound: NodeBound = if best_score >= beta {
-        //     NodeBound::LowerBound
-
-        // } else if best_score <= alpha  {
-        //     NodeBound::UpperBound
-
-        // } else {
-        //     NodeBound::ExactValue
-
-        // };
-
-        // let new_entry = Entry::new(board_hash, best_score, depth, TTMove::from(best_move), node_bound);
-        // unsafe { tt().insert(new_entry) };
-
         best_score
 
     }
@@ -315,7 +234,6 @@ impl Searcher {
 #[derive(Debug, Clone)]
 pub struct SearchData {
     pub best_move: RootMove,
-    pub pv: Vec<Entry>,
 
     pub start_time: Instant,
     pub search_time: f64,
@@ -344,7 +262,6 @@ impl SearchData {
     pub fn new(ply: i8) -> SearchData {
         SearchData {
             best_move: RootMove::new_null(),
-            pv: vec![],
 
             start_time: std::time::Instant::now(),
             search_time: 0.0,
@@ -373,41 +290,6 @@ impl SearchData {
 
 }
 
-impl Display for SearchData {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Depth: {:?}", self.ply)?;
-        writeln!(f, "  - Best: {:?}", self.best_move)?;
-        writeln!(f, "  - Time: {:?}", self.search_time)?;
-        writeln!(f)?;
-        writeln!(f, "  - Abf: {}", self.average_branching_factor)?;
-        writeln!(f)?;
-        writeln!(f, "  - Branchs: {}", self.branches)?;
-        writeln!(f, "  - Bps: {}", self.bps)?;
-        writeln!(f)?;
-        writeln!(f, "  - Leafs: {}", self.leafs)?;
-        writeln!(f, "  - Lps: {}", self.lps)?;
-        writeln!(f)?;
-        writeln!(f, "  - TT:")?;
-        writeln!(f, "      - HITS: {:?}", self.tt_hits)?;
-        writeln!(f, "      - EXACTS: {:?}", self.tt_exacts)?;
-        writeln!(f, "      - CUTS: {:?}", self.tt_cuts)?;
-        writeln!(f)?;
-        writeln!(f, "      - SAFE INSERTS: {}", unsafe { TT_SAFE_INSERTS })?;
-        writeln!(f, "      - UNSAFE INSERTS: {}", unsafe { TT_UNSAFE_INSERTS })?;
-        writeln!(f)?;
-        writeln!(f, "  - PV")?;
-        for (i, e) in self.pv.iter().enumerate() {
-            writeln!(f, "      - {}: {:?}, {}", i, e.bestmove, e.score)?;
-
-        }
-        writeln!(f, "")?;
-    
-        Result::Ok(())
-
-    }
-
-}
-
 #[derive(Clone)]
 pub struct SearchOptions {
     pub board: BoardState,
@@ -427,43 +309,5 @@ impl SearchOptions {
         }
 
     }
-
-}
-
-impl Display for SearchOptions {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Search Options")?;
-        writeln!(f, "  - Board:")?;
-        writeln!(f, "{}", self.board)?;
-        writeln!(f, "  - MaxPly: {:?}", self.maxply)?;
-        
-        Result::Ok(())
-
-    }
-
-}
-
-/// Uses the trasposition table to calculate the PV.
-pub fn calc_pv_tt(board: &mut BoardState, max_ply: i8) -> Vec<Entry> {
-    let mut pv = vec![];
-
-    let mut temp_board = *board;
-
-    for d in 0..max_ply {
-        let board_hash = temp_board.hash();
-        let (vaild, entry) = unsafe { tt().probe(board_hash) };
-        if vaild {
-            pv.push(*entry);
-
-            temp_board = temp_board.make_move(&Move::from(entry.bestmove));
-
-        } else {
-            break;
-
-        }
-
-    }
-
-    pv
 
 }

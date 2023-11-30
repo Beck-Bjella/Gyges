@@ -4,7 +4,6 @@ mod board;
 mod helper;
 mod moves;
 mod search;
-mod tools;
 mod consts;
 mod ugi;
 

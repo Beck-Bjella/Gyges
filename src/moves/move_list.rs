@@ -119,15 +119,6 @@ impl RootMoveList {
                 Ordering::Less
                 
             } else if a.score == b.score {
-                // match a.threats.cmp(&b.threats) {
-                //     Ordering::Greater => Ordering::Less,
-                    
-                //     Ordering::Less => Ordering::Greater,
-
-                //     Ordering::Equal => Ordering::Equal
-
-                // }
-
                 Ordering::Equal
     
             } else {
@@ -153,7 +144,7 @@ impl RootMoveList {
     }
 
     pub fn setup(&mut self, board: &mut BoardState) {
-        let moves = order_moves(unsafe { valid_moves(board, PLAYER_1) }.moves(board), board, PLAYER_1, &vec![]);
+        let moves = order_moves(unsafe { valid_moves(board, PLAYER_1) }.moves(board), board, PLAYER_1);
 
         let root_moves: Vec<RootMove> = moves.iter().map( |mv| {
             let mut new_board = board.make_move(mv);

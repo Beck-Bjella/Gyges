@@ -1,4 +1,3 @@
-use crate::board::bitboard::BitBoard;
 use crate::consts::*;
 use crate::board::board::*;
 use crate::moves::move_gen::*;
@@ -25,92 +24,6 @@ fn on_right_edge(pos: usize) -> bool {
 
 fn on_left_edge(pos: usize) -> bool {
     pos == 0 || pos == 6 || pos == 12 || pos == 18 || pos == 24 || pos == 30
-
-}
-
-
-// OLD TESTS
-pub fn unreaceable_positions(board: &mut BoardState) -> BitBoard {
-    let mut piece_board = board.piece_bb;
-    let piece_positions = piece_board.get_data();
-
-    let mut reach_positions = EMPTY;
-    
-    for pos in piece_positions {
-        if board.data[pos] == 1 {
-            reach_positions |= ONE_ENDS[pos];
-
-        } else if board.data[pos] == 2 {
-            reach_positions |= TWO_ENDS[pos];
-
-        } else if board.data[pos] == 3 {
-            reach_positions |= THREE_ENDS[pos];
-
-        }
-
-    }
-
-    !reach_positions
-
-}
-
-pub fn piece_cant_reach(board: &mut BoardState, pos: usize, piece: usize) -> bool {
-    if piece == 3 {
-        return (THREE_ENDS[pos] & board.piece_bb).is_empty();
-
-    } else if piece == 2 {
-        return (TWO_ENDS[pos] & board.piece_bb).is_empty();
-
-    } else if piece == 1{
-        return (ONE_ENDS[pos] & board.piece_bb).is_empty();
-
-    }
-
-    false
-
-}
-
-pub fn activeline_unreachable(board: &mut BoardState, player: f64) -> usize {
-    let active_lines = board.get_active_lines();
-
-    let active_line: usize = if player == PLAYER_1 {
-        active_lines[0]
-
-    } else {
-        active_lines[1]
-
-    };
-
-    let activeline_board = ROWS[active_line] & board.piece_bb;
-
-    let unreach_pos = unreaceable_positions(board);
-
-    (unreach_pos & activeline_board).pop_count()
-
-}
-
-pub fn activeline_cant_reach(board: &mut BoardState, player: f64) -> usize {
-    let active_lines = board.get_active_lines();
-
-    let active_line: usize = if player == PLAYER_1 {
-        active_lines[0]
-
-    } else {
-        active_lines[1]
-
-    };
-
-    let mut count = 0;
-    for x in (active_line * 6)..((active_line * 6) + 6) {
-        if piece_cant_reach(board, x, board.data[x]) {
-            count += 1;
-
-        }
-
-    }
-
-    count
-
 
 }
 
@@ -153,7 +66,20 @@ pub fn ones_connectivity_score(board: &mut BoardState, player: f64) -> f64 {
 pub fn ones_safety_score(board: &mut BoardState, player: f64) -> f64 {
     let mut safety = 0.0;
 
-    safety
+    let mut pieces = unsafe{ controlled_pieces(board, player) };
+    let positions = pieces.get_data();
+
+    for pos in positions.iter() {
+        let piece = board.data[*pos];
+
+        if piece == 1 {
+            if !on_top_edge(*pos) && positions.contains(&(pos + 6)) { safety += 1.0 }; // N
+
+        }
+
+    }
+ 
+    safety * 10.0
 
 }
 
@@ -384,19 +310,8 @@ pub fn ones_eval(board: &mut BoardState, player: f64) -> f64 {
     let mut eval = 0.0;
 
     eval += ones_connectivity_score(board, player);
-    eval += ones_safety_score(board, player);
 
     eval
-
-}
-
-pub fn tempo_bonus(current_player: f64) -> f64 {
-    if current_player == PLAYER_1 {
-        2700.0
-    } else {
-        -2700.0
-
-    }
 
 }
 
@@ -404,37 +319,10 @@ pub fn get_evalulation(board: &mut BoardState) -> f64 {
     let mut eval = 0.0;
 
     eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
-    eval += control_eval(board, PLAYER_1) - control_eval(board, PLAYER_2);
-
+    eval += (control_eval(board, PLAYER_1) - control_eval(board, PLAYER_2)) * 3.0;
     eval += (p1_wall_score(board) - p2_wall_score(board)) * (wall_strength(board) / 4.0);
-
     eval += ones_eval(board, PLAYER_1) - ones_eval(board, PLAYER_2);
 
     eval
 
 } 
-
-pub fn get_evalulation_tempo(board: &mut BoardState) -> f64 {
-    let mut eval = 0.0;
-
-    eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
-    eval += control_eval(board, PLAYER_1) - control_eval(board, PLAYER_2);
-
-    eval += (p1_wall_score(board) - p2_wall_score(board)) * (wall_strength(board) / 4.0);
-
-    eval += ones_eval(board, PLAYER_1) - ones_eval(board, PLAYER_2);
-
-    eval += tempo_bonus(board.player);
-
-    eval
-
-} 
-
-pub fn get_basic_evalulation(board: &mut BoardState) -> f64 {
-    let mut eval = 0.0;
-
-    eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
-
-    eval
-
-}
