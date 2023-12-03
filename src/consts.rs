@@ -12,8 +12,6 @@ pub const PLAYER_1_GOAL: usize = 36;
 pub const PLAYER_2_GOAL: usize = 37;
 
 pub const NULL: usize = 100;
-pub const NULL_U8: u8 = 100;
-pub const NULL_BB: BitBoard = BitBoard(u64::MAX);
 
 pub const STARTING_BOARD: [usize; 38] = [
     3, 2, 1, 1, 2, 3,

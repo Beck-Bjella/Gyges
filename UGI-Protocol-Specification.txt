@@ -1,0 +1,102 @@
+Description of the Universal Game Interface (UGI)    [Nov 2023]
+=================================================================
+
+* The Universal Game Interface (UGI) serves as a bridge for communication between the chess engine and the graphical user interface (GUI), ensuring compatibility across various operating systems.
+
+* Communication takes place through standard input and output channels, utilizing text-based commands.
+
+* Upon booting, the engine awaits input from the GUI, specifically the "isready" or "setoption" command to configure internal parameters.
+
+* The engine should consistently process input from stdin, even during calculations.
+
+* Command strings sent to the engine end with '\n'.
+
+* The engine operates in forced mode, refraining from initiating calculations or pondering without receiving a prior "go" command.
+
+* Before the engine starts searching a position, a position command is issued to inform the engine of the current game state.
+
+* In the event of an unknown command or token, both the engine and GUI should ignore it.
+
+
+Move Format:
+------------
+
+The moves are formated by numbers seperated with `|`. 
+	* e.g. 0|3|2|12|3|8
+	* e.g. 0|1|3|7
+
+
+GUI to Engine:
+--------------
+
+* `ugi`
+	Initiates communication with the engine.
+
+* `isready`
+	Synchronizes the engine with the GUI, indicating readiness.
+
+* `setoption <name> <value>`
+	Used to modify internal parameters.
+	* `MaxPly`: int > 0
+	* `MaxTime`: int > 0 (time in seconds)
+
+* `setpos`
+	* Sets the board layout; no response is sent.
+
+* `go`
+	Initiates the engine to start searching.
+	Subsequently sends "info ____" commands during the search.
+	Responds with "bestmove ____" when the search is complete.
+
+* `stop`
+	Instructs the engine to stop calculations as soon as possible.
+	Response: "bestmove ____" (providing the best move found)
+
+* `quit`
+	Terminates the program.
+
+
+Engine to GUI:
+--------------
+
+* `ugiok`
+	Sent after processing the "ugi" command to acknowledge UGI mode.
+
+* `id`
+	`name` (engine name)
+	`author` (author name)
+
+* `isready`
+	Responds with `readyok` when ready to accept new commands.
+
+* `setoption`
+	No specific response; options are silently acknowledged.
+
+* `setpos`
+	No response.
+
+* `go`
+	When searching, sends "info ____" commands.
+	Responds with "bestmove ____" when the search is complete.
+
+* `info`
+  - The engine sends information to the GUI.
+    - Example parameters: depth, score, time, nodes, pv (principal variation)
+
+* `option`
+  - Command to inform the GUI about parameters that can be changed in the engine.
+    - Sent once at engine startup after the "uci" and "id" commands if any parameter can be changed in the engine.
+
+* `stop`
+  - Signals the engine has stopped calculations.
+
+* `quit`
+  - Acknowledges termination.
+
+
+Example:
+--------
+
+
+
+

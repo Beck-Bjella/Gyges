@@ -2,6 +2,15 @@ use crate::consts::*;
 use crate::board::board::*;
 use crate::moves::move_gen::*;
 
+pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [300.0, 100.0, 50.0];
+pub const SHARED_PIECE_CONTROL_SCORES: [f64; 3] = [75.0, 50.0, 25.0];
+
+pub const UNIQUE_SQUARE_CONTROL_SCORE: f64 = 20.0;
+pub const SHARED_SQUARE_CONTROL_SCORE: f64 = 5.0;
+
+pub const PROTECTED_PIECE_SCORES: [f64; 3] = [250.0, 25.0, 100.0];
+pub const HALF_OFFSET_SCORE: f64 = 300.0;
+
 fn in_bounds(pos: usize) -> bool {
     pos <= 35
 
@@ -62,30 +71,6 @@ pub fn ones_connectivity_score(board: &mut BoardState, player: f64) -> f64 {
     connectivity
 
 }
-
-pub fn ones_safety_score(board: &mut BoardState, player: f64) -> f64 {
-    let mut safety = 0.0;
-
-    let mut pieces = unsafe{ controlled_pieces(board, player) };
-    let positions = pieces.get_data();
-
-    for pos in positions.iter() {
-        let piece = board.data[*pos];
-
-        if piece == 1 {
-            if !on_top_edge(*pos) && positions.contains(&(pos + 6)) { safety += 1.0 }; // N
-
-        }
-
-    }
- 
-    safety * 10.0
-
-}
-
-pub const PROTECTED_PIECE_SCORES: [f64; 3] = [250.0, 25.0, 100.0];
-
-pub const HALF_OFFSET_SCORE: f64 = 300.0;
 
 pub fn wall_depth_offset(board: &mut BoardState) -> f64 {
     let mut total_depth = 0.0;
@@ -226,12 +211,6 @@ pub fn p2_wall_score(board: &mut BoardState) -> f64 {
     
 }
 
-pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [300.0, 100.0, 50.0];
-pub const SHARED_PIECE_CONTROL_SCORES: [f64; 3] = [75.0, 50.0, 25.0];
-
-pub const UNIQUE_SQUARE_CONTROL_SCORE: f64 = 20.0;
-pub const SHARED_SQUARE_CONTROL_SCORE: f64 = 5.0;
-
 pub fn unique_controlled_pieces_score(board: &mut BoardState, player: f64) -> f64 {
     let pieces = unsafe{ controlled_pieces(board, player) };
     let opp_pieces = unsafe{ controlled_pieces(board, -player) };
@@ -283,7 +262,6 @@ pub fn shared_controlled_squares_score(board: &mut BoardState, player: f64) -> f
 
 }
 
-
 pub fn mobility_eval(board: &mut BoardState, player: f64) -> f64 {
     let mut eval = 0.0;
  
@@ -315,7 +293,7 @@ pub fn ones_eval(board: &mut BoardState, player: f64) -> f64 {
 
 }
 
-pub fn get_evalulation(board: &mut BoardState) -> f64 {
+pub fn get_evalulation_exp(board: &mut BoardState) -> f64 {
     let mut eval = 0.0;
 
     eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
@@ -325,4 +303,17 @@ pub fn get_evalulation(board: &mut BoardState) -> f64 {
 
     eval
 
-} 
+}
+
+
+// BEST EVALUATION FUNCTION
+pub fn get_evalulation(board: &mut BoardState) -> f64 {
+    let mut eval = 0.0;
+
+    eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
+    eval += (control_eval(board, PLAYER_1) - control_eval(board, PLAYER_2)) * 3.0;
+
+    eval
+
+}
+
