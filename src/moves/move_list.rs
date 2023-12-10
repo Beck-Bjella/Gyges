@@ -6,6 +6,7 @@ use crate::board::board::*;
 use crate::moves::move_gen::*;
 use crate::consts::*;
 
+
 #[derive(Clone)]
 pub struct RawMoveList {
     pub drop_positions: BitBoard,
@@ -112,7 +113,7 @@ impl RootMoveList {
         }
 
     }
-    
+
     pub fn sort(&mut self) {
         self.moves.sort_by(|a, b| {
             if a.score > b.score {
@@ -120,7 +121,7 @@ impl RootMoveList {
                 
             } else if a.score == b.score {
                 Ordering::Equal
-    
+
             } else {
                 Ordering::Greater
     
@@ -148,7 +149,7 @@ impl RootMoveList {
 
         let root_moves: Vec<RootMove> = moves.iter().map( |mv| {
             let mut new_board = board.make_move(mv);
-            let threats = unsafe { valid_threat_count(&mut new_board, PLAYER_1) };
+            let threats: usize = unsafe { valid_threat_count(&mut new_board, PLAYER_1) };
 
             RootMove::new(*mv, 0.0, 0, threats)
 

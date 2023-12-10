@@ -1,8 +1,9 @@
-use std::io::{self};
+use std::io;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
 use crate::board::board::*;
+use crate::consts::*;
 use crate::search::searcher::*;
 
 pub struct Ugi {
@@ -26,69 +27,58 @@ impl Ugi {
     }
 
     pub fn start(&mut self) {
+        println!("Gyges UGI Engine v1.0.0");
+
         let stdin = io::stdin();
         loop {
             let mut input = String::new();
             stdin.read_line(&mut input).expect("Failed to read line from stdin");
-
-            let mut raw_commands: Vec<&str> = input.split_whitespace().collect();
+            
+            let trimmed = input.trim();
+            
+            let raw_commands: Vec<&str> = trimmed.split_whitespace().collect();
             if raw_commands.len() == 0 {
                 continue;
 
             }
 
-            let base_cmd = raw_commands.remove(0);
-            match base_cmd {
-                "ugi" => {
-                    self.ugi();
+            match raw_commands.get(0) {
+                Some(&"ugi") => {
+                    println!("id name Helios");
+                    println!("id author beck-bjella");                
+                    println!("option maxply");
+                    println!("option maxtime");
+                    println!("ugiok");
 
                 },
-                "isready" => {
+                Some(&"isready") => {
                     println!("readyok");
 
                 },
-                "setoption" => {
-                    let name = raw_commands[0].clone();
-                    let value = raw_commands[1].clone();
-
-                    match name {
-                        "MaxPly" => {
-                            self.search_options.maxply = value.parse().unwrap();
-
-                        }
-                        "MaxTime" => {
-                            self.search_options.maxtime = Some(value.parse().unwrap());
-
-                        }
-                        _ => {
-                            println!("Unknown option: {}", name);
-
-                        }
-
-                    }
+                Some(&"setoption") => {
+                    self.parse_option(trimmed, raw_commands);
 
                 }
-                "setpos" => {
-                    let board_str = raw_commands[0].clone();
-                    self.search_options.board = BoardState::from(board_str);
+                Some(&"setpos") => {
+                    self.parse_position(trimmed, raw_commands)
 
                 },
-                "go" => {
+                Some(&"go") => {
                     self.go();
 
                 },
-                "stop" => {
+                Some(&"stop") => {
                     self.stop();
 
                 },
-                "quit" => {
+                Some(&"quit") => {
                     break;
 
                 },
-                _ => {
-                    println!("Unknown command: {}", base_cmd);
+                Some(_) | None => {
+                    println!("Unknown Command: '{}'", trimmed);
 
-                }
+                },
 
             }
            
@@ -96,6 +86,66 @@ impl Ugi {
 
         self.stop();
     
+    }
+
+    pub fn parse_option(&mut self, trimmed: &str, raw_commands: Vec<&str>) {
+        match raw_commands.get(1) {
+            Some(&"maxply") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    self.search_options.maxply = value_str.parse::<i8>().unwrap();
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+                
+            }
+            Some(&"maxtime") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    self.search_options.maxtime = Some(value_str.parse::<f64>().unwrap());
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(_) | None => {
+                println!("Unknown Command: '{}'", trimmed);
+
+            }
+
+        }
+
+    }
+
+    pub fn parse_position(&mut self, trimmed: &str, raw_commands: Vec<&str>) {
+        match raw_commands.get(1) {
+            Some(&"start") => {
+                self.search_options.board = BoardState::from(STARTING_BOARD);
+
+            },
+            Some(&"bench") => {
+                self.search_options.board = BoardState::from(BENCH_BOARD);
+
+            },
+            Some(&"data") => {
+                if let Some(board_str) = raw_commands.get(2) {
+                    self.search_options.board = BoardState::from(*board_str);
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            },
+            Some(_) | None => {
+                println!("Unknown Command: '{}'", trimmed);
+
+            }
+
+        }
+
     }
 
     pub fn go(&mut self) {
@@ -127,15 +177,6 @@ impl Ugi {
     
     }
 
-    pub fn ugi(&mut self) {
-        println!("id name nova");
-        println!("id author beck-bjella");                
-        println!("option MaxPly");
-        println!("option MaxTime");
-        println!("ugiok");
-
-    }
-    
 }
 
 pub fn info_output(search_data: SearchData) {
@@ -143,6 +184,10 @@ pub fn info_output(search_data: SearchData) {
     print!("ply {} ", search_data.ply);
     print!("bestmove {} ", search_data.best_move.as_ugi());
     print!("score {} ", search_data.best_move.score);
+    print!("nodes {} ", search_data.nodes);
+    print!("nps {} ", search_data.nps);
+    print!("abf {} ", search_data.average_branching_factor);
+    print!("beta_cuts {} ", search_data.beta_cuts);
     println!("time {} ", search_data.search_time);
 
 }

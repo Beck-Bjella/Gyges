@@ -79,7 +79,7 @@ impl RootMove {
             mv,
             score,
             ply,
-            threats
+            threats,
 
         }
 
@@ -91,7 +91,7 @@ impl RootMove {
             mv: Move::new_null(),
             score: 0.0,
             ply: 0,
-            threats: 0
+            threats: 0,
 
         }
 

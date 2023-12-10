@@ -1,7 +1,4 @@
 use std::ops::{Not, Rem, RemAssign, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign, Shl, ShlAssign, Shr, ShrAssign};
-use std::fmt::Display;
-
-use crate::consts::*;
 use crate::helper::bit_twiddles::*;
 
 // Allows for shifting operations to be applied to a struct consisting of a singular tuple

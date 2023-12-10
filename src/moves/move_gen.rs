@@ -5,7 +5,6 @@ use crate::board::bitboard::*;
 use crate::moves::move_list::*;
 use crate::consts::*;
 
-
 #[derive(PartialEq)]
 enum Action {
     Gen,
@@ -61,7 +60,7 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
         let starting_piece_type: usize = data.6;
         let active_line_idx: usize = data.7;
         let player: f64 = data.8;
-
+        
         if action == Action::Start {
             board.data[starting_piece] = 0;
             board.piece_bb ^= 1 << starting_piece;

@@ -293,6 +293,7 @@ pub fn ones_eval(board: &mut BoardState, player: f64) -> f64 {
 
 }
 
+// Experimental Evaluation Function
 pub fn get_evalulation_exp(board: &mut BoardState) -> f64 {
     let mut eval = 0.0;
 

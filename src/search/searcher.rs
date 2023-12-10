@@ -1,6 +1,5 @@
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
-use std::vec;
 
 use crate::board::board::*;
 use crate::consts::*;
@@ -73,9 +72,8 @@ impl Searcher {
     /// Updates the search data based on the collected data.
     pub fn update_search_stats(&mut self) {
         self.search_data.search_time = self.search_data.start_time.elapsed().as_secs_f64();
-        self.search_data.bps =(self.search_data.branches as f64 / self.search_data.search_time) as usize;
-        self.search_data.lps = (self.search_data.leafs as f64 / self.search_data.search_time) as usize;
-        self.search_data.average_branching_factor = ((self.search_data.branches + self.search_data.leafs) as f64).powf(1.0 / self.search_data.ply as f64);
+        self.search_data.nps = (self.search_data.nodes as f64 / self.search_data.search_time) as usize;
+        self.search_data.average_branching_factor = (self.search_data.nodes as f64).powf(1.0 / self.search_data.ply as f64);
 
         self.root_moves.sort();
         self.search_data.best_move = self.root_moves.first();
@@ -100,7 +98,7 @@ impl Searcher {
 
         for mv in unsafe{ valid_moves(board, PLAYER_1).moves(board) } {
             if mv.is_win() {
-                self.search_data.best_move = RootMove::new(mv, f64::INFINITY, 1, 1);
+                self.search_data.best_move = RootMove::new(mv, f64::INFINITY, 1, 0);
                 self.completed_searchs.push(self.search_data.clone());
 
                 let best_search_data = self.completed_searchs.last().unwrap().clone();
@@ -121,7 +119,7 @@ impl Searcher {
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
          
-            self.search(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply);
+            self.search(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false);
       
             if self.stop {
                 break 'iterative_deepening;
@@ -130,7 +128,7 @@ impl Searcher {
 
             self.update_search_stats();
             ugi::info_output(self.search_data.clone());
-
+            
             self.completed_searchs.push(self.search_data.clone());
 
             self.current_ply += 2;
@@ -149,15 +147,16 @@ impl Searcher {
     }
 
     /// Main search function.
-    fn search(&mut self, board: &mut BoardState, mut alpha: f64, beta: f64, player: f64, ply: i8) -> f64 {
+    fn search(&mut self, board: &mut BoardState, mut alpha: f64, beta: f64, player: f64, ply: i8, null_searching: bool) -> f64 {
         let is_root = ply == self.search_data.ply;
         let is_leaf = ply == 0;
-
+  
+        // Check if the search should stop.
         if self.stop {
             return 0.0;
     
         } else {
-            if self.search_data.leafs % 1000 == 0 {
+            if self.search_data.nodes % 1000 == 0 {
                 self.check_stop();
     
             }
@@ -172,19 +171,34 @@ impl Searcher {
             return f64::INFINITY;
             
         }
-       
+
+        if !null_searching {
+            self.search_data.nodes += 1;
+
+        }
+        
+        // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
-            self.search_data.leafs += 1;
-
             let eval = get_evalulation(board) * player;
-
             return eval;
 
         }
 
-        self.search_data.branches += 1;
+        // Null Move Pruning
+        if !is_root && ply > 5 && !null_searching && !move_list.has_threat(-player) {
+            let mut new_board = board.make_null();
+            
+            let score: f64 = -self.search(&mut new_board, -beta, -beta + 1.0, -player, ply - 1 - 1, true);
 
-        // Use the previous search to order the moves, otherwise generate and order them.
+            if score >= beta {
+                self.search_data.beta_cuts += 1;
+                return beta;
+
+            }
+
+        }
+
+        // Use previous ply search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {
             self.root_moves.as_vec()
             
@@ -192,13 +206,15 @@ impl Searcher {
             let moves = move_list.moves(board);
             order_moves(moves, board, player)
             
+            
         };
-       
+        
+        // Loop through valid moves and search them.
         let mut best_score: f64 = f64::NEG_INFINITY;
-        for mv in current_player_moves.iter() {
+        for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
 
-            let score: f64 = -self.search(&mut new_board, -beta, -alpha, -player, ply - 1);
+            let score: f64 = -self.search(&mut new_board, -beta, -alpha, -player, ply - 1, null_searching);
 
             // Update the score of the rootnode.
             if is_root {
@@ -208,9 +224,8 @@ impl Searcher {
 
             if score > best_score {
                 best_score = score;
-                // best_move = *mv;
+    
             }
-
             if best_score > alpha {
                 alpha = best_score;
 
@@ -238,16 +253,10 @@ pub struct SearchData {
     pub start_time: Instant,
     pub search_time: f64,
 
-    pub branches: usize,
-    pub leafs: usize,
+    pub nodes: usize,
     pub average_branching_factor: f64,
 
-    pub lps: usize,
-    pub bps: usize,
-
-    pub tt_hits: usize,
-    pub tt_exacts: usize,
-    pub tt_cuts: usize,
+    pub nps: usize,
 
     pub beta_cuts: usize,
 
@@ -266,17 +275,11 @@ impl SearchData {
             start_time: std::time::Instant::now(),
             search_time: 0.0,
 
-            branches: 0,
-            leafs: 0,
+            nodes: 0,
             average_branching_factor: 0.0,
 
-            lps: 0,
-            bps: 0,
-
-            tt_hits: 0,
-            tt_exacts: 0,
-            tt_cuts: 0,
-
+            nps: 0,
+       
             beta_cuts: 0,
 
             ply,
@@ -294,17 +297,16 @@ impl SearchData {
 pub struct SearchOptions {
     pub board: BoardState,
     pub maxply: i8,
-    pub maxtime: Option<f64>
-
+    pub maxtime: Option<f64>,
 
 }
 
 impl SearchOptions {
     pub fn new() -> SearchOptions {
         SearchOptions {
-            board: BoardState::from(STARTING_BOARD),
+            board: BoardState::from(STARTING_BOARD),   
             maxply: MAXPLY,
-            maxtime: Option::None
+            maxtime: Option::None,
 
         }
 

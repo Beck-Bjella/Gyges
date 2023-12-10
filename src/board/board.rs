@@ -51,6 +51,17 @@ impl BoardState {
 
     }
 
+    pub fn make_null(&self) -> BoardState {
+        BoardState {
+            data: self.data,
+            piece_bb: self.piece_bb,
+            player: self.player * -1.0,
+
+        }
+
+    }
+
+
     pub fn get_active_lines(&self) -> [usize; 2] {
         let player_1_active_line = (self.piece_bb.bit_scan_forward() as f64 / 6.0).floor() as usize;
         let player_2_active_line = (self.piece_bb.bit_scan_reverse() as f64 / 6.0).floor() as usize;
