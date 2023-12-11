@@ -1,3 +1,4 @@
+use crate::board::bitboard::BitBoard;
 use crate::consts::*;
 use crate::board::board::*;
 use crate::moves::move_gen::*;
@@ -211,7 +212,7 @@ pub fn p2_wall_score(board: &mut BoardState) -> f64 {
     
 }
 
-pub fn unique_controlled_pieces_score(board: &mut BoardState, player: f64) -> f64 {
+pub fn unique_controlled_pieces_score_2(board: &mut BoardState, player: f64) -> f64 {
     let pieces = unsafe{ controlled_pieces(board, player) };
     let opp_pieces = unsafe{ controlled_pieces(board, -player) };
     
@@ -230,7 +231,7 @@ pub fn unique_controlled_pieces_score(board: &mut BoardState, player: f64) -> f6
 
 }
 
-pub fn shared_controlled_pieces_score(board: &mut BoardState, player: f64) -> f64 {
+pub fn shared_controlled_pieces_score_2(board: &mut BoardState, player: f64) -> f64 {
     let mut pieces = unsafe{ controlled_pieces(board, player) };
 
     let positions = pieces.get_data();
@@ -246,7 +247,7 @@ pub fn shared_controlled_pieces_score(board: &mut BoardState, player: f64) -> f6
 
 }
 
-pub fn unique_controlled_squares_score(board: &mut BoardState, player: f64) -> f64 {
+pub fn unique_controlled_squares_score_2(board: &mut BoardState, player: f64) -> f64 {
     let squares = unsafe{ controlled_squares(board, player) };
     let opp_squares = unsafe{ controlled_squares(board, -player) };
     
@@ -256,13 +257,13 @@ pub fn unique_controlled_squares_score(board: &mut BoardState, player: f64) -> f
 
 }
 
-pub fn shared_controlled_squares_score(board: &mut BoardState, player: f64) -> f64 {
+pub fn shared_controlled_squares_score_2(board: &mut BoardState, player: f64) -> f64 {
     let squares = unsafe{ controlled_squares(board, player) };
     squares.pop_count() as f64 * SHARED_SQUARE_CONTROL_SCORE
 
 }
 
-pub fn mobility_eval(board: &mut BoardState, player: f64) -> f64 {
+pub fn mobility_eval_2(board: &mut BoardState, player: f64) -> f64 {
     let mut eval = 0.0;
  
     eval += unsafe{ valid_move_count(board, player) } as f64;
@@ -271,14 +272,14 @@ pub fn mobility_eval(board: &mut BoardState, player: f64) -> f64 {
 
 }
 
-pub fn control_eval(board: &mut BoardState, player: f64) -> f64 {
+pub fn control_eval_2(board: &mut BoardState, player: f64) -> f64 {
     let mut eval = 0.0;
 
-    eval +=  unique_controlled_pieces_score(board, player);
-    eval +=  unique_controlled_squares_score(board, player);
+    eval +=  unique_controlled_pieces_score_2(board, player);
+    eval +=  unique_controlled_squares_score_2(board, player);
 
-    eval +=  shared_controlled_pieces_score(board, player);
-    eval +=  shared_controlled_squares_score(board, player);
+    eval +=  shared_controlled_pieces_score_2(board, player);
+    eval +=  shared_controlled_squares_score_2(board, player);
 
     eval
 
@@ -297,8 +298,8 @@ pub fn ones_eval(board: &mut BoardState, player: f64) -> f64 {
 pub fn get_evalulation_exp(board: &mut BoardState) -> f64 {
     let mut eval = 0.0;
 
-    eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
-    eval += (control_eval(board, PLAYER_1) - control_eval(board, PLAYER_2)) * 3.0;
+    eval += mobility_eval_2(board, PLAYER_1) - mobility_eval_2(board, PLAYER_2);
+    eval += (control_eval_2(board, PLAYER_1) - control_eval_2(board, PLAYER_2)) * 3.0;
     eval += (p1_wall_score(board) - p2_wall_score(board)) * (wall_strength(board) / 4.0);
     eval += ones_eval(board, PLAYER_1) - ones_eval(board, PLAYER_2);
 
@@ -306,15 +307,92 @@ pub fn get_evalulation_exp(board: &mut BoardState) -> f64 {
 
 }
 
-
 // BEST EVALUATION FUNCTION
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
+    let move_counts = [unsafe{ valid_move_count(board, PLAYER_1) }, unsafe{ valid_move_count(board, PLAYER_2) }];
+    let control_squares = [unsafe{ controlled_squares(board, PLAYER_1) }, unsafe{ controlled_squares(board, PLAYER_2) } ];
+    let control_pieces = [unsafe{ controlled_pieces(board, PLAYER_1) }, unsafe{ controlled_pieces(board, PLAYER_2) } ];
+
     let mut eval = 0.0;
 
-    eval += mobility_eval(board, PLAYER_1) - mobility_eval(board, PLAYER_2);
-    eval += (control_eval(board, PLAYER_1) - control_eval(board, PLAYER_2)) * 3.0;
+    eval += mobility_eval(PLAYER_1, move_counts) - mobility_eval(PLAYER_2, move_counts);
+    eval += (control_eval(board, PLAYER_1, control_pieces, control_squares) - control_eval(board, PLAYER_2, control_pieces, control_squares)) * 3.0;
 
     eval
 
 }
 
+pub fn unique_controlled_pieces_score(board: &mut BoardState, player: f64, control_pieces: [BitBoard; 2]) -> f64 {
+
+    let pieces = if player == PLAYER_1 { control_pieces[0] } else { control_pieces[1] };
+    let opp_pieces = if player == PLAYER_1 { control_pieces[1] } else { control_pieces[0] };
+    
+    let mut unique_controlled_pieces = pieces & !opp_pieces;
+
+    let positions = unique_controlled_pieces.get_data();
+
+    let mut score = 0.0;
+    for pos in positions {
+        let piece = board.data[pos];
+        score += UNIQUE_PIECE_CONTROL_SCORES[piece - 1];
+
+    }
+
+    score
+
+}
+
+pub fn shared_controlled_pieces_score(board: &mut BoardState, player: f64, control_pieces: [BitBoard; 2]) -> f64 {
+    let mut pieces = if player == PLAYER_1 { control_pieces[0] } else { control_pieces[1] };
+
+    let positions = pieces.get_data();
+
+    let mut score = 0.0;
+    for pos in positions {
+        let piece = board.data[pos];
+        score += SHARED_PIECE_CONTROL_SCORES[piece - 1];
+
+    }
+
+    score
+
+}
+
+pub fn unique_controlled_squares_score(player: f64, control_squares: [BitBoard; 2]) -> f64 {
+
+    let squares = if player == PLAYER_1 { control_squares[0] } else { control_squares[1] };
+    let opp_squares = if player == PLAYER_1 { control_squares[1] } else { control_squares[0] };
+    
+    let unique_squares = squares & !opp_squares;
+
+    unique_squares.pop_count() as f64 * UNIQUE_SQUARE_CONTROL_SCORE
+
+}
+
+pub fn shared_controlled_squares_score(player: f64, control_squares: [BitBoard; 2]) -> f64 {
+    let squares = if player == PLAYER_1 { control_squares[0] } else { control_squares[1] };
+    squares.pop_count() as f64 * SHARED_SQUARE_CONTROL_SCORE
+
+}
+
+pub fn mobility_eval(player: f64, move_counts: [usize; 2]) -> f64 {
+    let mut eval = 0.0;
+ 
+    eval += if player == PLAYER_1 { move_counts[0] } else { move_counts[1] } as f64;
+
+    eval
+
+}
+
+pub fn control_eval(board: &mut BoardState, player: f64, control_pieces: [BitBoard; 2], control_squares: [BitBoard; 2]) -> f64 {
+    let mut eval = 0.0;
+    
+    eval +=  unique_controlled_pieces_score(board, player, control_pieces);
+    eval +=  unique_controlled_squares_score(player, control_squares);
+
+    eval +=  shared_controlled_pieces_score(board, player, control_pieces);
+    eval +=  shared_controlled_squares_score(player, control_squares);
+
+    eval
+
+}

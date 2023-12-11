@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use crate::board::board::*;
 use crate::moves::move_gen::*;
 use crate::consts::*;
+use crate::search::evaluation::get_evalulation;
 
 /// Designates the type of move.
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -110,7 +111,8 @@ impl RootMove {
 
     }
 
-    pub fn as_ugi(&self) -> String {
+    /// Converts to string for UGI. 
+    pub fn as_ugi(&self) -> String {    
         if self.mv.flag == MoveType::Bounce {
             return 
             self.mv.data[0].to_string() + "|" + 

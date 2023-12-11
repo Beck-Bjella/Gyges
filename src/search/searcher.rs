@@ -172,11 +172,8 @@ impl Searcher {
             
         }
 
-        if !null_searching {
-            self.search_data.nodes += 1;
+        self.search_data.nodes += 1;
 
-        }
-        
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
             let eval = get_evalulation(board) * player;
@@ -185,11 +182,10 @@ impl Searcher {
         }
 
         // Null Move Pruning
-        if !is_root && ply > 5 && !null_searching && !move_list.has_threat(-player) {
+        if !is_root && ply > 3 && !null_searching && !move_list.has_threat(-player) {
             let mut new_board = board.make_null();
             
-            let score: f64 = -self.search(&mut new_board, -beta, -beta + 1.0, -player, ply - 1 - 1, true);
-
+            let score: f64 = -self.search(&mut new_board, -beta, -beta + 1.0, -player, ply - 1 - 2, true);
             if score >= beta {
                 self.search_data.beta_cuts += 1;
                 return beta;
@@ -205,8 +201,7 @@ impl Searcher {
         } else {
             let moves = move_list.moves(board);
             order_moves(moves, board, player)
-            
-            
+
         };
         
         // Loop through valid moves and search them.
