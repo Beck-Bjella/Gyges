@@ -5,6 +5,8 @@ use crate::board::bitboard::*;
 use crate::moves::move_list::*;
 use crate::consts::*;
 
+use super::moves::Move;
+
 #[derive(PartialEq)]
 enum Action {
     Gen,

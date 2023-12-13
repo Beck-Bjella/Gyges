@@ -1,4 +1,12 @@
 use crate::board::bitboard::*;
+use crate::tools::tt::*;
+
+use std::mem;
+
+// TT (Transposition Table)
+const TT_ALLOC_SIZE: usize = mem::size_of::<TranspositionTable>();
+pub type DummyTranspositionTable = [u8; TT_ALLOC_SIZE];
+pub static mut TT_TABLE: DummyTranspositionTable = [0; TT_ALLOC_SIZE];
 
 // General
 pub const ONE_PIECE: usize = 1;

@@ -3,7 +3,6 @@ use std::cmp::Ordering;
 use crate::board::board::*;
 use crate::moves::move_gen::*;
 use crate::consts::*;
-use crate::search::evaluation::get_evalulation;
 
 /// Designates the type of move.
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -61,6 +60,48 @@ impl Move {
 
     }
 
+}
+
+impl From<TTMove> for Move {
+    fn from(mv: TTMove) -> Self {
+        let mut data = [0; 6];
+        for i in 0..mv.data.len() {
+            data[i] = mv.data[i] as usize
+
+        }
+
+        Move {
+            data,
+            flag: mv.flag
+
+        }
+
+    }
+}
+
+/// Structure that defines a move for the tt table.
+#[derive(PartialEq, Debug, Clone, Copy)]
+pub struct TTMove {
+    pub data: [u8; 6],
+    pub flag: MoveType,
+
+}
+
+impl From<Move> for TTMove {
+    fn from(mv: Move) -> Self {
+        let mut data = [0; 6];
+        for i in 0..mv.data.len() {
+            data[i] = mv.data[i] as u8
+
+        }
+
+        TTMove {
+            data,
+            flag: mv.flag
+
+        }
+
+    }
 }
 
 /// Structure that defines a rootmove.
@@ -142,15 +183,31 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec
         let mut sort_val: f64 = 0.0;
         let mut new_board = board.make_move(&mv);
 
-        // If move is not the PV then guess how good it is.
-        sort_val -= unsafe { valid_move_count(&mut new_board, -player)} as f64;
+        // ----------------------------------------------
+        // let mut move_list = unsafe { valid_moves(&mut new_board, -player) };
+        // if move_list.has_threat(-player) {
+        //     sort_val = f64::NEG_INFINITY;       
+        //     return (mv, sort_val);
+            
+        // }
+        // let moves = move_list.moves(&mut new_board);
+        // let legal = get_legal(moves, &mut new_board, -player);
+
+        // sort_val -= legal.len() as f64;
+        // ----------------------------------------------
         
+            
+        // ----------------------------------------------
+        sort_val -= unsafe{ valid_move_count(&mut new_board, -player)} as f64;
+
         // If a move has less then 5 threats then penalize it.
         let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
         if threat_count <= 5_usize {
             sort_val -= 1000.0 * (5 - threat_count) as f64;
 
         }
+        // ----------------------------------------------
+
 
         (mv, sort_val)
 
@@ -176,4 +233,22 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec
 
     ordered_moves
  
+}
+
+pub fn get_legal(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<Move> {
+    let mut legal_moves: Vec<Move> = Vec::with_capacity(moves.len());
+
+    for mv in moves {
+        let mut new_board = board.make_move(&mv);
+
+        let threat_count = unsafe{ valid_threat_count(&mut new_board, -player) };
+        if threat_count == 0 {
+            legal_moves.push(mv);
+
+        }
+
+    }
+
+    legal_moves
+
 }

@@ -5,6 +5,7 @@ use std::thread;
 use crate::board::board::*;
 use crate::consts::*;
 use crate::search::searcher::*;
+use crate::tools::tt::*;
 
 pub struct Ugi {
     searching_thread: Option<thread::JoinHandle<()>>,
@@ -27,6 +28,8 @@ impl Ugi {
     }
 
     pub fn start(&mut self) {
+        self.init();
+
         println!("Gyges UGI Engine v1.0.0");
 
         let stdin = io::stdin();
@@ -86,6 +89,11 @@ impl Ugi {
 
         self.stop();
     
+    }
+
+    pub fn init(&self) {
+        init_tt(2usize.pow(24));
+
     }
 
     pub fn parse_option(&mut self, trimmed: &str, raw_commands: Vec<&str>) {

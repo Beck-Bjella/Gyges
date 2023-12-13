@@ -6,6 +6,7 @@ mod moves;
 mod search;
 mod consts;
 mod ugi;
+mod tools;
 
 use crate::ugi::*;
 

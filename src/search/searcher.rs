@@ -7,6 +7,7 @@ use crate::search::evaluation::*;
 use crate::moves::moves::*;
 use crate::moves::move_gen::*;
 use crate::moves::move_list::*;
+use crate::tools::tt::*;
 use crate::ugi;
 
 pub const MAXPLY: i8 = 99;
@@ -147,9 +148,10 @@ impl Searcher {
     }
 
     /// Main search function.
-    fn search(&mut self, board: &mut BoardState, mut alpha: f64, beta: f64, player: f64, ply: i8, null_searching: bool) -> f64 {
+    fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, ply: i8, null_searching: bool) -> f64 {
         let is_root = ply == self.search_data.ply;
         let is_leaf = ply == 0;
+        let board_hash = board.hash();
   
         // Check if the search should stop.
         if self.stop {
@@ -181,14 +183,24 @@ impl Searcher {
 
         }
 
-        // Null Move Pruning
-        if !is_root && ply > 3 && !null_searching && !move_list.has_threat(-player) {
-            let mut new_board = board.make_null();
-            
-            let score: f64 = -self.search(&mut new_board, -beta, -beta + 1.0, -player, ply - 1 - 2, true);
-            if score >= beta {
-                self.search_data.beta_cuts += 1;
-                return beta;
+        // Handle Transposition Table
+        let (valid, entry) = unsafe { tt().probe(board_hash) };
+        if valid && entry.depth >= ply {
+            if entry.bound == NodeBound::ExactValue {
+                return entry.score;
+
+            } else if entry.bound == NodeBound::LowerBound {
+                if entry.score > alpha {
+                    alpha = entry.score;
+                }
+                
+            } else if entry.bound == NodeBound::UpperBound && entry.score < beta {
+                beta = entry.score;
+
+            }
+
+            if alpha >= beta {
+                return entry.score;
 
             }
 
@@ -205,8 +217,9 @@ impl Searcher {
         };
         
         // Loop through valid moves and search them.
+        let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
-        for (i, mv) in current_player_moves.iter().enumerate() {
+        for (_, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
 
             let score: f64 = -self.search(&mut new_board, -beta, -alpha, -player, ply - 1, null_searching);
@@ -219,7 +232,8 @@ impl Searcher {
 
             if score > best_score {
                 best_score = score;
-    
+                best_move = *mv;
+
             }
             if best_score > alpha {
                 alpha = best_score;
@@ -233,6 +247,20 @@ impl Searcher {
             }
 
         }
+
+        let node_bound: NodeBound = if best_score >= beta {
+            NodeBound::LowerBound
+
+        } else if best_score <= alpha  {
+            NodeBound::UpperBound
+
+        } else {
+            NodeBound::ExactValue
+
+        };
+
+        let new_entry = Entry::new(board_hash, best_score, ply, TTMove::from(best_move), node_bound);
+        unsafe { tt().insert(new_entry) };
 
         best_score
 
