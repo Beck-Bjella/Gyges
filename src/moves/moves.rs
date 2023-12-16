@@ -183,29 +183,29 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec
         let mut sort_val: f64 = 0.0;
         let mut new_board = board.make_move(&mv);
 
-        // ----------------------------------------------
-        // let mut move_list = unsafe { valid_moves(&mut new_board, -player) };
-        // if move_list.has_threat(-player) {
-        //     sort_val = f64::NEG_INFINITY;       
-        //     return (mv, sort_val);
+        // ----------------------- NEW -----------------------
+        let mut move_list = unsafe { valid_moves(&mut new_board, -player) };
+        if move_list.has_threat(-player) {
+            sort_val = f64::NEG_INFINITY;       
+            return (mv, sort_val);
             
-        // }
-        // let moves = move_list.moves(&mut new_board);
-        // let legal = get_legal(moves, &mut new_board, -player);
+        }
+        let moves = move_list.moves(&mut new_board);
+        let legal = get_legal(moves, &mut new_board, -player);
 
-        // sort_val -= legal.len() as f64;
+        sort_val -= legal.len() as f64;
         // ----------------------------------------------
         
             
-        // ----------------------------------------------
-        sort_val -= unsafe{ valid_move_count(&mut new_board, -player)} as f64;
+        // ----------------------- OLD -----------------------
+        // sort_val -= unsafe{ valid_move_count(&mut new_board, -player)} as f64;
 
-        // If a move has less then 5 threats then penalize it.
-        let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
-        if threat_count <= 5_usize {
-            sort_val -= 1000.0 * (5 - threat_count) as f64;
+        // // If a move has less then 5 threats then penalize it.
+        // let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
+        // if threat_count <= 5_usize {
+        //     sort_val -= 1000.0 * (5 - threat_count) as f64;
 
-        }
+        // }
         // ----------------------------------------------
 
 
@@ -241,8 +241,7 @@ pub fn get_legal(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<M
     for mv in moves {
         let mut new_board = board.make_move(&mv);
 
-        let threat_count = unsafe{ valid_threat_count(&mut new_board, -player) };
-        if threat_count == 0 {
+        if !unsafe{ has_threat(&mut new_board, -player) } {
             legal_moves.push(mv);
 
         }
