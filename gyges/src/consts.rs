@@ -3,11 +3,6 @@ use crate::tools::tt::*;
 
 use std::mem;
 
-// TT (Transposition Table)
-const TT_ALLOC_SIZE: usize = mem::size_of::<TranspositionTable>();
-pub type DummyTranspositionTable = [u8; TT_ALLOC_SIZE];
-pub static mut TT_TABLE: DummyTranspositionTable = [0; TT_ALLOC_SIZE];
-
 // General
 pub const ONE_PIECE: usize = 1;
 pub const TWO_PIECE: usize = 2;
@@ -20,29 +15,6 @@ pub const PLAYER_1_GOAL: usize = 36;
 pub const PLAYER_2_GOAL: usize = 37;
 
 pub const NULL: usize = 100;
-
-// Boards
-pub const STARTING_BOARD: [usize; 38] = [
-    3, 2, 1, 1, 2, 3,
-    0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0,
-    3, 2, 1, 1, 2, 3,
-    0, 0
-
-];
-
-pub const BENCH_BOARD: [usize; 38] = [
-    2, 0, 2, 1, 1, 0,
-    0, 0, 0, 3, 3, 0,
-    0, 0, 0, 0, 0, 0,
-    0, 0, 0, 2, 0, 0,
-    0, 0, 0, 1, 0, 0,
-    0, 3, 0, 1, 2, 3,
-    0, 0
-
-];
 
 // Move Generation
 pub const FULL: BitBoard = BitBoard(0b111111111111111111111111111111111111);

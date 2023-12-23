@@ -1,11 +1,6 @@
-[package]
-name = "gyges_engine"
-version = "1.0.0"
-edition = "2021"
-
-[dependencies]
-itertools = "0.10.5"
-rand = "0.8.5"
+[workspace]
+members = ["gyges", "gyges_engine"]
+resolver = "2"
 
 [profile.dev]
 opt-level = 3

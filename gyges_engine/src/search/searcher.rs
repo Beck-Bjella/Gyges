@@ -1,13 +1,15 @@
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
-use crate::board::board::*;
-use crate::consts::*;
+use gyges::board::board::*;
+use gyges::moves::moves::*;
+use gyges::moves::move_gen::*;
+use gyges::moves::move_list::*;
+use gyges::tools::tt::*;
+use gyges::consts::*;
+
 use crate::search::evaluation::*;
-use crate::moves::moves::*;
-use crate::moves::move_gen::*;
-use crate::moves::move_list::*;
-use crate::tools::tt::*;
+use crate::consts::*;
 use crate::ugi;
 
 pub const MAXPLY: i8 = 99;

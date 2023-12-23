@@ -2,10 +2,10 @@ use std::io;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-use crate::board::board::*;
-use crate::consts::*;
+use gyges::board::board::*;
+
 use crate::search::searcher::*;
-use crate::tools::tt::*;
+use crate::consts::*;
 
 pub struct Ugi {
     searching_thread: Option<thread::JoinHandle<()>>,

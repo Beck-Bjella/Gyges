@@ -4,7 +4,6 @@ use std::fmt::Display;
 use std::mem;
 use std::ptr::{self, NonNull};
 
-use crate::consts::*;
 use crate::moves::moves::*;
 
 const CLUSTER_SIZE: usize = 3;
@@ -255,24 +254,6 @@ fn alloc_room(size: usize) -> NonNull<Cluster> {
         let new_ptr: *mut Cluster = ptr.cast();
 
         NonNull::new(new_ptr).unwrap()
-
-    }
-
-}
-
-/// Returns acess to the global transposition table.
-pub fn tt() -> &'static TranspositionTable {
-    unsafe { &*(&mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable) }
-
-}
-
-/// Initalizes the global transposition table.
-/// 
-/// Size must be a power of 2
-pub fn init_tt(size: usize) {
-    unsafe {
-        let tt = &mut TT_TABLE as *mut DummyTranspositionTable as *mut TranspositionTable;
-        ptr::write(tt, TranspositionTable::new(size));
 
     }
 

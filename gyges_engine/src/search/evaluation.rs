@@ -1,7 +1,7 @@
-use crate::board::bitboard::BitBoard;
-use crate::consts::*;
-use crate::board::board::*;
-use crate::moves::move_gen::*;
+use gyges::board::board::*;
+use gyges::board::bitboard::BitBoard;
+use gyges::moves::move_gen::*;
+use gyges::consts::*;
 
 pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [300.0, 100.0, 50.0];
 pub const SHARED_PIECE_CONTROL_SCORES: [f64; 3] = [75.0, 50.0, 25.0];
