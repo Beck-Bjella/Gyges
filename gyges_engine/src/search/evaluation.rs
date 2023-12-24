@@ -1,5 +1,5 @@
 use gyges::board::board::*;
-use gyges::board::bitboard::BitBoard;
+use gyges::board::bitboard::*;
 use gyges::moves::move_gen::*;
 use gyges::consts::*;
 

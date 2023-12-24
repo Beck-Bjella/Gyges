@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 
+use crate::board::board::*;
 use crate::board::bitboard::*;
 use crate::moves::moves::*;
-use crate::board::board::*;
 use crate::moves::move_gen::*;
 use crate::consts::*;
 
@@ -23,8 +23,8 @@ impl RawMoveList {
             drop_positions,
             start_indexs: vec![],
             start_positions: [(NULL, NULL); 6],
-            end_positions: [BitBoard(0); 6],
-            pickup_positions: [BitBoard(0); 6],
+            end_positions: [EMPTY; 6],
+            pickup_positions: [EMPTY; 6],
 
         }
 

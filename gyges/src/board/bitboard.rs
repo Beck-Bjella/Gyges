@@ -1,138 +1,9 @@
-use std::ops::{Not, Rem, RemAssign, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign, Shl, ShlAssign, Shr, ShrAssign};
-use crate::helper::bit_twiddles::*;
+use std::ops::{Not, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Shl, ShlAssign, Shr, ShrAssign};
 
-// Allows for shifting operations to be applied to a struct consisting of a singular tuple
-/// containing a type that implements that bit operation.
-macro_rules! impl_indv_shift_ops {
-    ($t:ty, $tname:ident, $fname:ident, $w:ident, $ta_name:ident, $fa_name:ident) => (
-
-        impl $tname<usize> for $t {
-            type Output = $t;
-
-            #[inline]
-            fn $fname(self, rhs: usize) -> $t {
-                Self::from((self.0).$w(rhs as u32))
-            }
-        }
-
-        impl $ta_name<usize> for $t {
-
-            #[inline]
-            fn $fa_name(&mut self, rhs: usize) {
-                *self = Self::from((self.0).$w(rhs as u32));
-
-            }
-
-        }
-
-    )
-
-}
-
-/// Allows for bit operations to be applied to a struct consisting of a singular tuple
-/// containing a type that implements that bit operation.
-macro_rules! impl_indv_bit_ops {
-    ($t:ty, $b:ty, $tname:ident, $fname:ident, $w:ident, $ta_name:ident, $fa_name:ident) => (
-
-        impl $tname for $t {
-            type Output = $t;
-
-            #[inline]
-            fn $fname(self, rhs: $t) -> $t {
-                Self::from((self.0).$w(rhs.0))
-
-            }
-
-        }
-
-        impl $ta_name for $t {
-
-            #[inline]
-            fn $fa_name(&mut self, rhs: $t) {
-                *self = Self::from((self.0).$w(rhs.0));
-
-            }
-
-        }
-
-        impl $tname<$b> for $t {
-            type Output = $t;
-
-            #[inline]
-            fn $fname(self, rhs: $b) -> $t {
-                Self::from((self.0).$w(rhs))
-
-            }
-
-        }
-
-        impl $ta_name<$b> for $t {
-
-            #[inline]
-            fn $fa_name(&mut self, rhs: $b) {
-                *self = Self::from((self.0).$w(rhs));
-
-            }
-
-        }
-
-    )
-
-}
-
-/// Implies bit operations `&, |, ^, !`, shifting operations `<< >>`,1
-/// math operations `+, -, *, /, %` and `From` trait to a struct consisting of a
-/// singular tuple. This tuple must contain a type that implements these bit operations.
-macro_rules! impl_bit_ops {
-    ($t:tt, $b:tt) => (
-        impl From<$b> for $t {
-            fn from(bit_type: $b) -> Self {
-                $t(bit_type)
-
-            }
-
-        }
-
-        impl From<$t> for $b {
-            fn from(it:$t) -> Self {
-                it.0
-
-            }
-
-        }
-
-        impl_indv_bit_ops!( $t, $b,  Rem,    rem,    rem,             RemAssign,    rem_assign);
-        impl_indv_bit_ops!( $t, $b,  BitOr,  bitor,  bitor,           BitOrAssign,  bitor_assign);
-        impl_indv_bit_ops!( $t, $b,  BitAnd, bitand, bitand,          BitAndAssign, bitand_assign);
-        impl_indv_bit_ops!( $t, $b,  BitXor, bitxor, bitxor,          BitXorAssign, bitxor_assign);
-
-        impl_indv_bit_ops!( $t, $b,  Add,    add,    wrapping_add,    AddAssign, add_assign);
-        impl_indv_bit_ops!( $t, $b,  Div,    div,    wrapping_div,    DivAssign, div_assign);
-        impl_indv_bit_ops!( $t, $b,  Mul,    mul,    wrapping_mul,    MulAssign, mul_assign);
-        impl_indv_bit_ops!( $t, $b,  Sub,    sub,    wrapping_sub,    SubAssign, sub_assign);
-
-        impl_indv_shift_ops!($t, Shl, shl, wrapping_shl,    ShlAssign, shl_assign);
-        impl_indv_shift_ops!($t, Shr, shr, wrapping_shr,    ShrAssign, shr_assign);
-
-        impl Not for $t {
-            type Output = $t;
-
-            #[inline]
-            fn not(self) -> $t {
-                $t(!self.0)
-
-            }
-
-        }
-
-    )
-    
-}
+use crate::core::bit_twiddles::*;
 
 #[derive(Copy, Clone, Default, Hash, PartialEq, Eq, Debug)]
 pub struct BitBoard(pub u64);
-
-impl_bit_ops!(BitBoard, u64);
 
 impl BitBoard {
     pub fn get_data(&mut self) -> Vec<usize> {
@@ -204,6 +75,144 @@ impl BitBoard {
     
     pub fn is_not_empty(self) -> bool {
         self.0 != 0
+    }
+
+}
+
+// Impl bit opperators
+impl Not for BitBoard {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        Self(!self.0)
+    }
+
+}
+
+impl BitOr<BitBoard> for BitBoard {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+
+}
+
+impl BitOr<u64> for BitBoard {
+    type Output = Self;
+
+    fn bitor(self, rhs: u64) -> Self::Output {
+        Self(self.0 | rhs)
+    }
+
+}
+
+impl BitOrAssign<BitBoard> for BitBoard {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+
+}
+
+impl BitOrAssign<u64> for BitBoard {
+    fn bitor_assign(&mut self, rhs: u64) {
+        self.0 |= rhs;
+    }
+
+}
+
+impl BitAnd<BitBoard> for BitBoard {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+
+}
+
+impl BitAnd<u64> for BitBoard {
+    type Output = Self;
+
+    fn bitand(self, rhs: u64) -> Self::Output {
+        Self(self.0 & rhs)
+    }
+
+}
+
+impl BitAndAssign<BitBoard> for BitBoard {
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 &= rhs.0;
+    }
+
+}
+
+impl BitAndAssign<u64> for BitBoard {
+    fn bitand_assign(&mut self, rhs: u64) {
+        self.0 &= rhs;
+    }
+
+}
+
+impl BitXor<BitBoard> for BitBoard {
+    type Output = Self;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        Self(self.0 ^ rhs.0)
+    }
+
+}
+
+impl BitXor<u64> for BitBoard {
+    type Output = Self;
+
+    fn bitxor(self, rhs: u64) -> Self::Output {
+        Self(self.0 ^ rhs)
+    }
+
+}
+
+impl BitXorAssign<BitBoard> for BitBoard {
+    fn bitxor_assign(&mut self, rhs: Self) {
+        self.0 ^= rhs.0;
+    }
+
+}
+
+impl BitXorAssign<u64> for BitBoard {
+    fn bitxor_assign(&mut self, rhs: u64) {
+        self.0 ^= rhs;
+    }
+
+}
+
+impl Shl<usize> for BitBoard {
+    type Output = Self;
+
+    fn shl(self, rhs: usize) -> Self::Output {
+        Self(self.0 << rhs)
+    }
+
+}
+
+impl ShlAssign<usize> for BitBoard {
+    fn shl_assign(&mut self, rhs: usize) {
+        self.0 <<= rhs;
+    }
+
+}
+
+impl Shr<usize> for BitBoard {
+    type Output = Self;
+
+    fn shr(self, rhs: usize) -> Self::Output {
+        Self(self.0 >> rhs)
+    }
+
+}
+
+impl ShrAssign<usize> for BitBoard {
+    fn shr_assign(&mut self, rhs: usize) {
+        self.0 >>= rhs;
     }
 
 }

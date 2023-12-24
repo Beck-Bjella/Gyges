@@ -102,7 +102,7 @@ impl From<[usize; 38]> for BoardState {
     fn from(data: [usize; 38]) -> Self {
         let hash = get_uni_hash(data);
 
-        let mut piece_bb = BitBoard(0);
+        let mut piece_bb = EMPTY;
         for (i, piece) in data.iter().enumerate().take(36) {
             if *piece != 0 {
                 piece_bb.set_bit(i);

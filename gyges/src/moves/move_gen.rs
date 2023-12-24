@@ -40,9 +40,9 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: f64) -> RawMoveList {
             move_list.add_start_index(x);
             move_list.set_start(x, starting_piece, starting_piece_type);
 
-            STACK_BUFFER.push((Action::End, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
-            STACK_BUFFER.push((Action::Gen, BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
-            STACK_BUFFER.push((Action::Start, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
 
         }
 
@@ -271,9 +271,9 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: f64) -> usize {
             let starting_piece: usize = active_line + x;
             let starting_piece_type: usize = board.data[starting_piece];
 
-            STACK_BUFFER.push((Action::End, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
-            STACK_BUFFER.push((Action::Gen, BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
-            STACK_BUFFER.push((Action::Start, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
 
         }
 
@@ -487,9 +487,9 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
             let starting_piece: usize = active_line + x;
             let starting_piece_type: usize = board.data[starting_piece];
 
-            STACK_BUFFER.push((Action::End, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
-            STACK_BUFFER.push((Action::Gen, BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
-            STACK_BUFFER.push((Action::Start, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
 
         }
 
@@ -673,7 +673,7 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: f64) -> usize {
 
 pub unsafe fn controlled_pieces(board: &mut BoardState, player: f64) -> BitBoard {
     let active_lines: [usize; 2] = board.get_active_lines();
-    let mut controlled_pieces = BitBoard(0);
+    let mut controlled_pieces = EMPTY;
 
     let active_line: usize = if player == PLAYER_1 {
         active_lines[0] * 6
@@ -690,9 +690,9 @@ pub unsafe fn controlled_pieces(board: &mut BoardState, player: f64) -> BitBoard
 
             controlled_pieces |= 1 << active_line + x; 
 
-            STACK_BUFFER.push((Action::End, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
-            STACK_BUFFER.push((Action::Gen, BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
-            STACK_BUFFER.push((Action::Start, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
 
         }
 
@@ -876,7 +876,7 @@ pub unsafe fn controlled_pieces(board: &mut BoardState, player: f64) -> BitBoard
 
 pub unsafe fn controlled_squares(board: &mut BoardState, player: f64) -> BitBoard {
     let active_lines: [usize; 2] = board.get_active_lines();
-    let mut controlled_squares = BitBoard(0);
+    let mut controlled_squares = EMPTY;
 
     let active_line: usize = if player == PLAYER_1 {
         active_lines[0] * 6
@@ -891,9 +891,9 @@ pub unsafe fn controlled_squares(board: &mut BoardState, player: f64) -> BitBoar
             let starting_piece: usize = active_line + x;
             let starting_piece_type: usize = board.data[starting_piece];
 
-            STACK_BUFFER.push((Action::End, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
-            STACK_BUFFER.push((Action::Gen, BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
-            STACK_BUFFER.push((Action::Start, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
 
         }
 
@@ -1094,9 +1094,9 @@ pub unsafe fn has_threat(board: &mut BoardState, player: f64) -> bool {
             let starting_piece: usize = active_line + x;
             let starting_piece_type: usize = board.data[starting_piece];
 
-            STACK_BUFFER.push((Action::End, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
-            STACK_BUFFER.push((Action::Gen, BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
-            STACK_BUFFER.push((Action::Start, BitBoard(0), BitBoard(0), 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
+            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, 0, 0, starting_piece, starting_piece_type, 0, 0.0));
 
         }
 
@@ -1296,7 +1296,7 @@ pub unsafe fn new_valid_moves(board: &mut BoardState, player: f64) -> Vec<Move> 
 
     let mut moves = Vec::with_capacity(1000);
 
-    let mut end_pieces = BitBoard(0);
+    let mut end_pieces = EMPTY;
 
     let active_line: usize = if player == PLAYER_1 {
         active_lines[0] * 6
@@ -1312,7 +1312,7 @@ pub unsafe fn new_valid_moves(board: &mut BoardState, player: f64) -> Vec<Move> 
             let starting_piece_type: usize = board.data[starting_piece];
 
             NEW_STACK_BUFFER.push(NewAction::End(starting_piece, starting_piece_type));
-            NEW_STACK_BUFFER.push(NewAction::Gen(BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            NEW_STACK_BUFFER.push(NewAction::Gen(EMPTY, EMPTY, starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
             NEW_STACK_BUFFER.push(NewAction::Start(starting_piece));
 
         }
@@ -1329,7 +1329,7 @@ pub unsafe fn new_valid_moves(board: &mut BoardState, player: f64) -> Vec<Move> 
             NewAction::Start(starting_piece) => {
                 board.data[starting_piece] = 0;
                 board.piece_bb ^= 1 << starting_piece;
-                end_pieces = BitBoard(0);
+                end_pieces = EMPTY;
 
             },
             NewAction::End(starting_piece, starting_piece_type) => {
@@ -1562,7 +1562,7 @@ pub unsafe fn new_valid_move_count(board: &mut BoardState, player: f64) -> usize
             let starting_piece_type: usize = board.data[starting_piece];
 
             NEW_STACK_BUFFER.push(NewAction::End(starting_piece, starting_piece_type));
-            NEW_STACK_BUFFER.push(NewAction::Gen(BitBoard(0), BitBoard(0), starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
+            NEW_STACK_BUFFER.push(NewAction::Gen(EMPTY, EMPTY, starting_piece, starting_piece_type, starting_piece, starting_piece_type, x, player));
             NEW_STACK_BUFFER.push(NewAction::Start(starting_piece));
 
         }
