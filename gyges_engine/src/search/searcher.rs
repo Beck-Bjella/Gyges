@@ -2,11 +2,11 @@ use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
 use gyges::board::board::*;
+use gyges::core::player::Player;
 use gyges::moves::moves::*;
-use gyges::moves::move_gen::*;
+use gyges::moves::movegen::*;
 use gyges::moves::move_list::*;
 use gyges::tools::tt::*;
-use gyges::consts::*;
 
 use crate::search::evaluation::*;
 use crate::consts::*;
@@ -99,7 +99,7 @@ impl Searcher {
 
         let board = &mut self.options.board.clone();
 
-        for mv in unsafe{ valid_moves(board, PLAYER_1).moves(board) } {
+        for mv in unsafe{ valid_moves(board, Player::One).moves(board) } {
             if mv.is_win() {
                 self.search_data.best_move = RootMove::new(mv, f64::INFINITY, 1, 0);
                 self.completed_searchs.push(self.search_data.clone());
@@ -122,7 +122,7 @@ impl Searcher {
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
          
-            self.search(board, f64::NEG_INFINITY, f64::INFINITY, PLAYER_1, self.current_ply, false);
+            self.search(board, f64::NEG_INFINITY, f64::INFINITY, Player::One, self.current_ply, false);
       
             if self.stop {
                 break 'iterative_deepening;
@@ -150,7 +150,7 @@ impl Searcher {
     }
 
     /// Main search function.
-    fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: f64, ply: i8, null_searching: bool) -> f64 {
+    fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: Player, ply: i8, null_searching: bool) -> f64 {
         let is_root = ply == self.search_data.ply;
         let is_leaf = ply == 0;
         let board_hash = board.hash();
@@ -180,7 +180,7 @@ impl Searcher {
 
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
-            let eval = get_evalulation(board) * player;
+            let eval = get_evalulation(board) * player.eval_multiplier();
             return eval;
 
         }
@@ -224,7 +224,7 @@ impl Searcher {
         for (_, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
 
-            let score: f64 = -self.search(&mut new_board, -beta, -alpha, -player, ply - 1, null_searching);
+            let score: f64 = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1, null_searching);
 
             // Update the score of the rootnode.
             if is_root {

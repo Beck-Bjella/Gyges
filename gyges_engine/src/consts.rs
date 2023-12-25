@@ -15,7 +15,6 @@ pub fn tt() -> &'static TranspositionTable {
 }
 
 /// Initalizes the global transposition table.
-/// 
 /// Size must be a power of 2
 pub fn init_tt(size: usize) {
     unsafe {
@@ -25,7 +24,6 @@ pub fn init_tt(size: usize) {
     }
 
 }
-
 
 // Boards
 pub const STARTING_BOARD: [usize; 38] = [

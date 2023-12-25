@@ -1,4 +1,5 @@
 use crate::board::bitboard::*;
+use crate::core::player::Player;
 use crate::moves::moves::*;
 use crate::consts::*;
 use crate::tools::zobrist::*;
@@ -7,7 +8,7 @@ use crate::tools::zobrist::*;
 pub struct BoardState {
     pub data: [usize; 38],
     pub piece_bb: BitBoard,
-    pub player: f64,
+    pub player: Player,
     hash: u64,
 
 }
@@ -16,7 +17,7 @@ impl BoardState {
     pub fn make_move(self, mv: &Move) -> BoardState {
         let mut data = self.data;
         let mut piece_bb = self.piece_bb;
-        let player = self.player * -1.0;
+        let player = self.player.other();
         let mut hash = self.hash;
 
         let step1 = [mv.data[0], mv.data[1]];
@@ -74,25 +75,29 @@ impl BoardState {
 
     }
 
-    pub fn get_drops(&self, active_lines: [usize; 2], player: f64) -> BitBoard {
-        if player == PLAYER_1 {
-            (FULL ^ OPP_BACK_ZONE[active_lines[1]]) & !self.piece_bb
+    pub fn get_drops(&self, active_lines: [usize; 2], player: Player) -> BitBoard {
+        (FULL ^ BACK_ZONES[player.other() as usize][active_lines[player.other() as usize]]) & !self.piece_bb
 
-        } else {
-            (FULL ^ PLAYER_BACK_ZONE[active_lines[0]]) & !self.piece_bb
+        // if player == Player::One {
+        //     (FULL ^ OPP_BACK_ZONE[active_lines[1]]) & !self.piece_bb
+
+        // } else {
+        //     (FULL ^ PLAYER_BACK_ZONE[active_lines[0]]) & !self.piece_bb
                 
-        }
+        // }
 
     }
 
     pub fn hash(&self) -> u64 {
-        if self.player == PLAYER_1 {
-            self.hash ^ PLAYER_1_HASH
+        self.hash ^ PLAYER_HASH_DATA[self.player as usize]
 
-        } else {
-            self.hash ^ PLAYER_2_HASH
+        // if self.player == Player::One {
+        //     self.hash ^ PLAYER_1_HASH
 
-        }
+        // } else {
+        //     self.hash ^ PLAYER_2_HASH
+
+        // }
 
     }
 
@@ -114,7 +119,7 @@ impl From<[usize; 38]> for BoardState {
         BoardState {
             data,
             piece_bb,
-            player: 1.0,
+            player: Player::One,
             hash: hash
 
         }

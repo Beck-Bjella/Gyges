@@ -2,8 +2,9 @@ use std::cmp::Ordering;
 
 use crate::board::board::*;
 use crate::board::bitboard::*;
+use crate::core::player::*;
 use crate::moves::moves::*;
-use crate::moves::move_gen::*;
+use crate::moves::movegen::*;
 use crate::consts::*;
 
 
@@ -79,18 +80,12 @@ impl RawMoveList {
 
     }
 
-    pub fn has_threat(&mut self, player: f64) -> bool {
+    pub fn has_threat(&mut self, player: Player) -> bool {
         for idx in self.start_indexs.iter() {
-            if player == PLAYER_1 {
-                if (self.end_positions[*idx] & (1 << PLAYER_2_GOAL)).is_not_empty() {
-                    return true;
-
-                } 
-
-            } else if player == PLAYER_2 && (self.end_positions[*idx] & (1 << PLAYER_1_GOAL)).is_not_empty() {
+            if (self.end_positions[*idx] & (1 << GOALS[player.other() as usize])).is_not_empty() {
                 return true;
 
-            }
+            } 
         
         }
 
@@ -145,11 +140,11 @@ impl RootMoveList {
     }
 
     pub fn setup(&mut self, board: &mut BoardState) {
-        let moves = order_moves(unsafe { valid_moves(board, PLAYER_1) }.moves(board), board, PLAYER_1);
+        let moves = order_moves(unsafe { valid_moves(board, Player::One) }.moves(board), board, Player::One);
 
         let root_moves: Vec<RootMove> = moves.iter().map( |mv| {
             let mut new_board = board.make_move(mv);
-            let threats: usize = unsafe { valid_threat_count(&mut new_board, PLAYER_1) };
+            let threats: usize = unsafe { valid_threat_count(&mut new_board, Player::One) };
 
             RootMove::new(*mv, 0.0, 0, threats)
 

@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
 
 use crate::board::board::*;
-use crate::moves::move_gen::*;
+use crate::core::player::*;
+use crate::moves::movegen::*;
 use crate::consts::*;
 
 /// Designates the type of move.
@@ -177,28 +178,28 @@ impl RootMove {
 }
 
 /// Orders a list of moves.
-pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<Move> {
+pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: Player) -> Vec<Move> {
     // For every move calculate a value to sort it by.
     let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
         let mut sort_val: f64 = 0.0;
         let mut new_board = board.make_move(&mv);
 
         // ----------------------- NEW -----------------------
-        // let mut move_list = unsafe { valid_moves(&mut new_board, -player) };
-        // if move_list.has_threat(-player) {
+        // let mut move_list = unsafe { valid_moves(&mut new_board, player.other()) };
+        // if move_list.has_threat(player.other()) {
         //     sort_val = f64::NEG_INFINITY;       
         //     return (mv, sort_val);
             
         // }
         // let moves = move_list.moves(&mut new_board);
-        // let legal = get_legal(moves, &mut new_board, -player);
+        // let legal = get_legal(moves, &mut new_board, player.other());
 
         // sort_val -= legal.len() as f64;
         // ----------------------------------------------
         
             
         // ----------------------- OLD -----------------------
-        sort_val -= unsafe{ valid_move_count(&mut new_board, -player)} as f64;
+        sort_val -= unsafe{ valid_move_count(&mut new_board, player.other())} as f64;
 
         // If a move has less then 5 threats then penalize it.
         let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
@@ -207,7 +208,6 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec
 
         }
         // ----------------------------------------------
-
 
         (mv, sort_val)
 
@@ -235,13 +235,13 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec
  
 }
 
-pub fn get_legal(moves: Vec<Move>, board: &mut BoardState, player: f64) -> Vec<Move> {
+pub fn get_legal(moves: Vec<Move>, board: &mut BoardState, player: Player) -> Vec<Move> {
     let mut legal_moves: Vec<Move> = Vec::with_capacity(moves.len());
 
     for mv in moves {
         let mut new_board = board.make_move(&mv);
 
-        if !unsafe{ has_threat(&mut new_board, -player) } {
+        if !unsafe{ has_threat(&mut new_board, player.other()) } {
             legal_moves.push(mv);
 
         }

@@ -1,9 +1,11 @@
 use rand::Rng;
 
-use crate::board::board::*;
+use crate::{board::board::*, core::player::Player};
 
 pub const PLAYER_1_HASH: u64 = 11071850447646664432;
 pub const PLAYER_2_HASH: u64 = 15525846075063937794;
+
+pub const PLAYER_HASH_DATA: [u64; 2] = [PLAYER_1_HASH, PLAYER_2_HASH];
 
 pub const ZOBRIST_HASH_DATA: [[u64; 4]; 38] = [
     [0, 16019584827874668947, 10756861282518694731, 326575046895935871], 
@@ -64,15 +66,8 @@ pub fn gen_data() {
 }
 
 /// Gets the hash for a board including the player to move.
-pub fn get_hash(board: &mut BoardState, current_player: f64) -> u64 {
-    let mut hash = 0;
-
-    if current_player == 1.0 {
-        hash ^= PLAYER_1_HASH;
-    } else {
-        hash ^= PLAYER_2_HASH;
-
-    }
+pub fn get_hash(board: &mut BoardState, player: Player) -> u64 {
+    let mut hash = PLAYER_HASH_DATA[player as usize];
 
     for (i, piece) in board.data.iter().enumerate().take(36) {
         if *piece != 0 {

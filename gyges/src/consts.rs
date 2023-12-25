@@ -5,13 +5,30 @@ pub const ONE_PIECE: usize = 1;
 pub const TWO_PIECE: usize = 2;
 pub const THREE_PIECE: usize = 3;
 
-pub const PLAYER_1: f64 = 1.0;
-pub const PLAYER_2: f64 = -1.0;
-
-pub const PLAYER_1_GOAL: usize = 36;
-pub const PLAYER_2_GOAL: usize = 37;
-
 pub const NULL: usize = 100;
+
+// Boards
+pub const STARTING_BOARD: [usize; 38] = [
+    3, 2, 1, 1, 2, 3,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    3, 2, 1, 1, 2, 3,
+    0, 0
+
+];
+
+pub const BENCH_BOARD: [usize; 38] = [
+    2, 0, 2, 1, 1, 0,
+    0, 0, 0, 3, 3, 0,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 2, 0, 0,
+    0, 0, 0, 1, 0, 0,
+    0, 3, 0, 1, 2, 3,
+    0, 0
+
+];
 
 // Move Generation
 pub const FULL: BitBoard = BitBoard(0b111111111111111111111111111111111111);
@@ -34,6 +51,8 @@ pub const PLAYER_BACK_ZONE: [BitBoard; 6] = [
     BitBoard(0b000000000000111111111111111111111111),
     BitBoard(0b000000111111111111111111111111111111),
 ];
+
+pub const BACK_ZONES: [[BitBoard; 6]; 2] = [PLAYER_BACK_ZONE, OPP_BACK_ZONE];
 
 // Move Generation (main)
 pub const ALL_THREE_INTERCEPTS: [u64; 36] = [

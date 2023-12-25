@@ -2,7 +2,7 @@ use std::alloc::{self, Layout};
 use std::cell::UnsafeCell;
 use std::fmt::Display;
 use std::mem;
-use std::ptr::{self, NonNull};
+use std::ptr::NonNull;
 
 use crate::moves::moves::*;
 
@@ -191,7 +191,7 @@ impl TranspositionTable {
     }
 
     /// De-allocates the current heap.
-    unsafe fn de_alloc(&self) {
+    pub unsafe fn de_alloc(&self) {
         let layout = Layout::from_size_align(*self.cap.get(), 2).unwrap();
         let ptr: *mut u8 = mem::transmute(*self.clusters.get());
     
@@ -230,14 +230,13 @@ impl Display for TranspositionTable {
 
 }
 
-unsafe impl Sync for TranspositionTable {}
-
-/// Returns a raw pointer 
+/// Returns a raw pointer to a specific entry in a cluster.
 fn get_entry(cluster: *mut Cluster, i: usize) -> *mut Entry {
     unsafe{ ((*cluster).entrys).as_ptr().add(i) as *mut Entry }
 
 }
 
+/// Returns a raw pointer to the first entry in a cluster.
 unsafe fn cluster_first_entry(cluster: *mut Cluster) -> *mut Entry {
     (*cluster).entrys.get_unchecked_mut(0) as *mut Entry
 
