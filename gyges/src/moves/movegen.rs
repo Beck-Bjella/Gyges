@@ -4,7 +4,7 @@ use crate::board::board::*;
 use crate::board::bitboard::*;
 use crate::core::piece::Piece;
 use crate::core::player::*;
-use crate::core::sq::SQ;
+use crate::core::sq::*;
 use crate::moves::move_list::*;
 use crate::consts::*;
 
@@ -27,8 +27,8 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: Player) -> RawMoveList
     let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
 
     for x in 0..6 {
-        if board.piece_at(active_line_sq + x) != Piece::None {
-            let starting_sq = active_line_sq + x;
+        let starting_sq = active_line_sq + x;
+        if board.piece_at(starting_sq) != Piece::None {
             let starting_piece = board.piece_at(starting_sq);
 
             move_list.add_start_index(x);
@@ -271,8 +271,8 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: Player) -> usize 
     let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
 
     for x in 0..6 {
-        if board.piece_at(active_line_sq + x) != Piece::None {
-            let starting_sq = active_line_sq + x;
+        let starting_sq = active_line_sq + x;
+        if board.piece_at(starting_sq) != Piece::None {
             let starting_piece = board.piece_at(starting_sq);
 
             STACK_BUFFER.push((Action::End, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
@@ -497,8 +497,8 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: Player) -> usiz
     let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
 
     for x in 0..6 {
-        if board.piece_at(active_line_sq + x) != Piece::None {
-            let starting_sq = active_line_sq + x;
+        let starting_sq = active_line_sq + x;
+        if board.piece_at(starting_sq) != Piece::None {
             let starting_piece = board.piece_at(starting_sq);
 
             STACK_BUFFER.push((Action::End, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
@@ -571,16 +571,12 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: Player) -> usiz
                                 continue;
                 
                             }
-                            
-                            let end_piece = board.piece_at(end);
-                            if end_piece != Piece::None {
-                                if (banned_positions & end_bit).is_empty() {
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-                    
-                                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-            
-                                }
+
+                            if (board.piece_bb & end_bit).is_not_empty() && (banned_positions & end_bit).is_empty() {
+                                let new_banned_positions = banned_positions ^ end_bit;
+                                let new_backtrack_board = backtrack_board ^ path.1;
+                
+                                STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, board.piece_at(end), starting_sq, starting_piece, active_line_idx, player));
                                 
                             }
                 
@@ -621,15 +617,11 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: Player) -> usiz
                 
                             }
                             
-                            let end_piece = board.piece_at(end);
-                            if end_piece != Piece::None {
-                                if (banned_positions & end_bit).is_empty() {
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-                                    
-                                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-
-                                }
+                            if (board.piece_bb & end_bit).is_not_empty() && (banned_positions & end_bit).is_empty() {
+                                let new_banned_positions = banned_positions ^ end_bit;
+                                let new_backtrack_board = backtrack_board ^ path.1;
+                
+                                STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, board.piece_at(end), starting_sq, starting_piece, active_line_idx, player));
                                 
                             }
 
@@ -670,15 +662,11 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: Player) -> usiz
                 
                             }
                             
-                            let end_piece = board.piece_at(end);
-                            if end_piece != Piece::None {
-                                if (banned_positions & end_bit).is_empty() {
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-       
-                                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-
-                                }
+                            if (board.piece_bb & end_bit).is_not_empty() && (banned_positions & end_bit).is_empty() {
+                                let new_banned_positions = banned_positions ^ end_bit;
+                                let new_backtrack_board = backtrack_board ^ path.1;
+                
+                                STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, board.piece_at(end), starting_sq, starting_piece, active_line_idx, player));
                                 
                             }
                 
@@ -782,18 +770,14 @@ pub unsafe fn controlled_pieces(board: &mut BoardState, player: Player) -> BitBo
                                 continue;
                 
                             }
-                            
-                            let end_piece = board.piece_at(end);
-                            if end_piece != Piece::None {
-                                if (banned_positions & end_bit).is_empty() {
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-                                    
-                                    controlled_pieces |= end_bit;
 
-                                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-            
-                                }
+                            if (board.piece_bb & end_bit).is_not_empty() && (banned_positions & end_bit).is_empty() {
+                                let new_banned_positions = banned_positions ^ end_bit;
+                                let new_backtrack_board = backtrack_board ^ path.1;
+                                
+                                controlled_pieces |= end_bit;
+
+                                STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, board.piece_at(end), starting_sq, starting_piece, active_line_idx, player));
                                 
                             }
                 
@@ -832,17 +816,13 @@ pub unsafe fn controlled_pieces(board: &mut BoardState, player: Player) -> BitBo
                 
                             }
                             
-                            let end_piece = board.piece_at(end);
-                            if end_piece != Piece::None {
-                                if (banned_positions & end_bit).is_empty() {
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
+                            if (board.piece_bb & end_bit).is_not_empty() && (banned_positions & end_bit).is_empty() {
+                                let new_banned_positions = banned_positions ^ end_bit;
+                                let new_backtrack_board = backtrack_board ^ path.1;
+                                
+                                controlled_pieces |= end_bit;
 
-                                    controlled_pieces |= end_bit;
-                                    
-                                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-
-                                }
+                                STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, board.piece_at(end), starting_sq, starting_piece, active_line_idx, player));
                                 
                             }
 
@@ -881,17 +861,13 @@ pub unsafe fn controlled_pieces(board: &mut BoardState, player: Player) -> BitBo
                 
                             }
                             
-                            let end_piece = board.piece_at(end);
-                            if end_piece != Piece::None {
-                                if (banned_positions & end_bit).is_empty() {
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-                                    
-                                    controlled_pieces |= end_bit;
-       
-                                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+                            if (board.piece_bb & end_bit).is_not_empty() && (banned_positions & end_bit).is_empty() {
+                                let new_banned_positions = banned_positions ^ end_bit;
+                                let new_backtrack_board = backtrack_board ^ path.1;
+                                
+                                controlled_pieces |= end_bit;
 
-                                }
+                                STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, board.piece_at(end), starting_sq, starting_piece, active_line_idx, player));
                                 
                             }
                 
@@ -1123,7 +1099,7 @@ pub unsafe fn controlled_squares(board: &mut BoardState, player: Player) -> BitB
 
     }
 
-    controlled_squares
+    controlled_squares & !board.piece_bb
 
 }
 
@@ -1205,17 +1181,13 @@ pub unsafe fn has_threat(board: &mut BoardState, player: Player) -> bool {
                                 return true;
   
                             }
-                            
-                            let end_piece = board.piece_at(end);
-                            if end_piece != Piece::None {
-                                if (banned_positions & end_bit).is_empty() {
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-                    
-                                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+
+                            if (board.piece_bb & end_bit).is_not_empty() && (banned_positions & end_bit).is_empty() {
+                                let new_banned_positions = banned_positions ^ end_bit;
+                                let new_backtrack_board = backtrack_board ^ path.1;
+                
+                                STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, board.piece_at(end), starting_sq, starting_piece, active_line_idx, player));
             
-                                }
-                                
                             }
                 
                         }
@@ -1253,16 +1225,12 @@ pub unsafe fn has_threat(board: &mut BoardState, player: Player) -> bool {
                 
                             }
                             
-                            let end_piece = board.piece_at(end);
-                            if end_piece != Piece::None {
-                                if (banned_positions & end_bit).is_empty() {
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-                                    
-                                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-
-                                }
-                                
+                            if (board.piece_bb & end_bit).is_not_empty() && (banned_positions & end_bit).is_empty() {
+                                let new_banned_positions = banned_positions ^ end_bit;
+                                let new_backtrack_board = backtrack_board ^ path.1;
+                
+                                STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, board.piece_at(end), starting_sq, starting_piece, active_line_idx, player));
+            
                             }
 
                         }
@@ -1300,16 +1268,12 @@ pub unsafe fn has_threat(board: &mut BoardState, player: Player) -> bool {
                 
                             }
                             
-                            let end_piece = board.piece_at(end);
-                            if end_piece != Piece::None {
-                                if (banned_positions & end_bit).is_empty() {
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-       
-                                    STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-
-                                }
-                                
+                            if (board.piece_bb & end_bit).is_not_empty() && (banned_positions & end_bit).is_empty() {
+                                let new_banned_positions = banned_positions ^ end_bit;
+                                let new_backtrack_board = backtrack_board ^ path.1;
+                
+                                STACK_BUFFER.push((Action::Gen, new_backtrack_board, new_banned_positions, end, board.piece_at(end), starting_sq, starting_piece, active_line_idx, player));
+            
                             }
                 
                         }

@@ -87,8 +87,6 @@ impl Ugi {
            
         }
 
-        unsafe{ tt().de_alloc() };
-
         self.stop();
     
     }

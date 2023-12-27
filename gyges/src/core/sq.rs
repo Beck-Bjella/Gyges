@@ -1,5 +1,6 @@
 use std::ops::{Add, AddAssign, Sub, SubAssign, Mul, MulAssign};
 
+
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct SQ(pub u8);
 

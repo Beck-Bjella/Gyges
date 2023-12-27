@@ -189,27 +189,27 @@ impl Searcher {
         }
 
         // Handle Transposition Table
-        // let (valid, entry) = unsafe { tt().probe(board_hash) };
-        // if valid && entry.depth >= ply {
-        //     if entry.bound == NodeBound::ExactValue {
-        //         return entry.score;
+        let (valid, entry) = unsafe { tt().probe(board_hash) };
+        if valid && entry.depth >= ply {
+            if entry.bound == NodeBound::ExactValue {
+                return entry.score;
 
-        //     } else if entry.bound == NodeBound::LowerBound {
-        //         if entry.score > alpha {
-        //             alpha = entry.score;
-        //         }
+            } else if entry.bound == NodeBound::LowerBound {
+                if entry.score > alpha {
+                    alpha = entry.score;
+                }
                 
-        //     } else if entry.bound == NodeBound::UpperBound && entry.score < beta {
-        //         beta = entry.score;
+            } else if entry.bound == NodeBound::UpperBound && entry.score < beta {
+                beta = entry.score;
 
-        //     }
+            }
 
-        //     if alpha >= beta {
-        //         return entry.score;
+            if alpha >= beta {
+                return entry.score;
 
-        //     }
+            }
 
-        // }
+        }
 
         // Use previous ply search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {

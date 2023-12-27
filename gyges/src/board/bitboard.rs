@@ -2,6 +2,7 @@ use std::{ops::{Not, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAss
 
 use crate::core::{bit_twiddles::*, sq::SQ};
 
+/// A bitboard is a 64 bit integer that represents if a square is occupied or not.
 #[derive(Copy, Clone, Default, Hash, PartialEq, Eq, Debug)]
 pub struct BitBoard(pub u64);
 
@@ -75,6 +76,7 @@ impl BitBoard {
     
     pub fn is_not_empty(self) -> bool {
         self.0 != 0
+        
     }
 
 }

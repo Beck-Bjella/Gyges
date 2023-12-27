@@ -22,7 +22,7 @@ impl BoardState {
     /// Makes a move on the board. Updates the hash and bitboards accordingly.
     pub fn make_move(self, mv: &Move) -> BoardState {
         let mut new_state = self.clone();
-        new_state.player.other();
+        new_state.player = new_state.player.other();
 
         let step1 = mv.data[0];
         let step2 = mv.data[1];
@@ -34,7 +34,7 @@ impl BoardState {
             new_state.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][self.piece_at(step2.1) as usize];
             new_state.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][step2.0 as usize];
 
-            new_state.hash ^= ZOBRIST_HASH_DATA[step3.1.0 as usize][step2.0 as usize];
+            new_state.hash ^= ZOBRIST_HASH_DATA[step3.1.0 as usize][step3.0 as usize];
 
             new_state.place(step1.0, step1.1);
             new_state.place(step2.0, step2.1);
@@ -42,7 +42,7 @@ impl BoardState {
 
             new_state.piece_bb.clear_bit(step1.1.0 as usize);
             new_state.piece_bb.set_bit(step3.1.0 as usize);
-            
+
         } else if mv.flag == MoveType::Bounce {
             new_state.hash ^= ZOBRIST_HASH_DATA[step1.1.0 as usize][self.piece_at(step1.1) as usize];
 
@@ -110,7 +110,14 @@ impl BoardState {
     
     /// Returns the hash of the board state.
     pub fn hash(&self) -> u64 {
-        self.hash ^ PLAYER_HASH_DATA[self.player as usize]
+        if self.player == Player::One {
+            return self.hash ^ PLAYER_1_HASH;
+
+        } else {
+            return self.hash ^ PLAYER_2_HASH;
+
+        }
+        // self.hash ^ PLAYER_HASH_DATA[self.player as usize]
 
     }
 

@@ -64,48 +64,6 @@ impl Move {
 
 }
 
-// impl From<TTMove> for Move {
-//     fn from(mv: TTMove) -> Self {
-//         let mut data = [0; 6];
-//         for i in 0..mv.data.len() {
-//             data[i] = mv.data[i] as usize
-
-//         }
-
-//         Move {
-//             data,
-//             flag: mv.flag
-
-//         }
-
-//     }
-// }
-
-// /// Structure that defines a move for the tt table.
-// #[derive(PartialEq, Debug, Clone, Copy)]
-// pub struct TTMove {
-//     pub data: [u8; 6],
-//     pub flag: MoveType,
-
-// }
-
-// impl From<Move> for TTMove {
-//     fn from(mv: Move) -> Self {
-//         let mut data = [0; 6];
-//         for i in 0..mv.data.len() {
-//             data[i] = mv.data[i] as u8
-
-//         }
-
-//         TTMove {
-//             data,
-//             flag: mv.flag
-
-//         }
-
-//     }
-// }
-
 /// Structure that defines a rootmove.
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct RootMove {
