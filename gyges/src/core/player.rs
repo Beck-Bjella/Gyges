@@ -1,10 +1,5 @@
 use std::{ops::Not, fmt::Display};
 
-pub const PLAYER_1_GOAL: usize = 36;
-pub const PLAYER_2_GOAL: usize = 37;
-
-pub const GOALS: [usize; 2] = [36, 37];
-
 /// Enum to represent a player on the board
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u8)]

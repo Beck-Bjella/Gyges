@@ -1,12 +1,17 @@
+use std::fmt::Display;
+
 use crate::board::bitboard::*;
-use crate::core::player::Player;
+use crate::core::player::*;
+use crate::core::piece::*;
+use crate::core::sq::*;
 use crate::moves::moves::*;
 use crate::consts::*;
 use crate::tools::zobrist::*;
 
+/// Represents the state of the board. Contains the board data, bitboards, and hash.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct BoardState {
-    pub data: [usize; 38],
+    pub data: [Piece; 38],
     pub piece_bb: BitBoard,
     pub player: Player,
     hash: u64,
@@ -14,59 +19,80 @@ pub struct BoardState {
 }
 
 impl BoardState {
+    /// Makes a move on the board. Updates the hash and bitboards accordingly.
     pub fn make_move(self, mv: &Move) -> BoardState {
-        let mut data = self.data;
-        let mut piece_bb = self.piece_bb;
-        let player = self.player.other();
-        let mut hash = self.hash;
+        let mut new_state = self.clone();
+        new_state.player.other();
 
-        let step1 = [mv.data[0], mv.data[1]];
-        let step2 = [mv.data[2], mv.data[3]];
-        let step3 = [mv.data[4], mv.data[5]];
+        let step1 = mv.data[0];
+        let step2 = mv.data[1];
+        let step3 = mv.data[2];
         
         if mv.flag == MoveType::Drop {
-            hash ^= ZOBRIST_HASH_DATA[step1[1]][self.data[step1[1]]];
+            new_state.hash ^= ZOBRIST_HASH_DATA[step1.1.0 as usize][self.piece_at(step1.1) as usize];
 
-            hash ^= ZOBRIST_HASH_DATA[step2[1]][self.data[step2[1]]];
-            hash ^= ZOBRIST_HASH_DATA[step2[1]][step2[0]];
+            new_state.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][self.piece_at(step2.1) as usize];
+            new_state.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][step2.0 as usize];
 
-            hash ^= ZOBRIST_HASH_DATA[step3[1]][step3[0]];
+            new_state.hash ^= ZOBRIST_HASH_DATA[step3.1.0 as usize][step2.0 as usize];
 
-            data[step1[1]] = step1[0];
+            new_state.place(step1.0, step1.1);
+            new_state.place(step2.0, step2.1);
+            new_state.place(step3.0, step3.1);
 
-            data[step2[1]] = step2[0];
-        
-            data[step3[1]] = step3[0];
-
-            piece_bb.clear_bit(step1[1]);
-            piece_bb.set_bit(step3[1]);
+            new_state.piece_bb.clear_bit(step1.1.0 as usize);
+            new_state.piece_bb.set_bit(step3.1.0 as usize);
             
         } else if mv.flag == MoveType::Bounce {
-            hash ^= ZOBRIST_HASH_DATA[step1[1]][self.data[step1[1]]];
+            new_state.hash ^= ZOBRIST_HASH_DATA[step1.1.0 as usize][self.piece_at(step1.1) as usize];
 
-            hash ^= ZOBRIST_HASH_DATA[step2[1]][step2[0]];
+            new_state.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][step2.0 as usize];
 
-            data[step1[1]] = step1[0];
+            new_state.place(step1.0, step1.1);
+            new_state.place(step2.0, step2.1);
 
-            data[step2[1]] = step2[0];
-
-            piece_bb.clear_bit(step1[1]);
-
-            piece_bb.set_bit(step2[1]);
+            new_state.piece_bb.clear_bit(step1.1.0 as usize);
+            new_state.piece_bb.set_bit(step2.1.0 as usize);
 
         }
         
-        BoardState {
-            data,
-            piece_bb,
-            player,
-            hash
+        new_state
+
+    }
+    
+    /// Places a piece on the board.
+    /// Performs no checks and does not update bitboards or hash.
+    pub fn place(&mut self, piece: Piece, square: SQ) {
+        self.data[square.0 as usize] = piece;
+
+    }
+
+    /// Removes a piece from the board.
+    /// Performs no checks and does not update bitboards or hash.
+    pub fn remove(&mut self, square: SQ) {
+        self.data[square.0 as usize] = Piece::None;
+
+    }
+
+    /// Returns the piece at a given square.
+    pub fn piece_at(&self, square: SQ) -> Piece {
+        self.data[square.0 as usize]
+
+    }
+
+    /// Checks if the board is valid and panics if it is not.
+    pub fn check_valid(&self){
+        if self.piece_bb.pop_count() != 12 {
+            println!("Board Data: {:?}", self.data);
+            panic!("Invalid board state: {} pieces", self.piece_bb.pop_count());
 
         }
 
 
     }
-
+    
+    #[inline(always)]
+    /// Returns the active lines for each player.
     pub fn get_active_lines(&self) -> [usize; 2] {
         let player_1_active_line = (self.piece_bb.bit_scan_forward() as f64 / 6.0).floor() as usize;
         let player_2_active_line = (self.piece_bb.bit_scan_reverse() as f64 / 6.0).floor() as usize;
@@ -74,53 +100,89 @@ impl BoardState {
         [player_1_active_line, player_2_active_line]
 
     }
-
+    
+    #[inline(always)]
+    /// Returns a BitBoard of all the squares that a player can drop a piece on.
     pub fn get_drops(&self, active_lines: [usize; 2], player: Player) -> BitBoard {
         (FULL ^ BACK_ZONES[player.other() as usize][active_lines[player.other() as usize]]) & !self.piece_bb
 
-        // if player == Player::One {
-        //     (FULL ^ OPP_BACK_ZONE[active_lines[1]]) & !self.piece_bb
-
-        // } else {
-        //     (FULL ^ PLAYER_BACK_ZONE[active_lines[0]]) & !self.piece_bb
-                
-        // }
-
     }
-
+    
+    /// Returns the hash of the board state.
     pub fn hash(&self) -> u64 {
         self.hash ^ PLAYER_HASH_DATA[self.player as usize]
 
-        // if self.player == Player::One {
-        //     self.hash ^ PLAYER_1_HASH
+    }
 
-        // } else {
-        //     self.hash ^ PLAYER_2_HASH
+}
 
-        // }
+impl Display for BoardState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.data[37] == Piece::None {
+            writeln!(f, "                .")?;
+
+        } else {
+            writeln!(f, "                {}", self.data[37].to_string())?;
+
+        }
+        writeln!(f, " ")?;
+        writeln!(f, " ")?;
+
+        for y in (0..6).rev() {
+            for x in 0..6 {
+                if self.data[y * 6 + x] == Piece::None {
+                    write!(f, "    .")?;
+                } else {
+                    write!(f, "    {}", self.data[y * 6 + x].to_string())?;
+
+                }
+               
+            }
+            writeln!(f, " ")?;
+            writeln!(f, " ")?;
+
+        }
+
+        writeln!(f, " ")?;
+        if self.data[36] == Piece::None {
+            writeln!(f, "                .")?;
+
+        } else {
+            writeln!(f, "                {}", self.data[36].to_string())?;
+
+        }
+
+        Result::Ok(())
 
     }
 
 }
 
 impl From<[usize; 38]> for BoardState {
-    fn from(data: [usize; 38]) -> Self {
-        let hash = get_uni_hash(data);
+    fn from(array_data: [usize; 38]) -> Self {
+
+        let mut data: [Piece; 38] = [Piece::None; 38];
+        for (i, piece) in array_data.iter().enumerate().take(36) {
+            data[i] = Piece::from(*piece);
+
+        }
 
         let mut piece_bb = EMPTY;
         for (i, piece) in data.iter().enumerate().take(36) {
-            if *piece != 0 {
+            if *piece != Piece::None {
                 piece_bb.set_bit(i);
 
             }
 
         }
 
+        let hash = get_uni_hash(data);
+
         BoardState {
             data,
             piece_bb,
             player: Player::One,
-            hash: hash
+            hash
 
         }
 

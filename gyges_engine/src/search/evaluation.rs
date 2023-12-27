@@ -333,7 +333,7 @@ pub fn unique_controlled_pieces_score(board: &mut BoardState, player: Player, co
     let mut score = 0.0;
     for pos in positions {
         let piece = board.data[pos];
-        score += UNIQUE_PIECE_CONTROL_SCORES[piece - 1];
+        score += UNIQUE_PIECE_CONTROL_SCORES[piece as usize];
 
     }
 
@@ -349,7 +349,7 @@ pub fn shared_controlled_pieces_score(board: &mut BoardState, player: Player, co
     let mut score = 0.0;
     for pos in positions {
         let piece = board.data[pos];
-        score += SHARED_PIECE_CONTROL_SCORES[piece - 1];
+        score += SHARED_PIECE_CONTROL_SCORES[piece as usize];
 
     }
 

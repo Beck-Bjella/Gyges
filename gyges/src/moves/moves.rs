@@ -2,8 +2,9 @@ use std::cmp::Ordering;
 
 use crate::board::board::*;
 use crate::core::player::*;
+use crate::core::sq::*;
+use crate::core::piece::*;
 use crate::moves::movegen::*;
-use crate::consts::*;
 
 /// Designates the type of move.
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -17,14 +18,14 @@ pub enum MoveType {
 /// Structure that defines a move
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct Move {
-    pub data: [usize; 6],
+    pub data: [(Piece, SQ); 3],
     pub flag: MoveType,
 
 }
 
 impl Move {
     /// Create a new move from its indivudal components.
-    pub fn new(data: [usize; 6], flag: MoveType) -> Move {
+    pub fn new(data: [(Piece, SQ); 3], flag: MoveType) -> Move {
         Move {
             data,
             flag,
@@ -36,7 +37,7 @@ impl Move {
     /// Creates a new null move.
     pub fn new_null() -> Move {
         Move {
-            data: [NULL; 6],
+            data: [(Piece::None, SQ::NONE); 3],
             flag: MoveType::None,
 
         }
@@ -45,17 +46,17 @@ impl Move {
 
     /// Checks if a move is null.
     pub fn is_null(&self) -> bool {
-        self.data == [NULL; 6] && self.flag == MoveType::None
+        self.data == [(Piece::None, SQ::NONE); 3] && self.flag == MoveType::None
 
     }
 
     /// Checks if a move wins the game
     pub fn is_win(&self) -> bool {
         if self.flag == MoveType::Bounce {
-            return (self.data[3] == PLAYER_1_GOAL) || (self.data[3] == PLAYER_2_GOAL)
+            return (self.data[1].1 == SQ::P1_GOAL) || (self.data[1].1 == SQ::P2_GOAL)
 
         } else {
-            return (self.data[5] == PLAYER_1_GOAL) || (self.data[5] == PLAYER_2_GOAL)
+            return (self.data[2].1 == SQ::P1_GOAL) || (self.data[2].1 == SQ::P2_GOAL)
 
         }
 
@@ -63,47 +64,47 @@ impl Move {
 
 }
 
-impl From<TTMove> for Move {
-    fn from(mv: TTMove) -> Self {
-        let mut data = [0; 6];
-        for i in 0..mv.data.len() {
-            data[i] = mv.data[i] as usize
+// impl From<TTMove> for Move {
+//     fn from(mv: TTMove) -> Self {
+//         let mut data = [0; 6];
+//         for i in 0..mv.data.len() {
+//             data[i] = mv.data[i] as usize
 
-        }
+//         }
 
-        Move {
-            data,
-            flag: mv.flag
+//         Move {
+//             data,
+//             flag: mv.flag
 
-        }
+//         }
 
-    }
-}
+//     }
+// }
 
-/// Structure that defines a move for the tt table.
-#[derive(PartialEq, Debug, Clone, Copy)]
-pub struct TTMove {
-    pub data: [u8; 6],
-    pub flag: MoveType,
+// /// Structure that defines a move for the tt table.
+// #[derive(PartialEq, Debug, Clone, Copy)]
+// pub struct TTMove {
+//     pub data: [u8; 6],
+//     pub flag: MoveType,
 
-}
+// }
 
-impl From<Move> for TTMove {
-    fn from(mv: Move) -> Self {
-        let mut data = [0; 6];
-        for i in 0..mv.data.len() {
-            data[i] = mv.data[i] as u8
+// impl From<Move> for TTMove {
+//     fn from(mv: Move) -> Self {
+//         let mut data = [0; 6];
+//         for i in 0..mv.data.len() {
+//             data[i] = mv.data[i] as u8
 
-        }
+//         }
 
-        TTMove {
-            data,
-            flag: mv.flag
+//         TTMove {
+//             data,
+//             flag: mv.flag
 
-        }
+//         }
 
-    }
-}
+//     }
+// }
 
 /// Structure that defines a rootmove.
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -157,19 +158,19 @@ impl RootMove {
     pub fn as_ugi(&self) -> String {    
         if self.mv.flag == MoveType::Bounce {
             return 
-            self.mv.data[0].to_string() + "|" + 
-            &self.mv.data[1].to_string() + "|" +
-            &self.mv.data[2].to_string() + "|" + 
-            &self.mv.data[3].to_string();
+            self.mv.data[0].0.to_string() + "|" + 
+            &self.mv.data[0].1.to_string() + "|" +
+            &self.mv.data[1].0.to_string() + "|" + 
+            &self.mv.data[1].1.to_string();
 
         } else {
             return 
-            self.mv.data[0].to_string() + "|" + 
-            &self.mv.data[1].to_string() + "|" + 
-            &self.mv.data[2].to_string() + "|" + 
-            &self.mv.data[3].to_string() + "|" + 
-            &self.mv.data[4].to_string() + "|" + 
-            &self.mv.data[5].to_string();
+            self.mv.data[0].0.to_string() + "|" + 
+            &self.mv.data[0].1.to_string() + "|" + 
+            &self.mv.data[1].0.to_string() + "|" + 
+            &self.mv.data[1].1.to_string() + "|" + 
+            &self.mv.data[2].0.to_string() + "|" + 
+            &self.mv.data[2].1.to_string();
 
         }
 
@@ -235,19 +236,19 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: Player) -> 
  
 }
 
-pub fn get_legal(moves: Vec<Move>, board: &mut BoardState, player: Player) -> Vec<Move> {
-    let mut legal_moves: Vec<Move> = Vec::with_capacity(moves.len());
+// pub fn get_legal(moves: Vec<Move>, board: &mut BoardState, player: Player) -> Vec<Move> {
+//     let mut legal_moves: Vec<Move> = Vec::with_capacity(moves.len());
 
-    for mv in moves {
-        let mut new_board = board.make_move(&mv);
+//     for mv in moves {
+//         let mut new_board = board.make_move(&mv);
 
-        if !unsafe{ has_threat(&mut new_board, player.other()) } {
-            legal_moves.push(mv);
+//         if !unsafe{ has_threat(&mut new_board, player.other()) } {
+//             legal_moves.push(mv);
 
-        }
+//         }
 
-    }
+//     }
 
-    legal_moves
+//     legal_moves
 
-}
+// }

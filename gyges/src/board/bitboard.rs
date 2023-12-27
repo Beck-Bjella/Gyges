@@ -1,6 +1,6 @@
-use std::ops::{Not, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Shl, ShlAssign, Shr, ShrAssign};
+use std::{ops::{Not, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Shl, ShlAssign, Shr, ShrAssign}, fmt::Display};
 
-use crate::core::bit_twiddles::*;
+use crate::core::{bit_twiddles::*, sq::SQ};
 
 #[derive(Copy, Clone, Default, Hash, PartialEq, Eq, Debug)]
 pub struct BitBoard(pub u64);
@@ -75,6 +75,48 @@ impl BitBoard {
     
     pub fn is_not_empty(self) -> bool {
         self.0 != 0
+    }
+
+}
+
+impl Display for BitBoard {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let data = self.clone().get_data();
+        
+        if data.contains(&(SQ::P2_GOAL.0 as usize)) {
+            writeln!(f, "          1")?;
+
+        } else {
+            writeln!(f, "          0")?;
+            
+        }
+
+        for y in (0..6).rev() {
+            for x in 0..6 {
+                if data.contains(&((y * 6) + x)) {
+                    write!(f, "  1")?;
+
+                } else {
+                    write!(f, "  0")?;
+
+                }
+
+            }
+
+            writeln!(f)?;
+
+        }
+
+        if data.contains(&(SQ::P1_GOAL.0 as usize)) {
+            writeln!(f, "          1")?;
+
+        } else {
+            writeln!(f, "          0")?;
+            
+        }
+    
+       Ok(())
+
     }
 
 }

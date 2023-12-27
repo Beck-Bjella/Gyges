@@ -154,6 +154,9 @@ impl Searcher {
         let is_root = ply == self.search_data.ply;
         let is_leaf = ply == 0;
         let board_hash = board.hash();
+
+        // Check if the board is valid.
+        board.check_valid();
   
         // Check if the search should stop.
         if self.stop {
@@ -186,27 +189,27 @@ impl Searcher {
         }
 
         // Handle Transposition Table
-        let (valid, entry) = unsafe { tt().probe(board_hash) };
-        if valid && entry.depth >= ply {
-            if entry.bound == NodeBound::ExactValue {
-                return entry.score;
+        // let (valid, entry) = unsafe { tt().probe(board_hash) };
+        // if valid && entry.depth >= ply {
+        //     if entry.bound == NodeBound::ExactValue {
+        //         return entry.score;
 
-            } else if entry.bound == NodeBound::LowerBound {
-                if entry.score > alpha {
-                    alpha = entry.score;
-                }
+        //     } else if entry.bound == NodeBound::LowerBound {
+        //         if entry.score > alpha {
+        //             alpha = entry.score;
+        //         }
                 
-            } else if entry.bound == NodeBound::UpperBound && entry.score < beta {
-                beta = entry.score;
+        //     } else if entry.bound == NodeBound::UpperBound && entry.score < beta {
+        //         beta = entry.score;
 
-            }
+        //     }
 
-            if alpha >= beta {
-                return entry.score;
+        //     if alpha >= beta {
+        //         return entry.score;
 
-            }
+        //     }
 
-        }
+        // }
 
         // Use previous ply search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {
@@ -261,7 +264,7 @@ impl Searcher {
 
         };
 
-        let new_entry = Entry::new(board_hash, best_score, ply, TTMove::from(best_move), node_bound);
+        let new_entry = Entry::new(board_hash, best_score, ply, best_move, node_bound);
         unsafe { tt().insert(new_entry) };
 
         best_score

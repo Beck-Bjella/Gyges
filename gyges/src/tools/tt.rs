@@ -30,7 +30,7 @@ pub enum NodeBound {
 pub struct Entry {
     pub key: u64,
     pub score: f64,
-    pub bestmove: TTMove,
+    pub bestmove: Move,
     pub depth: i8,
     pub bound: NodeBound,
     pub used: bool,
@@ -38,7 +38,7 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn new(key: u64, score: f64, depth: i8, bestmove: TTMove, flag: NodeBound) -> Entry {
+    pub fn new(key: u64, score: f64, depth: i8, bestmove: Move, flag: NodeBound) -> Entry {
         Entry {
             key,
             score,

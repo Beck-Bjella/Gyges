@@ -3,6 +3,8 @@ use std::cmp::Ordering;
 use crate::board::board::*;
 use crate::board::bitboard::*;
 use crate::core::player::*;
+use crate::core::sq::*;
+use crate::core::piece::*;
 use crate::moves::moves::*;
 use crate::moves::movegen::*;
 use crate::consts::*;
@@ -12,7 +14,7 @@ use crate::consts::*;
 pub struct RawMoveList {
     pub drop_positions: BitBoard,
     pub start_indexs: Vec<usize>,
-    pub start_positions: [(usize, usize); 6],
+    pub start_positions: [(Piece, SQ); 6],
     pub end_positions: [BitBoard; 6],
     pub pickup_positions: [BitBoard; 6],
 
@@ -23,7 +25,7 @@ impl RawMoveList {
         RawMoveList {
             drop_positions,
             start_indexs: vec![],
-            start_positions: [(NULL, NULL); 6],
+            start_positions: [(Piece::None, SQ::NONE); 6],
             end_positions: [EMPTY; 6],
             pickup_positions: [EMPTY; 6],
 
@@ -36,18 +38,18 @@ impl RawMoveList {
 
     }
 
-    pub fn set_start(&mut self, active_line_idx: usize, start_pos: usize, start_piece_type: usize) {
-        self.start_positions[active_line_idx] = (start_pos, start_piece_type);
+    pub fn set_start(&mut self, active_line_idx: usize, start_sq: SQ, start_piece: Piece) {
+        self.start_positions[active_line_idx] = (start_piece, start_sq);
 
     }
 
-    pub fn set_end_position(&mut self, active_line_idx: usize, end_position: usize) {
-        self.end_positions[active_line_idx].set_bit(end_position);
+    pub fn set_end_position(&mut self, active_line_idx: usize, end_bit: u64) {
+        self.end_positions[active_line_idx] |= end_bit;
 
     }
 
-    pub fn set_pickup_position(&mut self, active_line_idx: usize, pickup_position: usize) {
-        self.pickup_positions[active_line_idx].set_bit(pickup_position);
+    pub fn set_pickup_position(&mut self, active_line_idx: usize, pickup_bit: u64) {
+        self.pickup_positions[active_line_idx] |= pickup_bit;
 
     }
 
@@ -60,15 +62,18 @@ impl RawMoveList {
             let start_position = self.start_positions[*idx];
             
             for end_pos in self.end_positions[*idx].get_data() {
-                moves.push(Move::new([0, start_position.0, start_position.1, end_pos, NULL, NULL], MoveType::Bounce));
+                let data = [(Piece::None, start_position.1), (start_position.0, SQ(end_pos as u8)), (Piece::None, SQ::NONE)];
+                moves.push(Move::new(data, MoveType::Bounce));
 
             }
 
             for pick_up_pos in self.pickup_positions[*idx].get_data() {
-                moves.push(Move::new([0, start_position.0, start_position.1, pick_up_pos, board.data[pick_up_pos], start_position.0], MoveType::Drop));
+                let data = [(Piece::None, start_position.1), (start_position.0, SQ(pick_up_pos as u8)), (board.piece_at(SQ(pick_up_pos as u8)), start_position.1)];
+                moves.push(Move::new(data, MoveType::Drop));
 
                 for drop_pos in drop_positions.iter() {
-                    moves.push(Move::new([0, start_position.0, start_position.1, pick_up_pos, board.data[pick_up_pos], *drop_pos], MoveType::Drop));
+                    let data = [(Piece::None, start_position.1), (start_position.0, SQ(pick_up_pos as u8)), (board.piece_at(SQ(pick_up_pos as u8)), SQ(*drop_pos as u8))];
+                    moves.push(Move::new(data, MoveType::Drop));
 
                 }
         
@@ -82,7 +87,7 @@ impl RawMoveList {
 
     pub fn has_threat(&mut self, player: Player) -> bool {
         for idx in self.start_indexs.iter() {
-            if (self.end_positions[*idx] & (1 << GOALS[player.other() as usize])).is_not_empty() {
+            if (self.end_positions[*idx] & SQ::GOALS[player.other() as usize].bit()).is_not_empty() {
                 return true;
 
             } 
