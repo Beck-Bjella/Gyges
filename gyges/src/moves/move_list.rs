@@ -7,8 +7,6 @@ use crate::core::sq::*;
 use crate::core::piece::*;
 use crate::moves::moves::*;
 use crate::moves::movegen::*;
-use crate::consts::*;
-
 
 #[derive(Clone)]
 pub struct RawMoveList {
@@ -26,8 +24,8 @@ impl RawMoveList {
             drop_positions,
             start_indexs: vec![],
             start_positions: [(Piece::None, SQ::NONE); 6],
-            end_positions: [EMPTY; 6],
-            pickup_positions: [EMPTY; 6],
+            end_positions: [BitBoard::EMPTY; 6],
+            pickup_positions: [BitBoard::EMPTY; 6],
 
         }
 

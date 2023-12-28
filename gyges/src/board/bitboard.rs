@@ -1,12 +1,17 @@
 use std::{ops::{Not, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Shl, ShlAssign, Shr, ShrAssign}, fmt::Display};
 
-use crate::core::{bit_twiddles::*, sq::SQ};
+use crate::core::bit_twiddles::*;
+use crate::core::sq::*;
+use crate::core::masks::*;
 
 /// A bitboard is a 64 bit integer that represents if a square is occupied or not.
 #[derive(Copy, Clone, Default, Hash, PartialEq, Eq, Debug)]
 pub struct BitBoard(pub u64);
 
 impl BitBoard {
+    pub const EMPTY: BitBoard = BitBoard(EMPTY);
+    pub const FULL: BitBoard = BitBoard(FULL);
+
     pub fn get_data(&mut self) -> Vec<usize> {
         let mut indexs = vec![];
 

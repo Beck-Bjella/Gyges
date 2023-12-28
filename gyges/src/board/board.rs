@@ -4,9 +4,33 @@ use crate::board::bitboard::*;
 use crate::core::player::*;
 use crate::core::piece::*;
 use crate::core::sq::*;
+use crate::core::masks::*;
 use crate::moves::moves::*;
-use crate::consts::*;
 use crate::tools::zobrist::*;
+
+/// Array representing the starting boardstate.
+pub const STARTING_BOARD: [usize; 38] = [
+    3, 2, 1, 1, 2, 3,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0,
+    3, 2, 1, 1, 2, 3,
+    0, 0
+
+];
+
+/// Array representing the boardstate used for benchmarking.
+pub const BENCH_BOARD: [usize; 38] = [
+    2, 0, 2, 1, 1, 0,
+    0, 0, 0, 3, 3, 0,
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 2, 0, 0,
+    0, 0, 0, 1, 0, 0,
+    0, 3, 0, 1, 2, 3,
+    0, 0
+
+];
 
 /// Represents the state of the board. Contains the board data, bitboards, and hash.
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -104,7 +128,7 @@ impl BoardState {
     #[inline(always)]
     /// Returns a BitBoard of all the squares that a player can drop a piece on.
     pub fn get_drops(&self, active_lines: [usize; 2], player: Player) -> BitBoard {
-        (FULL ^ BACK_ZONES[player.other() as usize][active_lines[player.other() as usize]]) & !self.piece_bb
+        !self.piece_bb & (FULL ^ BACK_ZONES[player.other() as usize][active_lines[player.other() as usize]])
 
     }
     
@@ -174,7 +198,7 @@ impl From<[usize; 38]> for BoardState {
 
         }
 
-        let mut piece_bb = EMPTY;
+        let mut piece_bb = BitBoard::EMPTY;
         for (i, piece) in data.iter().enumerate().take(36) {
             if *piece != Piece::None {
                 piece_bb.set_bit(i);

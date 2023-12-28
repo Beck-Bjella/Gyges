@@ -125,6 +125,8 @@ impl Ugi {
 
         }
 
+        unsafe{ tt().de_alloc() };
+
     }
 
     pub fn parse_position(&mut self, trimmed: &str, raw_commands: Vec<&str>) {

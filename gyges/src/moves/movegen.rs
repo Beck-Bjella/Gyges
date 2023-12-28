@@ -2,11 +2,12 @@ extern crate test;
 
 use crate::board::board::*;
 use crate::board::bitboard::*;
-use crate::core::piece::Piece;
+use crate::core::piece::*;
 use crate::core::player::*;
 use crate::core::sq::*;
+use crate::core::masks::*;
 use crate::moves::move_list::*;
-use crate::consts::*;
+use crate::moves::movegen_consts::*;
 
 #[derive(PartialEq)]
 enum Action {
@@ -34,9 +35,9 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: Player) -> RawMoveList
             move_list.add_start_index(x);
             move_list.set_start(x, starting_sq, starting_piece);
 
-            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
-            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
-            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
+            STACK_BUFFER.push((Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
 
         }
 
@@ -275,9 +276,9 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: Player) -> usize 
         if board.piece_at(starting_sq) != Piece::None {
             let starting_piece = board.piece_at(starting_sq);
 
-            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
-            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
-            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
+            STACK_BUFFER.push((Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
 
         }
 
@@ -501,9 +502,9 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: Player) -> usiz
         if board.piece_at(starting_sq) != Piece::None {
             let starting_piece = board.piece_at(starting_sq);
 
-            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
-            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
-            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
+            STACK_BUFFER.push((Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
 
         }
 
@@ -691,7 +692,7 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: Player) -> usiz
 pub unsafe fn controlled_pieces(board: &mut BoardState, player: Player) -> BitBoard {
     let active_lines = board.get_active_lines();
 
-    let mut controlled_pieces = EMPTY;
+    let mut controlled_pieces = BitBoard::EMPTY;
 
     let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
 
@@ -702,9 +703,9 @@ pub unsafe fn controlled_pieces(board: &mut BoardState, player: Player) -> BitBo
 
             controlled_pieces |= starting_sq.bit();
 
-            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
-            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
-            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
+            STACK_BUFFER.push((Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
 
         }
 
@@ -892,7 +893,7 @@ pub unsafe fn controlled_pieces(board: &mut BoardState, player: Player) -> BitBo
 pub unsafe fn controlled_squares(board: &mut BoardState, player: Player) -> BitBoard {
     let active_lines = board.get_active_lines();
 
-    let mut controlled_squares = EMPTY;
+    let mut controlled_squares = BitBoard::EMPTY;
 
     let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
 
@@ -901,9 +902,9 @@ pub unsafe fn controlled_squares(board: &mut BoardState, player: Player) -> BitB
         if board.piece_at(starting_sq) != Piece::None {
             let starting_piece = board.piece_at(starting_sq);
 
-            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
-            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
-            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
+            STACK_BUFFER.push((Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
 
         }
 
@@ -1113,9 +1114,9 @@ pub unsafe fn has_threat(board: &mut BoardState, player: Player) -> bool {
             let starting_sq = active_line_sq + x;
             let starting_piece = board.piece_at(starting_sq);
 
-            STACK_BUFFER.push((Action::End, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
-            STACK_BUFFER.push((Action::Gen, EMPTY, EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
-            STACK_BUFFER.push((Action::Start, EMPTY, EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+            STACK_BUFFER.push((Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
+            STACK_BUFFER.push((Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
 
         }
 
