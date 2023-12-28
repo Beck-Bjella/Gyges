@@ -45,7 +45,7 @@ pub struct BoardState {
 impl BoardState {
     /// Makes a move on the board. Updates the hash and bitboards accordingly.
     pub fn make_move(self, mv: &Move) -> BoardState {
-        let mut new_state = self.clone();
+        let mut new_state = self;
         new_state.player = new_state.player.other();
 
         let step1 = mv.data[0];
@@ -134,14 +134,7 @@ impl BoardState {
     
     /// Returns the hash of the board state.
     pub fn hash(&self) -> u64 {
-        if self.player == Player::One {
-            return self.hash ^ PLAYER_1_HASH;
-
-        } else {
-            return self.hash ^ PLAYER_2_HASH;
-
-        }
-        // self.hash ^ PLAYER_HASH_DATA[self.player as usize]
+        self.hash ^ PLAYER_HASH_DATA[self.player as usize]
 
     }
 
@@ -232,7 +225,7 @@ impl From<&str> for BoardState {
 
         };
 
-        return BoardState::from(array_data);
+        BoardState::from(array_data)
     
     }
 

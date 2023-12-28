@@ -1,4 +1,5 @@
-use std::{ops::Not, fmt::Display};
+use std::ops::Not;
+use std::fmt::Display;
 
 /// Enum to represent a player on the board
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -27,6 +28,18 @@ impl Player {
                 -1.0
 
             }
+
+        }
+
+    }
+
+}
+
+impl Display for Player {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Player::One => write!(f, "P1"),
+            Player::Two => write!(f, "P2"),
 
         }
 

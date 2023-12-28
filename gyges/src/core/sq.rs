@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Sub, SubAssign, Mul, MulAssign};
+use std::{ops::{Add, AddAssign, Sub, SubAssign, Mul, MulAssign}, fmt::Display};
 
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -44,11 +44,12 @@ impl SQ {
 
 }
 
-impl ToString for SQ {
-    fn to_string(&self) -> String {
-        self.0.to_string()
+impl Display for SQ {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
 
     }
+    
 
 }
 

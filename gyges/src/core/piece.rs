@@ -1,3 +1,6 @@
+use std::fmt::Display;
+
+
 #[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(u8)]
 pub enum Piece {
@@ -22,13 +25,13 @@ impl From<usize> for Piece {
 
 }
 
-impl ToString for Piece {
-    fn to_string(&self) -> String {
+impl Display for Piece {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Piece::One => "1".to_string(),
-            Piece::Two => "2".to_string(),
-            Piece::Three => "3".to_string(),
-            Piece::None => "0".to_string()
+            Piece::One => write!(f, "1"),
+            Piece::Two => write!(f, "2"),
+            Piece::Three => write!(f, "3"),
+            Piece::None => write!(f, "0"),
 
         }
 

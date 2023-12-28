@@ -52,12 +52,8 @@ impl Searcher {
     // Checks to see if the engine should stop the search
     pub fn check_stop(&mut self) {
         // Check if the stop signal has been sent.
-        match self.stop_in.try_recv() {
-            Ok(_) => {
-                self.stop = true;
-
-            }
-            Err(_) => {}
+        if self.stop_in.try_recv().is_ok() {
+            self.stop = true;
 
         }
 
@@ -106,7 +102,7 @@ impl Searcher {
 
                 let best_search_data = self.completed_searchs.last().unwrap().clone();
                 ugi::info_output(best_search_data.clone());
-                ugi::best_move_output(best_search_data.clone());
+                ugi::best_move_output(best_search_data);
                 return;
 
             }
@@ -122,7 +118,7 @@ impl Searcher {
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
          
-            self.search(board, f64::NEG_INFINITY, f64::INFINITY, Player::One, self.current_ply, false);
+            self.search(board, f64::NEG_INFINITY, f64::INFINITY, Player::One, self.current_ply);
       
             if self.stop {
                 break 'iterative_deepening;
@@ -145,28 +141,22 @@ impl Searcher {
         
         let best_search_data = self.completed_searchs.last().unwrap().clone();
         ugi::info_output(best_search_data.clone());
-        ugi::best_move_output(best_search_data.clone());
+        ugi::best_move_output(best_search_data);
 
     }
 
     /// Main search function.
-    fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: Player, ply: i8, null_searching: bool) -> f64 {
+    fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: Player, ply: i8) -> f64 {
         let is_root = ply == self.search_data.ply;
         let is_leaf = ply == 0;
         let board_hash = board.hash();
 
-        // Check if the board is valid.
-        board.check_valid();
-  
         // Check if the search should stop.
         if self.stop {
             return 0.0;
     
-        } else {
-            if self.search_data.nodes % 1000 == 0 {
-                self.check_stop();
-    
-            }
+        } else if self.search_data.nodes % 1000 == 0 {
+            self.check_stop();
 
         }
 
@@ -191,16 +181,19 @@ impl Searcher {
         // Handle Transposition Table
         let (valid, entry) = unsafe { tt().probe(board_hash) };
         if valid && entry.depth >= ply {
-            if entry.bound == NodeBound::ExactValue {
-                return entry.score;
+            match entry.bound {
+                NodeBound::ExactValue => {
+                    return entry.score
 
-            } else if entry.bound == NodeBound::LowerBound {
-                if entry.score > alpha {
-                    alpha = entry.score;
-                }
+                },
+                NodeBound::LowerBound => {
+                    alpha = entry.score
+
+                },
+                NodeBound::UpperBound => {
+                    beta = entry.score
                 
-            } else if entry.bound == NodeBound::UpperBound && entry.score < beta {
-                beta = entry.score;
+                }
 
             }
 
@@ -227,7 +220,7 @@ impl Searcher {
         for (_, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
 
-            let score: f64 = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1, null_searching);
+            let score: f64 = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1);
 
             // Update the score of the rootnode.
             if is_root {

@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::fmt::Display;
 
 use crate::board::board::*;
 use crate::core::player::*;
@@ -53,10 +54,24 @@ impl Move {
     /// Checks if a move wins the game
     pub fn is_win(&self) -> bool {
         if self.flag == MoveType::Bounce {
-            return (self.data[1].1 == SQ::P1_GOAL) || (self.data[1].1 == SQ::P2_GOAL)
+            self.data[1].1 == SQ::P1_GOAL || self.data[1].1 == SQ::P2_GOAL
 
         } else {
-            return (self.data[2].1 == SQ::P1_GOAL) || (self.data[2].1 == SQ::P2_GOAL)
+             self.data[2].1 == SQ::P1_GOAL || self.data[2].1 == SQ::P2_GOAL
+
+        }
+
+    }
+
+}
+
+impl Display for Move {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.flag == MoveType::Bounce {
+            write!(f, "({}, {}) : ({}, {})", self.data[0].0, self.data[0].1, self.data[1].0, self.data[1].1)
+
+        } else {
+            write!(f, "({}, {}) : ({}, {}) : ({}, {})", self.data[0].0, self.data[0].1, self.data[1].0, self.data[1].1, self.data[2].0, self.data[2].1)
 
         }
 
@@ -112,23 +127,15 @@ impl RootMove {
 
     }
 
-    /// Converts to string for UGI. 
-    pub fn as_ugi(&self) -> String {    
+}
+
+impl Display for RootMove {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.mv.flag == MoveType::Bounce {
-            return 
-            self.mv.data[0].0.to_string() + "|" + 
-            &self.mv.data[0].1.to_string() + "|" +
-            &self.mv.data[1].0.to_string() + "|" + 
-            &self.mv.data[1].1.to_string();
+            write!(f, "{}|{}|{}|{}", self.mv.data[0].0, self.mv.data[0].1, self.mv.data[1].0, self.mv.data[1].1)
 
         } else {
-            return 
-            self.mv.data[0].0.to_string() + "|" + 
-            &self.mv.data[0].1.to_string() + "|" + 
-            &self.mv.data[1].0.to_string() + "|" + 
-            &self.mv.data[1].1.to_string() + "|" + 
-            &self.mv.data[2].0.to_string() + "|" + 
-            &self.mv.data[2].1.to_string();
+            write!(f, "{}|{}|{}|{}|{}|{}", self.mv.data[0].0, self.mv.data[0].1, self.mv.data[1].0, self.mv.data[1].1, self.mv.data[2].0, self.mv.data[2].1)
 
         }
 
@@ -142,22 +149,7 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: Player) -> 
     let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
         let mut sort_val: f64 = 0.0;
         let mut new_board = board.make_move(&mv);
-
-        // ----------------------- NEW -----------------------
-        // let mut move_list = unsafe { valid_moves(&mut new_board, player.other()) };
-        // if move_list.has_threat(player.other()) {
-        //     sort_val = f64::NEG_INFINITY;       
-        //     return (mv, sort_val);
-            
-        // }
-        // let moves = move_list.moves(&mut new_board);
-        // let legal = get_legal(moves, &mut new_board, player.other());
-
-        // sort_val -= legal.len() as f64;
-        // ----------------------------------------------
         
-            
-        // ----------------------- OLD -----------------------
         sort_val -= unsafe{ valid_move_count(&mut new_board, player.other())} as f64;
 
         // If a move has less then 5 threats then penalize it.
@@ -166,7 +158,6 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: Player) -> 
             sort_val -= 1000.0 * (5 - threat_count) as f64;
 
         }
-        // ----------------------------------------------
 
         (mv, sort_val)
 
@@ -193,20 +184,3 @@ pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: Player) -> 
     ordered_moves
  
 }
-
-// pub fn get_legal(moves: Vec<Move>, board: &mut BoardState, player: Player) -> Vec<Move> {
-//     let mut legal_moves: Vec<Move> = Vec::with_capacity(moves.len());
-
-//     for mv in moves {
-//         let mut new_board = board.make_move(&mv);
-
-//         if !unsafe{ has_threat(&mut new_board, player.other()) } {
-//             legal_moves.push(mv);
-
-//         }
-
-//     }
-
-//     legal_moves
-
-// }

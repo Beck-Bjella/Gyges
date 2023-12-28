@@ -173,3 +173,11 @@ impl RootMoveList {
     }
 
 }
+
+impl Default for RootMoveList {
+    fn default() -> Self {
+        Self::new()
+
+    }
+
+}

@@ -40,12 +40,12 @@ impl Ugi {
             let trimmed = input.trim();
             
             let raw_commands: Vec<&str> = trimmed.split_whitespace().collect();
-            if raw_commands.len() == 0 {
+            if raw_commands.is_empty() {
                 continue;
 
             }
 
-            match raw_commands.get(0) {
+            match raw_commands.first() {
                 Some(&"ugi") => {
                     println!("id name Helios");
                     println!("id author beck-bjella");                
@@ -192,7 +192,7 @@ impl Ugi {
 pub fn info_output(search_data: SearchData) {
     print!("info ");
     print!("ply {} ", search_data.ply);
-    print!("bestmove {} ", search_data.best_move.as_ugi());
+    print!("bestmove {} ", search_data.best_move);
     print!("score {} ", search_data.best_move.score);
     print!("nodes {} ", search_data.nodes);
     print!("nps {} ", search_data.nps);
@@ -203,6 +203,6 @@ pub fn info_output(search_data: SearchData) {
 }
 
 pub fn best_move_output(search_data: SearchData) {
-    println!("bestmove {}", search_data.best_move.as_ugi());
+    println!("bestmove {}", search_data.best_move);
 
 }

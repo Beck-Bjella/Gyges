@@ -4,11 +4,14 @@ use crate::board::board::*;
 use crate::core::player::*;
 use crate::core::piece::*;
 
+/// P1 hash data
 pub const PLAYER_1_HASH: u64 = 11071850447646664432;
+/// P2 hash data
 pub const PLAYER_2_HASH: u64 = 15525846075063937794;
-
+// Hash data for each player.
 pub const PLAYER_HASH_DATA: [u64; 2] = [PLAYER_1_HASH, PLAYER_2_HASH];
 
+/// Randomly generated hash data for each square and piece combination.
 pub const ZOBRIST_HASH_DATA: [[u64; 3]; 38] = [
     [16019584827874668947, 10756861282518694731, 326575046895935871], 
     [10801462851853052059, 8912476932191465120, 4868635385389206586], 
