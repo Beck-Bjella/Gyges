@@ -1,12 +1,12 @@
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
-use gyges::board::board::*;
-use gyges::core::player::Player;
-use gyges::moves::moves::*;
+use gyges::board::*;
+use gyges::moves::*;
 use gyges::moves::movegen::*;
 use gyges::moves::move_list::*;
 use gyges::tools::tt::*;
+use gyges::core::*;
 
 use crate::search::evaluation::*;
 use crate::consts::*;

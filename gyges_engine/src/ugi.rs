@@ -2,7 +2,7 @@ use std::io;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-use gyges::board::board::*;
+use gyges::board::*;
 
 use crate::search::searcher::*;
 use crate::consts::*;

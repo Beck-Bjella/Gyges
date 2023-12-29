@@ -1,4 +1,4 @@
-Description of the Universal Game Interface (UGI)    [Nov 2023]
+Description of the Universal Gyges Interface (UGI)    [Nov 2023]
 =================================================================
 
 * The Universal Game Interface (UGI) serves as a bridge for communication between the chess engine and the graphical user interface (GUI), ensuring compatibility across various operating systems.

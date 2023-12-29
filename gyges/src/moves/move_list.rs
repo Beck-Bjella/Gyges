@@ -1,11 +1,9 @@
 use std::cmp::Ordering;
 
-use crate::board::board::*;
+use crate::board::*;
 use crate::board::bitboard::*;
-use crate::core::player::*;
-use crate::core::sq::*;
-use crate::core::piece::*;
-use crate::moves::moves::*;
+use crate::core::*;
+use crate::moves::*;
 use crate::moves::movegen::*;
 
 #[derive(Clone)]

@@ -1,10 +1,18 @@
+//! Contains the bitboard struct and impls.
+
 use std::{ops::{Not, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Shl, ShlAssign, Shr, ShrAssign}, fmt::Display};
 
 use crate::core::bit_twiddles::*;
-use crate::core::sq::*;
 use crate::core::masks::*;
+use crate::core::*;
 
-/// A bitboard is a 64 bit integer that represents if a square is occupied or not.
+/// A bitboard is a 64 bit integer that represents if a square is occupied or not.  
+/// 
+/// The mapping of bits of the bitboard to their corosponding [square] is the same as the mapping documented on the [boardstate] struct.
+/// 
+/// [square]: 
+/// [boardstate]: 
+/// 
 #[derive(Copy, Clone, Default, Hash, PartialEq, Eq, Debug)]
 pub struct BitBoard(pub u64);
 
@@ -12,6 +20,7 @@ impl BitBoard {
     pub const EMPTY: BitBoard = BitBoard(EMPTY);
     pub const FULL: BitBoard = BitBoard(FULL);
 
+    /// Returns an vector of the indexes of the set bits in the bitboard.
     pub fn get_data(&mut self) -> Vec<usize> {
         let mut indexs = vec![];
 
@@ -24,16 +33,19 @@ impl BitBoard {
 
     }
 
+    /// Starts from the start of the bitboard and returns the index of the first set bit.
     pub fn bit_scan_forward(&self) -> usize {
         bit_scan_forward(self.0) as usize
 
     }
 
+    /// Starts from the end of the bitboard and returns the index of the last set bit.
     pub fn bit_scan_reverse(&self) -> usize {
         bit_scan_reverse(self.0) as usize
 
-    }
+    }  
 
+    /// Returns the index of the first set bit and clears it.
     pub fn pop_lsb(&mut self) -> usize {
         let bit = self.bit_scan_forward();
         self.0 &= !(1 << bit);
@@ -41,6 +53,7 @@ impl BitBoard {
         
     }
 
+    /// Returns the index of the last set bit and clears it.
     pub fn pop_msb(&mut self) -> usize {
         let bit = self.bit_scan_reverse();
         self.0 &= !(1 << bit);
@@ -48,11 +61,13 @@ impl BitBoard {
         
     }
 
+    /// Returns the number of set bits in the bitboard.
     pub fn pop_count(&self) -> usize {
         self.0.count_ones() as usize
 
     }
 
+    /// Sets a specific bit in the bitboard.
     pub fn set_bit(&mut self, bit: usize) {
         let mask = 1 << bit;
 
@@ -60,6 +75,7 @@ impl BitBoard {
 
     }
 
+    /// Clears a specific bit in the bitboard.
     pub fn clear_bit(&mut self, bit: usize) {
         let mask = 1 << bit;
 
@@ -67,6 +83,7 @@ impl BitBoard {
 
     }
 
+    /// Toggles a specific bit in the bitboard.
     pub fn toggle_bit(&mut self, bit: usize) {
         let mask = 1 << bit;
 
@@ -74,11 +91,13 @@ impl BitBoard {
 
     }
 
+    /// Checks if there are no set bits in the bitboard.
     pub fn is_empty(self) -> bool {
         self.0 == 0
         
     }
     
+    /// Checks if there are set bits in the bitboard.
     pub fn is_not_empty(self) -> bool {
         self.0 != 0
         

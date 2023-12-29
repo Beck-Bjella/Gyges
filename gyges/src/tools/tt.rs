@@ -1,22 +1,43 @@
+//! This module contains the transposition table and the other helper structures for it.
+//! 
+//! A transposition table is a type of HashTable that maps Zobrist keys to data about that position.
+//! This is a very acommon technique in chess engines and other board game AI. 
+//! Its primary purpose is reduce the number of nodes that need to be searched by storing the data about a position
+//! so that it does not need to be re-calculted.
+//! 
+//! Specifically, this transposition table is lockless and can be accessed by multiple threads at the same time. 
+//! This means that overwriting data is possible, but it is unlikely. It also uses clusers to store multiple entrys that share the same key. 
+//!
+//! Zobrist hashing is used to generate the keys for the transposition table, and the keys are generated in the board module. 
+//! This hashing technique can lead to collisions in the table (multiple positions having the same key), but this is very unlikely.
+//!
+
 use std::alloc::{self, Layout};
 use std::cell::UnsafeCell;
 use std::fmt::Display;
 use std::mem;
 use std::ptr::NonNull;
 
-use crate::moves::moves::*;
+use crate::moves::*;
 
+/// The number of entrys in a cluster.
 const CLUSTER_SIZE: usize = 3;
 
+/// Bytes per kilobyte.
 const BYTES_PER_KB: f64 = 1000.0;
+/// Bytes per megabyte.
 const BYTES_PER_MB: f64 = BYTES_PER_KB * 1000.0;
+/// Bytes per gigabyte.
 const BYTES_PER_GB: f64 = BYTES_PER_MB * 1000.0;
 
+/// Counter for the number of safe inserts into the transposition table.
 pub static mut TT_SAFE_INSERTS: usize = 0;
+/// Counter for the number of unsafe inserts into the transposition table.
 pub static mut TT_UNSAFE_INSERTS: usize = 0;
 
 
 /// Defines the bound for a node.
+/// This is the same as the chess concept of a node type. [Chess Wiki](https://www.chessprogramming.org/Node_Types).
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum NodeBound {
     ExactValue,
@@ -26,6 +47,7 @@ pub enum NodeBound {
 }
 
 /// Structure that holds the data of a node.
+/// Stores the key, score, best move, depth, and bound.
 #[derive(Clone, Copy, Debug)]
 pub struct Entry {
     pub key: u64,
@@ -63,14 +85,19 @@ impl Entry {
 
 }
 
-/// Structure that holds multiple entrys and is stored in the trasposition table.
+/// Structure that holds multiple entrys and is stored in the trasposition table. 
+/// Each of the entrys that are stored in the cluster are share the same key.
 #[derive(Clone, Copy, Debug)]
 pub struct Cluster {
     pub entrys: [Entry; CLUSTER_SIZE],
 
 }
 
-/// Structure for the transposition table.
+/// Structure representing a transposition table.
+/// A transposition table is a type of HashTable that maps Zobrist keys to the data about that position. 
+/// The data that is stored in [entrys]
+/// 
+/// [entrys]: struct.Entry.html
 pub struct TranspositionTable {
     pub clusters: UnsafeCell<NonNull<Cluster>>,
     pub cap: UnsafeCell<usize>,

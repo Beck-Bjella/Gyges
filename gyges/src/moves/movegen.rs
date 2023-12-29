@@ -1,10 +1,8 @@
 extern crate test;
 
-use crate::board::board::*;
+use crate::board::*;
 use crate::board::bitboard::*;
-use crate::core::piece::*;
-use crate::core::player::*;
-use crate::core::sq::*;
+use crate::core::*;
 use crate::moves::move_list::*;
 use crate::moves::movegen_consts::*;
 
