@@ -1,4 +1,10 @@
+//! Structures to represent moves, lists of moves, and move generation.
+//! 
+//! This module contains the move, rootmove structures.
+//! 
+
 pub mod move_list;
+
 pub mod movegen;
 pub mod movegen_consts;
 
@@ -10,6 +16,10 @@ use crate::moves::movegen::*;
 use crate::core::*;
 
 /// Designates the type of move.
+/// 
+/// A move can either be a drop or a bounce.
+/// A drop is a move that has three stages: the staring position, a piece that is replaced, and where that piece is dropped.
+/// A bounce is a move that only has two stages: the staring position and the ending position.
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum MoveType {
     Drop,
@@ -19,6 +29,9 @@ pub enum MoveType {
 }
 
 /// Structure that defines a move
+/// 
+/// A move has the data which represents how the move effects the board. 
+/// The format of each of the tuples in the data array is a (Piece, Square) and it directly means put that piece at that square.
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct Move {
     pub data: [(Piece, SQ); 3],
@@ -82,6 +95,9 @@ impl Display for Move {
 }
 
 /// Structure that defines a rootmove.
+/// 
+/// A rootmove is a move that can stores other data associated with the root of a search 
+/// like the score of the move.
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct RootMove {
     pub mv: Move,

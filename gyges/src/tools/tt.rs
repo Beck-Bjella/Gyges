@@ -1,4 +1,4 @@
-//! This module contains the transposition table and the other helper structures for it.
+//! The transposition table and the other helper structures for it.
 //! 
 //! A transposition table is a type of HashTable that maps Zobrist keys to data about that position.
 //! This is a very acommon technique in chess engines and other board game AI. 
@@ -10,6 +10,8 @@
 //!
 //! Zobrist hashing is used to generate the keys for the transposition table, and the keys are generated in the board module. 
 //! This hashing technique can lead to collisions in the table (multiple positions having the same key), but this is very unlikely.
+//! 
+//! Credit to [Pleco chess engine](https://github.com/pleco-rs/Pleco) for huge insperaration for this file
 //!
 
 use std::alloc::{self, Layout};
@@ -60,6 +62,7 @@ pub struct Entry {
 }
 
 impl Entry {
+    /// Creates a new entry from its components.
     pub fn new(key: u64, score: f64, depth: i8, bestmove: Move, flag: NodeBound) -> Entry {
         Entry {
             key,
@@ -73,6 +76,7 @@ impl Entry {
 
     }
 
+    /// Replaces the data with another entrys data.
     pub fn replace(&mut self, entry: Entry) {
         self.key = entry.key;
         self.score = entry.score;
@@ -97,7 +101,7 @@ pub struct Cluster {
 /// A transposition table is a type of HashTable that maps Zobrist keys to the data about that position. 
 /// The data that is stored in [entrys]
 /// 
-/// [entrys]: struct.Entry.html
+/// [entrys]:
 pub struct TranspositionTable {
     pub clusters: UnsafeCell<NonNull<Cluster>>,
     pub cap: UnsafeCell<usize>,
@@ -105,6 +109,7 @@ pub struct TranspositionTable {
 }
 
 impl TranspositionTable {
+    /// Creates a new TranspostionTable with a specific size.
     pub fn new(size: usize) -> TranspositionTable {
         TranspositionTable {
             clusters: UnsafeCell::new(alloc_room(size)),

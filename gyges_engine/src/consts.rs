@@ -1,3 +1,6 @@
+//! General constants.
+//! 
+
 use gyges::tools::tt::*;
 
 use std::mem;

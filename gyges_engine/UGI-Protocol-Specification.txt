@@ -1,22 +1,5 @@
-Description of the Universal Gyges Interface (UGI)    [Nov 2023]
+Description of the Universal Gyges Interface (UGI) [Jan 2024]
 =================================================================
-
-* The Universal Game Interface (UGI) serves as a bridge for communication between the chess engine and the graphical user interface (GUI), ensuring compatibility across various operating systems.
-
-* Communication takes place through standard input and output channels, utilizing text-based commands.
-
-* Upon booting, the engine awaits input from the GUI, specifically the "isready" or "setoption" command to configure internal parameters.
-
-* The engine should consistently process input from stdin, even during calculations.
-
-* Command strings sent to the engine end with '\n'.
-
-* The engine operates in forced mode, refraining from initiating calculations or pondering without receiving a prior "go" command.
-
-* Before the engine starts searching a position, a position command is issued to inform the engine of the current game state.
-
-* In the event of an unknown command or token, both the engine and GUI should ignore it.
-
 
 Move Format:
 ------------
@@ -24,6 +7,11 @@ Move Format:
 The moves are formated by numbers seperated with `|`. 
 	* e.g. 0|3|2|12|3|8
 	* e.g. 0|1|3|7
+
+	Lets look at the first example:
+
+	It translates into:
+		* Put the piece '0' at position '3'1
 
 
 GUI to Engine:

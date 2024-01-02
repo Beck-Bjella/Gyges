@@ -2,6 +2,11 @@
 members = ["gyges", "gyges_engine"]
 resolver = "2"
 
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"
+
 [profile.dev]
 opt-level = 3
 debug = true
@@ -13,8 +18,3 @@ panic = 'unwind'
 incremental = true
 codegen-units = 4
 rpath = false
-
-[profile.release]
-opt-level = 3
-lto = true
-panic = "abort"

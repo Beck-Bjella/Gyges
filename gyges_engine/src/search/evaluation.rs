@@ -1,3 +1,6 @@
+//! All logic and functions related to the evaluation of a board.
+//! 
+
 use gyges::board::*;
 use gyges::board::bitboard::*;
 use gyges::moves::movegen::*;

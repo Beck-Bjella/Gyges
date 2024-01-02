@@ -1,3 +1,6 @@
+//! This module contains different movelists. There is the RawMoveList and the RootMoveList.
+//! 
+
 use std::cmp::Ordering;
 
 use crate::board::*;
@@ -6,6 +9,14 @@ use crate::core::*;
 use crate::moves::*;
 use crate::moves::movegen::*;
 
+/// An Encoded list of moves.
+/// 
+/// A ```RawMoveList``` stores the starting, pickup, and end postions of moves in BitBoards. 
+/// These are easy and efficent to set and can decoded into a ```Vec<Move>``` when the real moves need to be used.
+/// 
+/// The RawMoveList has some major advantages over just using a ```Vec<Move>```. The main reason is that it is much faster to generate.
+/// The other main reason is that you can get general infomation about the types of moves that will be in the list before doing the costly transformation into a ```Vec<Move>```.
+/// The most common example of this is checking if any move in the list will move into the opponents goal.
 #[derive(Clone)]
 pub struct RawMoveList {
     pub drop_positions: BitBoard,
@@ -17,6 +28,7 @@ pub struct RawMoveList {
 }
 
 impl RawMoveList {
+    /// Creates an empty ```RawMoveList``` for a board with the drop positions already known.
     pub fn new(drop_positions: BitBoard) -> RawMoveList {
         RawMoveList {
             drop_positions,
@@ -29,26 +41,30 @@ impl RawMoveList {
 
     }
 
-    pub fn add_start_index(&mut self, index: usize) {
-        self.start_indexs.push(index);
-
-    }
-
+    /// Defines a new piece that can move on a player's active line.
     pub fn set_start(&mut self, active_line_idx: usize, start_sq: SQ, start_piece: Piece) {
+        self.start_indexs.push(active_line_idx);
         self.start_positions[active_line_idx] = (start_piece, start_sq);
 
     }
 
+    /// Sets a possible end position for a piece.
     pub fn set_end_position(&mut self, active_line_idx: usize, end_bit: u64) {
         self.end_positions[active_line_idx] |= end_bit;
 
     }
 
+    /// Sets a possible pickup position for a piece.
     pub fn set_pickup_position(&mut self, active_line_idx: usize, pickup_bit: u64) {
         self.pickup_positions[active_line_idx] |= pickup_bit;
 
     }
 
+    /// Decodes the ```RawMoveList``` into a ```Vec<Move>```
+    ///
+    /// Removes all data from the ```RawMoveList``` in the process of decoding. 
+    /// Do not try and use data in the list after this process.
+    ///
     pub fn moves(&mut self, board: &BoardState) -> Vec<Move> {
         let mut moves: Vec<Move> = Vec::with_capacity(1000);
 
@@ -81,6 +97,7 @@ impl RawMoveList {
 
     }
 
+    /// Checks if there is a move in the ```RawMoveList``` that would move into the opponents goal.
     pub fn has_threat(&mut self, player: Player) -> bool {
         for idx in self.start_indexs.iter() {
             if (self.end_positions[*idx] & SQ::GOALS[player.other() as usize].bit()).is_not_empty() {
@@ -96,6 +113,10 @@ impl RawMoveList {
 
 }
 
+/// A sortable list of RootMove's
+/// 
+/// Very simmilar to using ```Vec<RootMove>``` except implimentes custom functions for setup and sorting.
+#[derive(Clone)]
 pub struct RootMoveList {
     pub moves: Vec<RootMove>,
 
@@ -109,7 +130,8 @@ impl RootMoveList {
         }
 
     }
-
+    
+    /// Sorts the RootMoveList by whatever move has the greatest score.
     pub fn sort(&mut self) {
         self.moves.sort_by(|a, b| {
             if a.score > b.score {
@@ -127,6 +149,7 @@ impl RootMoveList {
     
     }
 
+    /// Updates the score and ply fields on a specific move.
     pub fn update_move(&mut self, mv: Move, score: f64, ply: i8) {
         for root_move in self.moves.iter_mut() {
             if root_move.mv == mv {
@@ -140,6 +163,9 @@ impl RootMoveList {
 
     }
 
+    /// Setups up the RootMoveList from a BoardState
+    /// 
+    /// Generates all moves, sorts them, and calculates the number of threats that they each have.
     pub fn setup(&mut self, board: &mut BoardState) {
         let moves = order_moves(unsafe { valid_moves(board, Player::One) }.moves(board), board, Player::One);
 
@@ -155,13 +181,17 @@ impl RootMoveList {
 
     }
 
+    /// Returns the first move
     pub fn first(&self) -> RootMove {
         self.moves[0]
 
     }
 
-    pub fn as_vec(&self) -> Vec<Move> {
-        let moves: Vec<Move> = self.moves.clone().into_iter().map( |mv| {
+}
+
+impl Into<Vec<Move>> for RootMoveList {
+    fn into(self) -> Vec<Move> {
+        let moves: Vec<Move> = self.moves.into_iter().map( |mv| {
             mv.mv
 
         }).collect();

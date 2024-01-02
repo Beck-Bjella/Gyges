@@ -1,11 +1,15 @@
 //! Representaion of a board's state, functions to manipulate it, and bitboards.
 //! 
+//! This module contains the main BoardState struct.
+//! 
 
 pub mod bitboard;
 
 use std::fmt::Display;
 
+#[doc(inline)]
 use crate::board::bitboard::*;
+
 use crate::core::*;
 use crate::core::masks::*;
 use crate::moves::*;
@@ -16,6 +20,12 @@ use crate::tools::zobrist::*;
 /// The board data is 38 element array. Each of these elements represent the pieces at each position on the board.
 /// It also contains a bitboard representing all of the pieces on the board, and a hash of the boardstate.
 /// This hash is computed using the concept of Zobrist hashing. [Chess Zobrist Example](https://www.chessprogramming.org/Zobrist_Hashing)
+/// 
+/// It is important to note that throughout the program, player 1 is always the player at the bottom of the board, and player 2 is always the player at the top. 
+/// This is also explained in the [player] enum.
+/// 
+/// 
+/// # Position Mapping
 /// 
 /// Each of the positions on the board can be mapped to a number from 0 to 37. This is done as follows:
 /// 
@@ -53,9 +63,6 @@ use crate::tools::zobrist::*;
 /// This mapping applys to many compnents of the program, such as the [bitboard]. Each of the respestive bits on the bitboard can be mapped to these
 /// same positions. The [SQ] struct is used to represent these positions.
 /// 
-/// It is important to note that throughout the program, player 1 is always the player at the bottom of the board, and player 2 is always the player at the top. 
-/// This is also explained in the [player] enum.
-/// 
 /// [boardstate]: 
 /// [bitboard]: 
 /// [SQ]: 
@@ -70,7 +77,7 @@ pub struct BoardState {
 }
 
 impl BoardState {
-    /// Makes a move on the board. Updates the hash and bitboards accordingly.
+    /// Makes a move on the board and returns the new board. Updates the hash and bitboards accordingly.
     pub fn make_move(self, mv: &Move) -> BoardState {
         let mut new_state = self;
         new_state.player = new_state.player.other();
@@ -132,6 +139,7 @@ impl BoardState {
     }
 
     /// Checks if the board is valid and panics if it is not.
+    /// A board is valid as long as it has all 12 pieces still on it.
     pub fn check_valid(&self){
         if self.piece_bb.pop_count() != 12 {
             println!("Board Data: {:?}", self.data);
@@ -139,11 +147,10 @@ impl BoardState {
 
         }
 
-
     }
     
-    #[inline(always)]
     /// Returns the active lines for each player.
+    #[inline(always)]
     pub fn get_active_lines(&self) -> [usize; 2] {
         let player_1_active_line = (self.piece_bb.bit_scan_forward() as f64 / 6.0).floor() as usize;
         let player_2_active_line = (self.piece_bb.bit_scan_reverse() as f64 / 6.0).floor() as usize;
@@ -152,8 +159,8 @@ impl BoardState {
 
     }
     
-    #[inline(always)]
     /// Returns a BitBoard of all the squares that a player can drop a piece on.
+    #[inline(always)]
     pub fn get_drops(&self, active_lines: [usize; 2], player: Player) -> BitBoard {
         !self.piece_bb & (FULL ^ BACK_ZONES[player.other() as usize][active_lines[player.other() as usize]])
 
@@ -254,6 +261,14 @@ impl From<&str> for BoardState {
 
         BoardState::from(array_data)
     
+    }
+
+}
+
+impl Default for BoardState {
+    fn default() -> Self {
+        BoardState::from(STARTING_BOARD)
+
     }
 
 }

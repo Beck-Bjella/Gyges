@@ -1,9 +1,12 @@
 //! Contains the Zobrist hashing functions and data.
 //! 
-//! Zobrist hashing is a hashing algorithm that is used to hash a board state.
-//! This is used to generate the keys for the transposition table.
+//! Zobrist hashing is a hashing algorithm that is used to hash a [BoardState]. 
+//! Once a hash is generated it can be used as the key for a entry in the transpostion table.
+//! 
+//! [BoardState]: 
 //! 
 
+#[doc(hidden)]
 use rand::Rng;
 
 use crate::board::*;
@@ -13,7 +16,7 @@ use crate::core::*;
 pub const PLAYER_1_HASH: u64 = 11071850447646664432;
 /// P2 hash data
 pub const PLAYER_2_HASH: u64 = 15525846075063937794;
-// Hash data for each player.
+/// Hash data for each player.
 pub const PLAYER_HASH_DATA: [u64; 2] = [PLAYER_1_HASH, PLAYER_2_HASH];
 
 /// Randomly generated hash data for each square and piece combination.

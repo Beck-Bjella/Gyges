@@ -1,10 +1,13 @@
+//! Ugi implimentation.
+//! 
+
 use std::io;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
 use gyges::board::*;
 
-use crate::search::searcher::*;
+use crate::search::*;
 use crate::consts::*;
 
 pub struct Ugi {
@@ -86,6 +89,8 @@ impl Ugi {
             }
            
         }
+
+        unsafe{ tt().de_alloc() };
 
         self.stop();
     
