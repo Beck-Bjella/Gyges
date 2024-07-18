@@ -172,7 +172,7 @@ impl SQ {
 
 impl Display for SQ {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", READABLE_SQS[self.0 as usize])
 
     }
     
@@ -287,3 +287,14 @@ impl MulAssign<SQ> for SQ {
     }
 
 }
+
+pub const READABLE_SQS: [&str; 38] = [
+    "a1", "b1", "c1", "d1", "e1", "f1",
+    "a2", "b2", "c2", "d2", "e2", "f2",
+    "a3", "b3", "c3", "d3", "e3", "f3",
+    "a4", "b4", "c4", "d4", "e4", "f4",
+    "a5", "b5", "c5", "d5", "e5", "f5",
+    "a6", "b6", "c6", "d6", "e6", "f6",
+    "P1", "P2"
+    
+];

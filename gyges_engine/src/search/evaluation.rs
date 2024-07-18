@@ -93,9 +93,9 @@ pub fn control_eval(board: &mut BoardState, player: Player, control_pieces: [Bit
     eval +=  unique_controlled_pieces_score(board, player, control_pieces);
     eval +=  unique_controlled_squares_score(player, control_squares);
 
-    eval +=  shared_controlled_pieces_score(board, player, control_pieces);
-    eval +=  shared_controlled_squares_score(player, control_squares);
+    // eval +=  shared_controlled_pieces_score(board, player, control_pieces);
+    // eval +=  shared_controlled_squares_score(player, control_squares);
 
     eval
-
+    
 }

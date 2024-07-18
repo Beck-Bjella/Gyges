@@ -218,7 +218,6 @@ impl Display for BoardState {
 
 impl From<[usize; 38]> for BoardState {
     fn from(array_data: [usize; 38]) -> Self {
-
         let mut data: [Piece; 38] = [Piece::None; 38];
         for (i, piece) in array_data.iter().enumerate().take(36) {
             data[i] = Piece::from(*piece);

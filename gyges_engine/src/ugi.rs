@@ -130,8 +130,6 @@ impl Ugi {
 
         }
 
-        unsafe{ tt().de_alloc() };
-
     }
 
     pub fn parse_position(&mut self, trimmed: &str, raw_commands: Vec<&str>) {
@@ -164,6 +162,8 @@ impl Ugi {
     }
 
     pub fn go(&mut self) {
+        unsafe { tt().reset() }; // Reset tt before new search
+
         self.searching = true;
 
         let (ss, sr): (Sender<bool>, Receiver<bool>) = mpsc::channel();

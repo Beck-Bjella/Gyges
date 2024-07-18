@@ -218,6 +218,7 @@ impl TranspositionTable {
 
         TT_UNSAFE_INSERTS += 1;
         replacement_entry.replace(new_entry);
+    
         false
 
     }
@@ -228,6 +229,15 @@ impl TranspositionTable {
         let ptr: *mut u8 = mem::transmute(*self.clusters.get());
     
         alloc::dealloc(ptr, layout);
+    }
+
+    /// Resets the transposition table.
+    /// Completly realloctes to empty memory.
+    pub unsafe fn reset(&self) {
+        self.de_alloc();
+        *self.clusters.get() = alloc_room(*self.cap.get());
+
+    
     }
 
 }
