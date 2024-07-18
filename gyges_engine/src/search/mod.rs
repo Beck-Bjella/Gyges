@@ -185,30 +185,34 @@ impl Searcher {
         }
 
         // Handle Transposition Table
-        let (valid, entry) = unsafe { tt().probe(board_hash) };
-        if valid && entry.depth >= ply {
-            match entry.bound {
-                NodeBound::ExactValue => {
-                    return entry.score
+        if self.options.tt_enabled {
+            let (valid, entry) = unsafe { tt().probe(board_hash) };
+            if valid && entry.depth >= ply {
+                match entry.bound {
+                    NodeBound::ExactValue => {
+                        return entry.score
 
-                },
-                NodeBound::LowerBound => {
-                    alpha = entry.score
+                    },
+                    NodeBound::LowerBound => {
+                        alpha = entry.score
 
-                },
-                NodeBound::UpperBound => {
-                    beta = entry.score
-                
+                    },
+                    NodeBound::UpperBound => {
+                        beta = entry.score
+                    
+                    }
+
+                }
+
+                if alpha >= beta {
+                    return entry.score;
+
                 }
 
             }
 
-            if alpha >= beta {
-                return entry.score;
-
-            }
-
         }
+        
 
         // Use previous ply search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {
@@ -252,20 +256,23 @@ impl Searcher {
 
         }
 
-        let node_bound: NodeBound = if best_score >= beta {
-            NodeBound::LowerBound
+        if self.options.tt_enabled {
+            let node_bound: NodeBound = if best_score >= beta {
+                NodeBound::LowerBound
+    
+            } else if best_score <= alpha  {
+                NodeBound::UpperBound
+    
+            } else {
+                NodeBound::ExactValue
+    
+            };
+            
+            let new_entry = Entry::new(board_hash, best_score, ply, best_move, node_bound);
+            unsafe { tt().insert(new_entry) };
 
-        } else if best_score <= alpha  {
-            NodeBound::UpperBound
-
-        } else {
-            NodeBound::ExactValue
-
-        };
+        }
         
-        let new_entry = Entry::new(board_hash, best_score, ply, best_move, node_bound);
-        unsafe { tt().insert(new_entry) };
-
         best_score
 
     }
@@ -326,6 +333,7 @@ pub struct SearchOptions {
     pub board: BoardState,
     pub maxply: i8,
     pub maxtime: Option<f64>,
+    pub tt_enabled: bool
 
 }
 
@@ -335,6 +343,7 @@ impl SearchOptions {
             board: BoardState::from(STARTING_BOARD),   
             maxply: MAXPLY,
             maxtime: Option::None,
+            tt_enabled: true
 
         }
 

@@ -183,7 +183,7 @@ impl TranspositionTable {
         let cluster = self.get_cluster(index);
 
         for entry_idx in 0..CLUSTER_SIZE {
-            let entry_ptr = get_entry(cluster, entry_idx);
+            let entry_ptr: *mut Entry = get_entry(cluster, entry_idx);
 
             let entry = &mut (*entry_ptr);
 
@@ -274,7 +274,7 @@ impl Display for TranspositionTable {
 
 /// Returns a raw pointer to a specific entry in a cluster.
 fn get_entry(cluster: *mut Cluster, i: usize) -> *mut Entry {
-    unsafe{ ((*cluster).entrys).as_ptr().add(i) as *mut Entry }
+    unsafe { ((*cluster).entrys).as_ptr().add(i) as *mut Entry }
 
 }
 

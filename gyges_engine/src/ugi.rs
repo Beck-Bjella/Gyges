@@ -54,6 +54,7 @@ impl Ugi {
                     println!("id author beck-bjella");                
                     println!("option maxply");
                     println!("option maxtime");
+                    println!("option tt_enabled");
                     println!("ugiok");
 
                 },
@@ -78,6 +79,7 @@ impl Ugi {
 
                 },
                 Some(&"quit") => {
+
                     break;
 
                 },
@@ -90,20 +92,19 @@ impl Ugi {
            
         }
 
-        unsafe{ tt().de_alloc() };
-
         self.stop();
+        unsafe{ tt().de_alloc() };
     
     }
 
     pub fn init(&self) {
-        init_tt(2usize.pow(24));
+        init_tt(2usize.pow(25)); // 100MB
 
     }
 
     pub fn parse_option(&mut self, trimmed: &str, raw_commands: Vec<&str>) {
         match raw_commands.get(1) {
-            Some(&"maxply") => {
+            Some(&"max_ply") => {
                 if let Some(value_str) = raw_commands.get(2) {
                     self.search_options.maxply = value_str.parse::<i8>().unwrap();
 
@@ -113,9 +114,25 @@ impl Ugi {
                 }
                 
             }
-            Some(&"maxtime") => {
+            Some(&"max_time") => {
                 if let Some(value_str) = raw_commands.get(2) {
                     self.search_options.maxtime = Some(value_str.parse::<f64>().unwrap());
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"tt_enabled") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    match value_str {
+                        &"true" => self.search_options.tt_enabled = true,
+                        &"false" => self.search_options.tt_enabled = false,
+                        _ => println!("Unknown Command: '{}'", trimmed),
+
+                    }
+                    
 
                 } else {
                     println!("Unknown Command: '{}'", trimmed);
