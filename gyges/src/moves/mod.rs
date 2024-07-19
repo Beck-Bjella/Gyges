@@ -150,10 +150,10 @@ impl RootMove {
 impl Display for RootMove {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.mv.flag == MoveType::Bounce {
-            write!(f, "{}{}", self.mv.data[0].1, self.mv.data[1].1)
+            write!(f, "{}|{}", self.mv.data[0].1, self.mv.data[1].1)
 
         } else {
-            write!(f, "{}{}{}", self.mv.data[0].1, self.mv.data[1].1, self.mv.data[2].1)
+            write!(f, "{}|{}|{}", self.mv.data[0].1, self.mv.data[1].1, self.mv.data[2].1)
 
         }
 

@@ -172,7 +172,7 @@ impl SQ {
 
 impl Display for SQ {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", READABLE_SQS[self.0 as usize])
+        write!(f, "{}", self.0 as usize)
 
     }
     
