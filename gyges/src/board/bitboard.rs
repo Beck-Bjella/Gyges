@@ -8,11 +8,9 @@ use crate::core::*;
 
 /// A bitboard is a 64 bit integer that represents if a square is occupied or not.  
 /// 
-/// The mapping of bits of the bitboard to their corosponding [squares] is the same as the mapping documented on the [boardstate] struct.
+/// The mapping of bits to their corresponding square is the same as the mapping documented on the [BoardState](crate::board::BoardState) struct.
 /// 
-/// [squares]: 
-/// [boardstate]: 
-/// 
+
 #[derive(Copy, Clone, Default, Hash, PartialEq, Eq, Debug)]
 pub struct BitBoard(pub u64);
 

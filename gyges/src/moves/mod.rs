@@ -40,7 +40,7 @@ pub struct Move {
 }
 
 impl Move {
-    /// Create a new move from its indivudal components.
+    /// Create a new move from its individual components.
     pub fn new(data: [(Piece, SQ); 3], flag: MoveType) -> Move {
         Move {
             data,

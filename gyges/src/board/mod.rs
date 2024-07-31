@@ -22,7 +22,7 @@ use crate::tools::zobrist::*;
 /// This hash is computed using the concept of Zobrist hashing. [Chess Zobrist Example](https://www.chessprogramming.org/Zobrist_Hashing)
 /// 
 /// It is important to note that throughout the program, player 1 is always the player at the bottom of the board, and player 2 is always the player at the top. 
-/// This is also explained in the [`Player`] enum.
+/// This is also explained in the [Player](crate::core::Player) enum.
 /// 
 /// 
 /// # Position Mapping
@@ -60,10 +60,9 @@ use crate::tools::zobrist::*;
 /// 
 /// ```
 /// 
-/// This mapping applys to many compnents of the program, such as the [`BitBoard`]. Each of the respestive bits on the bitboard can be mapped to these
-/// same positions. The [`SQ`] struct is used to represent these positions.
+/// This mapping applys to many compnents of the program, such as the [BitBoard](crate::board::bitboard::BitBoard). Each of the respestive bits on the bitboard can be mapped to these
+/// same positions. The [SQ](crate::core::SQ) struct is used to represent these positions.
 /// 
-
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct BoardState {
     pub data: [Piece; 38],

@@ -8,7 +8,7 @@
 //! Specifically, this transposition table is lockless and can be accessed by multiple threads at the same time. 
 //! This means that overwriting data is possible, but it is unlikely. It also uses clusers to store multiple entrys that share the same key. 
 //!
-//! Zobrist hashing is used to generate the keys for the transposition table, and the keys are handled in the [`BoardState`]. 
+//! Zobrist hashing is used to generate the keys for the transposition table, and the keys are handled in the [BoardState](crate::board::BoardState). 
 //! This hashing technique can lead to collisions in the table (multiple positions having the same key), but this is very unlikely.
 //! 
 //! Credit to [Pleco chess engine](https://github.com/pleco-rs/Pleco) for huge insperaration for this file.
@@ -89,7 +89,7 @@ impl Entry {
 
 }
 
-/// Structure that holds multiple entrys and is stored in the trasposition table. 
+/// Structure that holds multiple [Entrys](crate::tools::tt::Entry) and is stored in the trasposition table. 
 /// Each of the entrys that are stored in the cluster are share the same key.
 #[derive(Clone, Copy, Debug)]
 pub struct Cluster {
@@ -98,10 +98,9 @@ pub struct Cluster {
 }
 
 /// Structure representing a transposition table.
-/// A transposition table is a type of HashTable that maps Zobrist keys to the data about that position. 
-/// The data that is stored in [entrys]
+/// A transposition table is a type of HashTable that maps Zobrist keys to the data about that position.
+/// Data is stored in [Clusters](crate::tools::tt::Cluster), which are groups of [Entrys](crate::tools::tt::Entry) that are mapped to the same key.
 /// 
-/// [entrys]:
 pub struct TranspositionTable {
     pub clusters: UnsafeCell<NonNull<Cluster>>,
     pub cap: UnsafeCell<usize>,
@@ -176,7 +175,9 @@ impl TranspositionTable {
 
     }
 
-    /// Uses a key and inserts a entry into the table in the best available spot.
+    /// Uses a key and inserts a entry into the table in the best available spot. 
+    /// If no spot is available, it will replace the entry with the lowest depth. 
+    /// 
     pub unsafe fn insert(&self, new_entry: Entry) -> bool {
         let index = new_entry.key as usize % self.num_clusters();
 
@@ -224,11 +225,13 @@ impl TranspositionTable {
     }
 
     /// De-allocates the current table.
+    /// 
     pub unsafe fn de_alloc(&self) {
         let layout = Layout::from_size_align(*self.cap.get(), 2).unwrap();
         let ptr: *mut u8 = mem::transmute(*self.clusters.get());
     
         alloc::dealloc(ptr, layout);
+
     }
 
     /// Resets the table.
@@ -280,23 +283,21 @@ fn get_entry(cluster: *mut Cluster, i: usize) -> *mut Entry {
 }
 
 /// Returns a raw pointer to the first entry in a cluster.
+/// 
 unsafe fn cluster_first_entry(cluster: *mut Cluster) -> *mut Entry {
     (*cluster).entrys.get_unchecked_mut(0) as *mut Entry
 
 }
 
-/// Allocates empty memory as clusters and returns a pointer to it.
+/// Allocates size number of clusters as empty memory and returns a pointer to it. 
 fn alloc_room(size: usize) -> NonNull<Cluster> {
-    unsafe {
-        let size = size * mem::size_of::<Cluster>();
-        let layout = Layout::from_size_align(size, 8).unwrap();
+    let size = size * mem::size_of::<Cluster>();
+    let layout = Layout::from_size_align(size, 8).unwrap();
+    
+    let ptr: *mut u8 = unsafe { alloc::alloc_zeroed(layout) };
 
-        let ptr: *mut u8 = alloc::alloc_zeroed(layout);
+    let new_ptr: *mut Cluster = ptr.cast();
 
-        let new_ptr: *mut Cluster = ptr.cast();
-
-        NonNull::new(new_ptr).unwrap()
-
-    }
+    NonNull::new(new_ptr).unwrap()
 
 }

@@ -124,7 +124,7 @@ impl Display for Piece {
 /// Represents a square on the board.
 /// 
 /// A square is represented by a number from 0 to 37. This number is where the square is on the board.
-/// The mapping of these numbers to their corosponding position is the same as the mapping documented on the [`BoardState`] struct.
+/// The mapping of these numbers to their corosponding position is the same as the mapping documented on the [BoardState](crate::board::BoardState) struct.
 /// 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct SQ(pub u8);

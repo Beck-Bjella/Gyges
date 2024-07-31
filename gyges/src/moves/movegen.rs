@@ -1,4 +1,6 @@
-//! This module contains all of the functions for generating moves.
+//! This module contains all of the functions for generating moves. 
+//! 
+//! All of the functions in this module are unsafe and cannot be run concurrently.
 //!  
 
 extern crate test;
@@ -21,7 +23,14 @@ type StackData = (Action, BitBoard, BitBoard, SQ, Piece, SQ, Piece, usize, Playe
 
 static mut STACK_BUFFER: Vec<StackData> = Vec::new();
 
-/// Generates all of the legal moves for a player in the form of a ```RawMoveList```
+/// Generates all of the legal moves for a player in the form of a [RawMoveList](crate::moves::move_list::RawMoveList).
+/// 
+/// # Safety
+/// 
+/// Uses a static mutable buffer to process moves during generation. 
+/// The buffer is used to avoid recursion and is not thread safe. 
+/// Running this function in parallel will cause undefined behavior.
+/// 
 pub unsafe fn valid_moves(board: &mut BoardState, player: Player) -> RawMoveList {
     let active_lines = board.get_active_lines();
     let mut move_list: RawMoveList = RawMoveList::new(board.get_drops(active_lines, player));
@@ -265,6 +274,13 @@ pub unsafe fn valid_moves(board: &mut BoardState, player: Player) -> RawMoveList
 }
 
 /// Counts the number of moves that a player has on a board.
+/// 
+/// # Safety
+/// 
+/// Uses a static mutable buffer to count moves.
+/// The buffer is used to avoid recursion and is not thread safe.
+/// Running this function in parallel will cause undefined behavior.
+/// 
 pub unsafe fn valid_move_count(board: &mut BoardState, player: Player) -> usize {
     let active_lines = board.get_active_lines();
 
@@ -491,7 +507,14 @@ pub unsafe fn valid_move_count(board: &mut BoardState, player: Player) -> usize 
 
 }
 
-/// Counts the number of threats(ways into the opponents goal) that a player.
+/// Counts the number of threats (ways into the opponents goal) that a player.
+/// 
+/// # Safety
+/// 
+/// Uses a static mutable buffer to count threats.
+/// The buffer is used to avoid recursion and is not thread safe.
+/// Running this function in parallel will cause undefined behavior.
+/// 
 pub unsafe fn valid_threat_count(board: &mut BoardState, player: Player) -> usize {
     let active_lines = board.get_active_lines();
 
@@ -691,7 +714,14 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: Player) -> usiz
 
 }
 
-/// Generates a ```BitBoard``` for all of the pieces that a player can reach.
+/// Generates a [BitBoard](crate::board::bitboard::BitBoard) for all of the pieces that a player can reach.
+/// 
+/// # Safety
+/// 
+/// Uses a static mutable buffer to obtain the controlled pieces.
+/// The buffer is used to avoid recursion and is not thread safe.
+/// Running this function in parallel will cause undefined behavior.
+/// 
 pub unsafe fn controlled_pieces(board: &mut BoardState, player: Player) -> BitBoard {
     let active_lines = board.get_active_lines();
 
@@ -893,7 +923,14 @@ pub unsafe fn controlled_pieces(board: &mut BoardState, player: Player) -> BitBo
 
 }
 
-/// Generates a ```BitBoard``` for all of the sqaures that a player can reach.
+/// Generates a [BitBoard](crate::board::bitboard::BitBoard) for all of the sqaures that a player can reach.
+/// 
+/// # Safety
+/// 
+/// Uses a static mutable buffer to obtain the controlled squares.
+/// The buffer is used to avoid recursion and is not thread safe.
+/// Running this function in parallel will cause undefined behavior.
+/// 
 pub unsafe fn controlled_squares(board: &mut BoardState, player: Player) -> BitBoard {
     let active_lines = board.get_active_lines();
 

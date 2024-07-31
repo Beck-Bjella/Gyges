@@ -1,4 +1,6 @@
-//! This module contains different movelists. There is the RawMoveList and the RootMoveList.
+//! This module contains different movelists. 
+//! 
+//! There is the RawMoveList and the RootMoveList, and both follow the same pattern of storing groups of moves.
 //! 
 
 use std::cmp::Ordering;
@@ -12,11 +14,12 @@ use crate::moves::movegen::*;
 /// An Encoded list of moves.
 /// 
 /// A RawMoveList stores the starting, pickup, and end postions of moves in BitBoards. 
-/// These are easy and efficent to set and can decoded into a [`Vec<Move>`] when the real moves need to be used.
+/// These are easy and efficent to set and can decoded into a `Vec<Move>` when the real moves need to be used.
 /// 
-/// The RawMoveList has some major advantages over just using a [`Vec<Move>`]. The main reason is that it is much faster to generate.
+/// The RawMoveList has some major advantages over just using a `Vec<Move>`. The main reason is that it is much faster to generate.
 /// The other main reason is that you can get general infomation about the types of moves that will be in the list before doing the costly transformation into a ```Vec<Move>```.
 /// The most common example of this is checking if any move in the list will move into the opponents goal.
+/// 
 #[derive(Clone)]
 pub struct RawMoveList {
     pub drop_positions: BitBoard,
@@ -60,7 +63,7 @@ impl RawMoveList {
 
     }
 
-    /// Decodes the RawMoveList into a [`Vec<Move>`]
+    /// Decodes the RawMoveList into a `Vec<Move>`
     ///
     /// Removes all data from the RawMoveList in the process of decoding. 
     /// Do not try and use data in the list after this process.
@@ -115,7 +118,8 @@ impl RawMoveList {
 
 /// A sortable list of RootMove's
 /// 
-/// Very simmilar to using [`Vec<RootMove>`] except implements custom functions for setup and sorting.
+/// Very simmilar to using `Vec<RootMove>` except implements custom functions for setup and sorting.
+/// 
 #[derive(Clone)]
 pub struct RootMoveList {
     pub moves: Vec<RootMove>,
@@ -163,9 +167,10 @@ impl RootMoveList {
 
     }
 
-    /// Setups up the RootMoveList from a [`BoardState`]
+    /// Setups up the RootMoveList from a [BoardState](crate::board::BoardState)
     /// 
     /// Generates all moves, sorts them, and calculates the number of threats that they each have.
+    /// 
     pub fn setup(&mut self, board: &mut BoardState) {
         let moves = order_moves(unsafe { valid_moves(board, Player::One) }.moves(board), board, Player::One);
 
