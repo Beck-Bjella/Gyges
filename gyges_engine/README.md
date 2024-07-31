@@ -3,9 +3,9 @@ An incredibly strong Gygès engine.
 
 The Gygès engine is a powerful program designed to play the game of Gygès. Similar to a chess engine, it utilizes advanced algorithms and strategies to make intelligent moves.
 
-The engine communicates using the UGI Protocol, a communication protocol specifically developed for this engine. This protocol is closely related to the UCI Protocol used in chess engines, incorporating similar concepts and ideas. Check out the [UGI Protocol]() for more information.
+The engine communicates using the UGI Protocol, a communication protocol specifically developed for this engine. This protocol is closely related to the UCI Protocol used in chess engines, incorporating similar concepts and ideas. Check out the [UGI Protocol](https://github.com/Beck-Bjella/Gyges/blob/main/gyges_engine/UGI-Protocol-Specification.md) for more information.
 
-Please note that the Gygès engine is a standalone application and not intended to be used as a library. If you are looking for a library to integrate Gygès functionality into your own projects, you can find it [here]().
+Please note that the Gygès engine is a standalone application and not intended to be used as a library. If you are looking for a library to integrate Gygès functionality into your own projects, you can find it [here](https://github.com/Beck-Bjella/Gyges/tree/main/gyges).
 
 # Installation
 To get started with the Gygès engine, you have two options for installation:
@@ -25,4 +25,4 @@ There are multiple ways to interact with the Gygès engine:
 Contributions to the Gygès engine are highly welcome! If you would like to contribute to the project, please open a pull request with your changes. I appreciate any feedback, bug reports, or suggestions for improvements.
 
 # License
-The Gygès engine is released under the [license](). Please make sure to review and comply with the terms of the license when using or distributing the engine.
+The Gygès engine is released under the [GNU General Public License v3.0](https://github.com/Beck-Bjella/Gyges/blob/main/LICENSE). Please make sure to review and comply with the terms of the license when using or distributing the engine.

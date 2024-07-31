@@ -5,9 +5,9 @@ Gygès is an abstract strategy game for two players. The object of Gygès is to 
 If it lands on another piece, it can move the number of spaces equal to that piece's number of rings. 
 It can also displace that piece to any open space. 
 
-Offical rule book: [Rules](https://s3.amazonaws.com/geekdo-files.com/bgg32746?response-content-disposition=inline%3B%20filename%3D%22gyges_rules.pdf%22&response-content-type=application%2Fpdf&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAJYFNCT7FKCE4O6TA%2F20231229%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20231229T031405Z&X-Amz-SignedHeaders=host&X-Amz-Expires=120&X-Amz-Signature=e7c322bed070e101346483b70e896133e22967568a021c530add36ef698b99d0)
+Check out the game on Board Game Arena: [Gygès](https://boardgamearena.com/gamepanel?game=gyges). 
 
-This is specifically a library for the game Gygès not the engine to play the game. You can check out the engine [here]().
+This is specifically a library for the game Gygès not the engine to play the game. You can check out the engine [here](https://github.com/Beck-Bjella/Gyges/tree/main/gyges_engine).
 
 # Library Features
  - Board representaion
@@ -17,9 +17,6 @@ This is specifically a library for the game Gygès not the engine to play the ga
  - Custom lists of moves
  - Lighting quick move generation
  - Transposition Table
-
-
-
 
 # Library Usage
 You can add this crate to your project by adding the following to your `Cargo.toml` file:
@@ -81,4 +78,4 @@ This project and its formating was inspired by the incridible rust chess program
 Contributions welcome! If you'd like to contribute, please open a pull request. Feedback is greatly appreciated, along with reporting issues or suggesting improvements.
 
 # Lisence
-This project is licensed under the GPL-3.0 license. Please make sure to review and comply with the terms of the license when using or distributing the engine.
+The Gygès library is released under the [GNU General Public License v3.0](https://github.com/Beck-Bjella/Gyges/blob/main/LICENSE). Please make sure to review and comply with the terms of the license when using or distributing the library.
