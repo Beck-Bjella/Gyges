@@ -103,7 +103,7 @@ impl Ugi {
 
     pub fn parse_option(&mut self, trimmed: &str, raw_commands: Vec<&str>) {
         match raw_commands.get(1) {
-            Some(&"max_ply") => {
+            Some(&"maxPly") => {
                 if let Some(value_str) = raw_commands.get(2) {
                     self.search_options.maxply = value_str.parse::<i8>().unwrap();
 
@@ -113,7 +113,7 @@ impl Ugi {
                 }
                 
             }
-            Some(&"max_time") => {
+            Some(&"maxTime") => {
                 if let Some(value_str) = raw_commands.get(2) {
                     self.search_options.maxtime = Some(value_str.parse::<f64>().unwrap());
 
@@ -123,7 +123,7 @@ impl Ugi {
                 }
 
             }
-            Some(&"tt_enabled") => {
+            Some(&"ttEnabled") => {
                 if let Some(value_str) = raw_commands.get(2) {
                     match *value_str {
                         "true" => self.search_options.tt_enabled = true,
@@ -225,7 +225,6 @@ pub fn info_output(search_data: SearchData) {
     print!("nodes {} ", search_data.nodes);
     print!("nps {} ", search_data.nps);
     print!("abf {} ", search_data.average_branching_factor);
-    print!("beta_cuts {} ", search_data.beta_cuts);
     println!("time {} ", search_data.search_time);
 
 }

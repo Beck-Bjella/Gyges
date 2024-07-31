@@ -7,8 +7,10 @@ It can also displace that piece to any open space.
 
 Offical rule book: [Rules](https://s3.amazonaws.com/geekdo-files.com/bgg32746?response-content-disposition=inline%3B%20filename%3D%22gyges_rules.pdf%22&response-content-type=application%2Fpdf&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAJYFNCT7FKCE4O6TA%2F20231229%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20231229T031405Z&X-Amz-SignedHeaders=host&X-Amz-Expires=120&X-Amz-Signature=e7c322bed070e101346483b70e896133e22967568a021c530add36ef698b99d0)
 
-# Features
- - Board representaion 
+This is specifically a library for the game Gygès not the engine to play the game. You can check out the engine [here]().
+
+# Library Features
+ - Board representaion
     - Zobrist Hashing
  - BitBoards
  - Move represenation 
@@ -16,40 +18,59 @@ Offical rule book: [Rules](https://s3.amazonaws.com/geekdo-files.com/bgg32746?re
  - Lighting quick move generation
  - Transposition Table
 
-# Usage
-In the future this crate will be published to [crates.io](https://crates.io/).
 
-For now, you can add this crate to your project by adding the following to your `Cargo.toml` file:
+
+
+# Library Usage
+You can add this crate to your project by adding the following to your `Cargo.toml` file:
 ```toml
 [dependencies]
-gyges = { git = " " }
+gyges = { git = "https://github.com/Beck-Bjella/Gyges/tree/version-1.0-prep/gyges", branch = "main" }
 ```
 
 # Examples
 
-Basic boards, move generation, and move making.
+### Setting up a starting board position
+
+This is one specific starting position built into the library. There are other constant board positions that can be loaded as well.
+```rust 
+use gyges::board::*;
+
+// Load Board
+let board = BoardState::from(STARTING_BOARD);
+
+```
+
+### Loading a specific Board
+
+Boards can be created using this notation as shown below. Each set of 6 numbers represents a row on the board starting from your side of the board going left to right. The orientation of the board is subjetive and is based on how the board is inputed.
 ```rust
-    use gyges::board::*;
-    use gyges::moves::movegen::*;
-    use gyges::core::*;
+use gyges::board::*;
 
-    // Create board from a constant
-    let mut board = BoardState::from(STARTING_BOARD);
+// Load Board
+let board = BoardState::from("321123/000000/000000/000000/000000/321123");
 
-    // Define a player 
-    let player = Player::One;
+```
 
-    // Create a RawMoveList
-    let mut movelist = unsafe{ valid_moves(&mut board, player) };
+### Applying and generating moves
 
-    // Extract the moves
-    let moves = movelist.moves(&mut board);
+Move generation is done in a two step process. You first have to generate a `RawMoveList` and then extract the moves from that list into a `Vec<Move>`. This is done to improve efficiency and reduce unnessary processing. When making a move the `make_move` function will return a copy of the board with the move applied.
+```rust
+use gyges::board::*;
+use gyges::moves::*;
 
-    // Make the move
-    let new_board = board.make_move(&mv);
+// Load Board
+let mut board = BoardState::from(STARTING_BOARD);
 
-    // Display the new board
-    println!("{}", new_board);
+let player = Player::One;
+
+// Generate moves
+let mut movelist = unsafe{ valid_moves(&mut board, player) }; // Create a MoveList
+let moves = movelist.moves(&mut board); // Extract the moves
+
+// Make a move
+board.make_move(&moves[0]);
+
 ```
 
 # Acknowledgements
@@ -60,3 +81,4 @@ This project and its formating was inspired by the incridible rust chess program
 Contributions welcome! If you'd like to contribute, please open a pull request. Feedback is greatly appreciated, along with reporting issues or suggesting improvements.
 
 # Lisence
+This project is licensed under the GPL-3.0 license. Please make sure to review and comply with the terms of the license when using or distributing the engine.

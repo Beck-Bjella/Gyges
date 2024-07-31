@@ -15,10 +15,67 @@ The Gyges crate is a library that provides all core funcinaly for the game. It i
 
 The Gyges-engine crate is a fully functional engine to play the game.
 
-Both of these crates are written in Rust, and found in the `gyges` and `gyges_engine` directories respectively. You can find more information about each crate in their respective READMEs.
+Both of these crates are written in Rust, and found in the `gyges` and `gyges_engine` directories respectively. You can find more information about each crate and there usage in their respective READMEs.
+
+# Standalone Usage
+To use the standalone engine, check out the [Gyges-engine]() crate README for more information.
+
+# Library Usage
+You can add this crate to your project by adding the following to your `Cargo.toml` file:
+```toml
+[dependencies]
+gyges = { git = "https://github.com/Beck-Bjella/Gyges/tree/version-1.0-prep/gyges", branch = "main" }
+```
+
+## Examples
+
+### Setting up a starting board position
+
+This is one specific starting position built into the library. There are other constant board positions that can be loaded as well.
+```rust 
+use gyges::board::*;
+
+// Load Board
+let board = BoardState::from(STARTING_BOARD);
+
+```
+
+### Loading a specific Board
+
+Boards can be created using this notation as shown below. Each set of 6 numbers represents a row on the board starting from your side of the board going left to right. The orientation of the board is subjetive and is based on how the board is inputed.
+```rust
+use gyges::board::*;
+
+// Load Board
+let board = BoardState::from("321123/000000/000000/000000/000000/321123");
+
+```
+
+### Applying and generating moves
+
+Move generation is done in a two step process. You first have to generate a `RawMoveList` and then extract the moves from that list into a `Vec<Move>`. This is done to improve efficiency and reduce unnessary processing. When making a move the `make_move` function will return a copy of the board with the move applied.
+```rust
+use gyges::board::*;
+use gyges::moves::*;
+
+// Load Board
+let mut board = BoardState::from(STARTING_BOARD);
+
+// Define a player
+let player = Player::One;
+
+// Generate moves
+let mut movelist = unsafe{ valid_moves(&mut board, player) }; // Create a MoveList
+let moves = movelist.moves(&mut board); // Extract the moves
+
+// Make a move
+board.make_move(&moves[0]);
+
+```
 
 # Contributions 
 
 Contributions welcome! If you'd like to contribute, please open a pull request. Feedback is greatly appreciated, along with reporting issues or suggesting improvements.
 
 # Lisence
+
