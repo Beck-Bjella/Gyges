@@ -79,7 +79,6 @@ impl Ugi {
 
                 },
                 Some(&"quit") => {
-
                     break;
 
                 },
@@ -133,7 +132,6 @@ impl Ugi {
 
                     }
                     
-
                 } else {
                     println!("Unknown Command: '{}'", trimmed);
 

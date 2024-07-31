@@ -176,7 +176,6 @@ impl Display for SQ {
 
     }
     
-
 }
 
 // impl math operations

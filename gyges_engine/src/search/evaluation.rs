@@ -6,10 +6,10 @@ use gyges::board::bitboard::*;
 use gyges::moves::movegen::*;
 use gyges::core::*;
 
-pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [300.0, 100.0, 50.0];
+pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [500.0, 100.0, 50.0];
 pub const SHARED_PIECE_CONTROL_SCORES: [f64; 3] = [75.0, 50.0, 25.0];
 
-pub const UNIQUE_SQUARE_CONTROL_SCORE: f64 = 20.0;
+pub const UNIQUE_SQUARE_CONTROL_SCORE: f64 = 10.0;
 pub const SHARED_SQUARE_CONTROL_SCORE: f64 = 5.0;
 
 // BEST EVALUATION FUNCTION
