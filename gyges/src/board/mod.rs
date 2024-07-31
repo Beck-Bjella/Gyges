@@ -22,7 +22,7 @@ use crate::tools::zobrist::*;
 /// This hash is computed using the concept of Zobrist hashing. [Chess Zobrist Example](https://www.chessprogramming.org/Zobrist_Hashing)
 /// 
 /// It is important to note that throughout the program, player 1 is always the player at the bottom of the board, and player 2 is always the player at the top. 
-/// This is also explained in the [player] enum.
+/// This is also explained in the [`Player`] enum.
 /// 
 /// 
 /// # Position Mapping
@@ -60,13 +60,10 @@ use crate::tools::zobrist::*;
 /// 
 /// ```
 /// 
-/// This mapping applys to many compnents of the program, such as the [bitboard]. Each of the respestive bits on the bitboard can be mapped to these
-/// same positions. The [SQ] struct is used to represent these positions.
+/// This mapping applys to many compnents of the program, such as the [`BitBoard`]. Each of the respestive bits on the bitboard can be mapped to these
+/// same positions. The [`SQ`] struct is used to represent these positions.
 /// 
-/// [boardstate]: 
-/// [bitboard]: 
-/// [SQ]: 
-/// [player]:
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct BoardState {
     pub data: [Piece; 38],
@@ -180,7 +177,7 @@ impl Display for BoardState {
             writeln!(f, "                .")?;
 
         } else {
-            writeln!(f, "                {}", self.data[37].to_string())?;
+            writeln!(f, "                {}", self.data[37])?;
 
         }
         writeln!(f, " ")?;
@@ -191,7 +188,7 @@ impl Display for BoardState {
                 if self.data[y * 6 + x] == Piece::None {
                     write!(f, "    .")?;
                 } else {
-                    write!(f, "    {}", self.data[y * 6 + x].to_string())?;
+                    write!(f, "    {}", self.data[y * 6 + x])?;
 
                 }
                
@@ -206,7 +203,7 @@ impl Display for BoardState {
             writeln!(f, "                .")?;
 
         } else {
-            writeln!(f, "                {}", self.data[36].to_string())?;
+            writeln!(f, "                {}", self.data[36])?;
 
         }
 

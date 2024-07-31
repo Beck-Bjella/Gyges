@@ -1,4 +1,4 @@
-//! Bit twiddling functions and related constants.
+//! Functions to opperate on bits and their related constants.
 
 static DEBRUIJ_T: &[u8] = &[
     0, 47, 1, 56, 48, 27, 2, 60, 57, 49, 41, 37, 28, 16, 3, 61, 54, 58, 35, 52, 50, 42, 21, 44, 38,

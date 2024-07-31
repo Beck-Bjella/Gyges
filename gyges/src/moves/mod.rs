@@ -19,7 +19,7 @@ use crate::core::*;
 /// 
 /// A move can either be a drop or a bounce.
 /// A drop is a move that has three stages: the staring position, a piece that is replaced, and where that piece is dropped.
-/// A bounce is a move that only has two stages: the staring position and the ending position.
+/// A bounce is a move that only has two stages: the starting position and the ending position.
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum MoveType {
     Drop,
@@ -96,8 +96,8 @@ impl Display for Move {
 
 /// Structure that defines a rootmove.
 /// 
-/// A rootmove is a move that can stores other data associated with the root of a search 
-/// like the score of the move.
+/// A rootmove is a move that can store other data associated with the root of a search tree. This data includes the ply of the move and  
+/// the score of the move.
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct RootMove {
     pub mv: Move,

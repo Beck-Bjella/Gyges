@@ -124,9 +124,8 @@ impl Display for Piece {
 /// Represents a square on the board.
 /// 
 /// A square is represented by a number from 0 to 37. This number is where the square is on the board.
-/// The mapping of these numbers to their corosponding position is the same as the mapping documented on the [boardstate] struct.
+/// The mapping of these numbers to their corosponding position is the same as the mapping documented on the [`BoardState`] struct.
 /// 
-/// [boardstate]: 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct SQ(pub u8);
 
@@ -178,7 +177,7 @@ impl Display for SQ {
     
 }
 
-// impl math operations
+// Impl math operations
 impl Add<usize> for SQ {
     type Output = SQ;
 
@@ -287,6 +286,8 @@ impl MulAssign<SQ> for SQ {
 
 }
 
+
+/// Translates a square to a string.
 pub const READABLE_SQS: [&str; 38] = [
     "a1", "b1", "c1", "d1", "e1", "f1",
     "a2", "b2", "c2", "d2", "e2", "f2",

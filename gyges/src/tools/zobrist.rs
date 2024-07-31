@@ -1,9 +1,7 @@
 //! Contains the Zobrist hashing functions and data.
 //! 
-//! Zobrist hashing is a hashing algorithm that is used to hash a [BoardState]. 
+//! Zobrist hashing is a hashing algorithm that is used to hash a [`BoardState`]. 
 //! Once a hash is generated it can be used as the key for a entry in the transpostion table.
-//! 
-//! [BoardState]: 
 //! 
 
 #[doc(hidden)]
@@ -66,19 +64,16 @@ pub const ZOBRIST_HASH_DATA: [[u64; 3]; 38] = [
 pub fn gen_data() {
     let mut rng = rand::thread_rng();
 
-    let mut new_hash_data: [[u64; 4]; 38] = [[0; 4]; 38];
+    let new_hash_data: [[u64; 3]; 38] = [[0; 3]; 38].map(|_: [u64; 3]| {
+        [rng.gen(), rng.gen(), rng.gen()]
 
-    for i in 0..38 {
-        let data: [u64; 4] = [0, rng.gen(), rng.gen(), rng.gen()];
-        new_hash_data[i] = data;
+    });
     
-    }
-
     println!("{:?}", new_hash_data);
 
 }
 
-/// Gets the hash for a board including the player to move.
+/// Gets the hash for a [`BoardState`] including the player to move.
 pub fn get_hash(board: &mut BoardState, player: Player) -> u64 {
     let mut hash = PLAYER_HASH_DATA[player as usize];
 

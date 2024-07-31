@@ -8,10 +8,10 @@
 //! Specifically, this transposition table is lockless and can be accessed by multiple threads at the same time. 
 //! This means that overwriting data is possible, but it is unlikely. It also uses clusers to store multiple entrys that share the same key. 
 //!
-//! Zobrist hashing is used to generate the keys for the transposition table, and the keys are generated in the board module. 
+//! Zobrist hashing is used to generate the keys for the transposition table, and the keys are handled in the [`BoardState`]. 
 //! This hashing technique can lead to collisions in the table (multiple positions having the same key), but this is very unlikely.
 //! 
-//! Credit to [Pleco chess engine](https://github.com/pleco-rs/Pleco) for huge insperaration for this file
+//! Credit to [Pleco chess engine](https://github.com/pleco-rs/Pleco) for huge insperaration for this file.
 //!
 
 use std::alloc::{self, Layout};
@@ -223,7 +223,7 @@ impl TranspositionTable {
 
     }
 
-    /// De-allocates the current heap.
+    /// De-allocates the current table.
     pub unsafe fn de_alloc(&self) {
         let layout = Layout::from_size_align(*self.cap.get(), 2).unwrap();
         let ptr: *mut u8 = mem::transmute(*self.clusters.get());
@@ -231,17 +231,18 @@ impl TranspositionTable {
         alloc::dealloc(ptr, layout);
     }
 
-    /// Resets the transposition table.
+    /// Resets the table.
     /// Completly realloctes to empty memory.
     pub unsafe fn reset(&self) {
         self.de_alloc();
         *self.clusters.get() = alloc_room(*self.cap.get());
-
     
     }
 
 }
 
+
+// Not practical for real use, but mainly used for debugging small tables.
 impl Display for TranspositionTable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         unsafe {

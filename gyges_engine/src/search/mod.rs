@@ -227,7 +227,7 @@ impl Searcher {
         // Loop through valid moves and search them.
         let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
-        for (_, mv) in current_player_moves.iter().enumerate() {
+        for mv in current_player_moves.iter() {
             let mut new_board = board.make_move(mv);
 
             let score: f64 = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1);
@@ -346,6 +346,14 @@ impl SearchOptions {
             tt_enabled: true
 
         }
+
+    }
+
+}
+
+impl Default for SearchOptions {
+    fn default() -> Self {
+        Self::new()
 
     }
 

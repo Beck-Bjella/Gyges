@@ -125,9 +125,9 @@ impl Ugi {
             }
             Some(&"tt_enabled") => {
                 if let Some(value_str) = raw_commands.get(2) {
-                    match value_str {
-                        &"true" => self.search_options.tt_enabled = true,
-                        &"false" => self.search_options.tt_enabled = false,
+                    match *value_str {
+                        "true" => self.search_options.tt_enabled = true,
+                        "false" => self.search_options.tt_enabled = false,
                         _ => println!("Unknown Command: '{}'", trimmed),
 
                     }
@@ -205,6 +205,14 @@ impl Ugi {
         self.searching_thread = Option::None;
         self.searching = false;
     
+    }
+
+}
+
+impl Default for Ugi {
+    fn default() -> Self {
+        Self::new()
+
     }
 
 }
