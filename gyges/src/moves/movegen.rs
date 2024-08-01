@@ -23,7 +23,7 @@ type StackData = (Action, BitBoard, BitBoard, SQ, Piece, SQ, Piece, usize, Playe
 
 static mut STACK_BUFFER: Vec<StackData> = Vec::new();
 
-/// Generates all of the legal moves for a player in the form of a [RawMoveList](crate::moves::move_list::RawMoveList).
+/// Generates all of the legal moves for a player in the form of a [RawMoveList].
 /// 
 /// # Safety
 /// 
@@ -714,7 +714,7 @@ pub unsafe fn valid_threat_count(board: &mut BoardState, player: Player) -> usiz
 
 }
 
-/// Generates a [BitBoard](crate::board::bitboard::BitBoard) for all of the pieces that a player can reach.
+/// Generates a [BitBoard] for all of the pieces that a player can reach.
 /// 
 /// # Safety
 /// 
@@ -923,7 +923,7 @@ pub unsafe fn controlled_pieces(board: &mut BoardState, player: Player) -> BitBo
 
 }
 
-/// Generates a [BitBoard](crate::board::bitboard::BitBoard) for all of the sqaures that a player can reach.
+/// Generates a [BitBoard] for all of the sqaures that a player can reach.
 /// 
 /// # Safety
 /// 

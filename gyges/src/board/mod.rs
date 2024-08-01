@@ -22,7 +22,7 @@ use crate::tools::zobrist::*;
 /// This hash is computed using the concept of Zobrist hashing. [Chess Zobrist Example](https://www.chessprogramming.org/Zobrist_Hashing)
 /// 
 /// It is important to note that throughout the program, player 1 is always the player at the bottom of the board, and player 2 is always the player at the top. 
-/// This is also explained in the [Player](crate::core::Player) enum.
+/// This is also explained in the [Player] enum.
 /// 
 /// 
 /// # Position Mapping
@@ -60,8 +60,8 @@ use crate::tools::zobrist::*;
 /// 
 /// ```
 /// 
-/// This mapping applys to many compnents of the program, such as the [BitBoard](crate::board::bitboard::BitBoard). Each of the respestive bits on the bitboard can be mapped to these
-/// same positions. The [SQ](crate::core::SQ) struct is used to represent these positions.
+/// This mapping applys to many compnents of the program, such as the [BitBoard]. Each of the respestive bits on the bitboard can be mapped to these
+/// same positions. The [SQ] struct is used to represent these positions.
 /// 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct BoardState {
@@ -245,6 +245,9 @@ impl From<[usize; 38]> for BoardState {
 
 impl From<&str> for BoardState {
    fn from(value: &str) -> BoardState {
+        // Strip '/' from string
+        let value = value.replace("/", "");
+
         let array_data: [usize; 38] = {
             let mut arr: [usize; 38] = [0; 38];
             for (i, c) in value.chars().take(38).enumerate() {

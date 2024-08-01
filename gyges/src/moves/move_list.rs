@@ -167,7 +167,7 @@ impl RootMoveList {
 
     }
 
-    /// Setups up the RootMoveList from a [BoardState](crate::board::BoardState)
+    /// Setups up the RootMoveList from a [BoardState].
     /// 
     /// Generates all moves, sorts them, and calculates the number of threats that they each have.
     /// 

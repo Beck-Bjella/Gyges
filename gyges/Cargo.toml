@@ -2,6 +2,24 @@
 name = "gyges"
 version = "1.0.0"
 edition = "2021"
+description = "A library for the board game Gygès."
+license = "GPL-3.0-or-later"
+documentation = "https://docs.rs/gyges"
+repository = "https://github.com/Beck-Bjella/Gyges"
+readme = "README.md"
+keywords = ["boardgame", "gyges", "ai", "library", "games"]
+categories = ["games", "game-engines"]
+
+[lib]
+name = "gyges"
+path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "unwind"
+codegen-units = 1
+debug = false
 
 [dependencies]
 rand = "0.8.5"
