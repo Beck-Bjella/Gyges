@@ -21,9 +21,7 @@ dependencies = [
 
 [[package]]
 name = "gyges"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0930f60884745e5b6e5d88e9abcc6d45e93debd85dd8705b3ba92eab671730bf"
+version = "1.0.1"
 dependencies = [
  "rand",
 ]
@@ -31,6 +29,8 @@ dependencies = [
 [[package]]
 name = "gyges"
 version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5793e258dc5bc4f6aa9c3be377ba87bb366960fdce9f52a2265c5278ed7c08d4"
 dependencies = [
  "rand",
 ]
@@ -39,7 +39,7 @@ dependencies = [
 name = "gyges_engine"
 version = "1.0.1"
 dependencies = [
- "gyges 1.0.0",
+ "gyges 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

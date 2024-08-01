@@ -22,4 +22,4 @@ codegen-units = 1
 debug = false
 
 [dependencies]
-gyges = "1.0.0"
+gyges = "1.0.1"
