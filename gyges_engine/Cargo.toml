@@ -2,6 +2,20 @@
 name = "gyges_engine"
 version = "1.0.0"
 edition = "2021"
+description = "A powerful Gygès engine."
+license = "GPL-3.0-or-later"
+documentation = "https://docs.rs/gyges_engine"
+repository = "https://github.com/Beck-Bjella/Gyges"
+readme = "README.md"
+keywords = ["boardgame", "gyges", "ai", "games"]
+categories = ["games", "game-engines"]
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "unwind"
+codegen-units = 1
+debug = false
 
 [dependencies]
-gyges = { path = "../gyges" }
+gyges = "1.0.0"

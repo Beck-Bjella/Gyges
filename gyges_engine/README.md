@@ -1,7 +1,7 @@
 # Overview
-An incredibly strong Gygès engine.
+A powerful Gygès engine.
 
-The Gygès engine is a powerful program designed to play the game of Gygès. Like a chess engine, it utilizes advanced algorithms and strategies to make intelligent moves.
+The Gygès engine is a program designed to play the game of Gygès. Like a chess engine, it utilizes advanced algorithms and strategies to make intelligent moves.
 
 The engine communicates using the UGI Protocol, which was specifically developed for this engine. This protocol closely relates to the UCI Protocol used in chess engines, incorporating similar concepts and ideas. Check out the [UGI Protocol](https://github.com/Beck-Bjella/Gyges/blob/main/gyges_engine/UGI-Protocol-Specification.md) for more information.
 

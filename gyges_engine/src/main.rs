@@ -1,4 +1,4 @@
-//! An incredibly strong Gygès engine.
+//! A powerful Gygès engine.
 //!
 //! This crate is not intended to be used as a dependency. Run the compiled binary to run the engine. 
 //! More information about the engine can be found on the [github page](https://github.com/Beck-Bjella/Gyges).

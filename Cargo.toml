@@ -5,7 +5,9 @@ resolver = "2"
 [profile.release]
 opt-level = 3
 lto = true
-panic = "abort"
+panic = "unwind"
+codegen-units = 1
+debug = false
 
 [profile.dev]
 opt-level = 3

@@ -9,7 +9,6 @@ Check out the game on Board Game Arena: [Gygès](https://boardgamearena.com/game
 This is specifically a library for the game Gygès, not the engine to play the game. You can check out the engine [here](https://github.com/Beck-Bjella/Gyges/tree/main/gyges_engine).
 
 # Library Features
- 
 - Board representation
    - Zobrist Hashing
 - BitBoards
