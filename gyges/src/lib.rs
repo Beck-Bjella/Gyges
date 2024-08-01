@@ -6,8 +6,6 @@
 //! If a piece lands on another piece, it can move the number of spaces equal to that piece's number of rings. 
 //! It can also displace that piece to any open space. 
 //! 
-//! If you are looking for the engine that uses this library, check out the [github page](https://github.com/Beck-Bjella/Gyges) for the project.
-//!  
 //! # Usage 
 //! This crate is available on [crates.io](https://crates.io/crates/gyges) and can be used by adding `gyges` to your `Cargo.toml` file. 
 //! For more examples check out the [github page](https://github.com/Beck-Bjella/Gyges) for the project.

@@ -1,11 +1,11 @@
 # Overview
 A powerful Gygès engine.
 
-The Gygès engine is a program designed to play the game of Gygès. Like a chess engine, it utilizes advanced algorithms and strategies to make intelligent moves.
-
-The engine communicates using the UGI Protocol, which was specifically developed for this engine. This protocol closely relates to the UCI Protocol used in chess engines, incorporating similar concepts and ideas. Check out the [UGI Protocol](https://github.com/Beck-Bjella/Gyges/blob/main/gyges_engine/UGI-Protocol-Specification.md) for more information.
+The Gygès engine is a program designed to play the game of Gygès. Like a chess engine, it utilizes advanced algorithms and strategies to make intelligent moves. The engine communicates using the UGI Protocol, which was specifically developed for this engine. This protocol closely relates to the UCI Protocol used in chess engines, incorporating similar concepts and ideas. Check out the [UGI Protocol](https://github.com/Beck-Bjella/Gyges/blob/main/gyges_engine/UGI-Protocol-Specification.md) for more information.
 
 Please note that the Gygès engine is a standalone application and not intended to be used as a library. If you are looking for a library to integrate Gygès functionality into your projects, you can find it [here](https://github.com/Beck-Bjella/Gyges/tree/main/gyges).
+
+[Documentation](https://docs.rs/gyges_engine) and the [Crates.io](https://crates.io/crates/gyges_engine) page.
 
 # Features
  - Iterative Deepening Search

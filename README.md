@@ -23,13 +23,12 @@ To use the standalone engine, check out the [Gyges-engine](https://github.com/Be
 You can add this crate to your project by adding the following to your `Cargo.toml` file:
 ```toml
 [dependencies]
-gyges = "1.0.0"
+gyges = "1.0.1"
 ```
 
 ## Examples
 
 ### Setting up a starting board position
-
 This is one specific starting position built into the library. Other constant board positions can be loaded as well.
 ```rust 
 use gyges::board::*;
@@ -40,7 +39,6 @@ let board = BoardState::from(STARTING_BOARD);
 ```
 
 ### Loading a specific Board
-
 Boards can be created using this notation, as shown below. Each set of 6 numbers represents a row on the board, starting from your side of the board and going left to right. The orientation of the board is subjective and is based on how the board is inputted.
 ```rust
 use gyges::board::*;
@@ -51,7 +49,6 @@ let board = BoardState::from("321123/000000/000000/000000/000000/321123");
 ```
 
 ### Applying and generating moves
-
 Move generation is done in a two-step process. You must generate a `RawMoveList` and then extract the moves from that list into a `Vec<Move>`. This is done to improve efficiency and reduce unnecessary processing. When making a move, the `make_move` function will return a copy of the board with the move applied.
 ```rust
 use gyges::board::*;
@@ -73,7 +70,6 @@ board.make_move(&moves[0]);
 ```
 
 # Contributions 
-
 Contributions welcome! If you'd like to contribute, please open a pull request. Feedback is greatly appreciated, along with reporting issues or suggesting improvements.
 
 # Lisence

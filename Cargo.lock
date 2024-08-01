@@ -22,13 +22,6 @@ dependencies = [
 [[package]]
 name = "gyges"
 version = "1.0.0"
-dependencies = [
- "rand",
-]
-
-[[package]]
-name = "gyges"
-version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0930f60884745e5b6e5d88e9abcc6d45e93debd85dd8705b3ba92eab671730bf"
 dependencies = [
@@ -36,10 +29,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "gyges_engine"
-version = "1.0.0"
+name = "gyges"
+version = "1.0.1"
 dependencies = [
- "gyges 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand",
+]
+
+[[package]]
+name = "gyges_engine"
+version = "1.0.1"
+dependencies = [
+ "gyges 1.0.0",
 ]
 
 [[package]]
