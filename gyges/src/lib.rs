@@ -63,7 +63,6 @@
 //! This project and its formating was inspired by the incridible rust chess program [Pleco](https://github.com/pleco-rs/Pleco).
 //! 
 
-#![feature(test)]
 #![allow(dead_code)]
 
 pub mod board;

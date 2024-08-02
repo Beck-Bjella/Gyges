@@ -6,7 +6,6 @@
 //! If you are looking for the core library, check out the gyges crate on [crates.io](https://crates.io/crates/gyges).
 //! 
 
-#![feature(test)]
 #![allow(dead_code)]
 
 pub mod search;

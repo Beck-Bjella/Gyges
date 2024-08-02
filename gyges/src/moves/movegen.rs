@@ -3,8 +3,6 @@
 //! All of the functions in this module are unsafe and cannot be run concurrently.
 //!  
 
-extern crate test;
-
 use crate::board::*;
 use crate::board::bitboard::*;
 use crate::core::*;
@@ -1142,53 +1140,5 @@ pub unsafe fn controlled_squares(board: &mut BoardState, player: Player) -> BitB
     }
 
     controlled_squares & !board.piece_bb
-
-}
-
-#[cfg(test)]
-mod move_gen_bench {
-    use test::Bencher;
-
-    use crate::moves::movegen::*;
-
-    #[bench]
-    fn bench_valid_moves(b: &mut Bencher) {
-        let mut board = BoardState::from(BENCH_BOARD);
-
-        b.iter(|| unsafe{ valid_moves(&mut board, Player::One) }.moves(&board));
-
-    }
-
-    #[bench]
-    fn bench_valid_move_count(b: &mut Bencher) {
-        let mut board = BoardState::from(BENCH_BOARD);
-
-        b.iter(|| unsafe{ valid_move_count(&mut board, Player::One) });
-
-    }
-
-    #[bench]
-    fn bench_threat_count(b: &mut Bencher) {
-        let mut board = BoardState::from(BENCH_BOARD);
-
-        b.iter(|| unsafe{ valid_threat_count(&mut board, Player::One) });
-
-    }
-
-    #[bench]
-    fn bench_controlled_pieces(b: &mut Bencher) {
-        let mut board = BoardState::from(BENCH_BOARD);
-
-        b.iter(|| unsafe{ controlled_pieces(&mut board, Player::One) });
-
-    }
-
-    #[bench]
-    fn bench_controlled_squares(b: &mut Bencher) {
-        let mut board = BoardState::from(BENCH_BOARD);
-
-        b.iter(|| unsafe{ controlled_squares(&mut board, Player::One) });
-
-    }
 
 }
