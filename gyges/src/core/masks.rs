@@ -27,10 +27,10 @@ pub const FILE_E: u64 = 0b000010000010000010000010000010000010;
 pub const FILE_F: u64 = 0b000001000001000001000001000001000001;
 
 /// Array of all ranks.
-pub const RANKS: [u64; 6] = [RANK_1, RANK_2, RANK_3, RANK_4, RANK_5, RANK_6];
+pub const RANKS: [u64; 6] = [RANK_6, RANK_5, RANK_4, RANK_3, RANK_2, RANK_1];
 
 /// Array of all files.
-pub const FILES: [u64; 6] = [FILE_A, FILE_B, FILE_C, FILE_D, FILE_E, FILE_F];
+pub const FILES: [u64; 6] = [FILE_F, FILE_E, FILE_D, FILE_C, FILE_B, FILE_A];
 
 /// Full board mask.
 pub const FULL: u64 = 0b111111111111111111111111111111111111;

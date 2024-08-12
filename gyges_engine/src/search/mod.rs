@@ -3,6 +3,7 @@
 
 pub mod evaluation;
 
+use core::f64;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
@@ -94,7 +95,7 @@ impl Searcher {
         }
 
     } 
-
+    
     /// Iterative deepening search.
     pub fn iterative_deepening_search(&mut self) {
         self.stop = false;
@@ -135,8 +136,11 @@ impl Searcher {
             ugi::info_output(self.search_data.clone());
             
             self.completed_searchs.push(self.search_data.clone());
-
+           
             self.current_ply += 2;
+
+            // Prune the root moves list.
+            self.root_moves.moves = self.root_moves.moves.iter().filter(|mv| mv.score != f64::NEG_INFINITY).cloned().collect();
             
             if self.current_ply > self.options.maxply {
                 break 'iterative_deepening;
@@ -185,9 +189,12 @@ impl Searcher {
         }
 
         // Handle Transposition Table
+        let mut tt_move: Option<Move> = None;
         if self.options.tt_enabled {
             let (valid, entry) = unsafe { tt().probe(board_hash) };
             if valid && entry.depth >= ply {
+                tt_move = Some(entry.bestmove);
+
                 match entry.bound {
                     NodeBound::ExactValue => {
                         return entry.score
@@ -213,24 +220,42 @@ impl Searcher {
 
         }
         
-
         // Use previous ply search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {
             self.root_moves.clone().into()
             
         } else {
             let moves = move_list.moves(board);
-            order_moves(moves, board, player)
+            order_moves(moves, board, player, tt_move)
 
         };
+
+        // If there are no valid moves, return negative infinity.
+        if current_player_moves.len() == 0 {
+            return f64::NEG_INFINITY;
+
+        }
         
         // Loop through valid moves and search them.
         let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
-        for mv in current_player_moves.iter() {
+        for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
 
-            let score: f64 = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1);
+            // Principal Variation Search
+            let score: f64 = if i == 0 {
+                -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1) // Full search
+
+            } else {
+                let mut score = -self.search(&mut new_board, -alpha - 1.0, -alpha, player.other(), ply - 1); // Null window search
+                if score > alpha && score < beta { 
+                    score = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1);
+
+                }
+
+                score
+
+            };
 
             // Update the score of the rootnode.
             if is_root {

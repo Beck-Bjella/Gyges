@@ -172,7 +172,7 @@ impl RootMoveList {
     /// Generates all moves, sorts them, and calculates the number of threats that they each have.
     /// 
     pub fn setup(&mut self, board: &mut BoardState) {
-        let moves = order_moves(unsafe { valid_moves(board, Player::One) }.moves(board), board, Player::One);
+        let moves = order_moves(unsafe { valid_moves(board, Player::One) }.moves(board), board, Player::One, None);
 
         let root_moves: Vec<RootMove> = moves.iter().map( |mv| {
             let mut new_board = board.make_move(mv);
