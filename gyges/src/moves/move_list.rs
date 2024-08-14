@@ -142,7 +142,16 @@ impl RootMoveList {
                 Ordering::Less
                 
             } else if a.score == b.score {
-                Ordering::Equal
+                if a.threats > b.threats {
+                    Ordering::Less
+
+                } else if a.threats == b.threats {
+                    Ordering::Equal
+                    
+                } else {
+                    Ordering::Greater
+
+                }
 
             } else {
                 Ordering::Greater
@@ -173,7 +182,7 @@ impl RootMoveList {
     /// 
     pub fn setup(&mut self, board: &mut BoardState) {
         let moves = order_moves(unsafe { valid_moves(board, Player::One) }.moves(board), board, Player::One, None);
-
+        
         let root_moves: Vec<RootMove> = moves.iter().map( |mv| {
             let mut new_board = board.make_move(mv);
             let threats: usize = unsafe { valid_threat_count(&mut new_board, Player::One) };

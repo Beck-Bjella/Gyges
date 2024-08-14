@@ -70,6 +70,10 @@ impl Ugi {
                     self.parse_position(trimmed, raw_commands)
 
                 },
+                Some(&"showpos") => {
+                    println!("{}", self.search_options.board);
+
+                },
                 Some(&"go") => {
                     self.go();
 
@@ -97,7 +101,7 @@ impl Ugi {
     }
 
     pub fn init(&self) {
-        init_tt(2usize.pow(25)); // 100MB
+        init_tt(2usize.pow(22)); // 400 MB
 
     }
 
@@ -157,6 +161,10 @@ impl Ugi {
                 self.search_options.board = BoardState::from(BENCH_BOARD);
 
             },
+            Some(&"test") => {
+                self.search_options.board = BoardState::from(TEST_BOARD);
+
+            }
             Some(&"data") => {
                 if let Some(board_str) = raw_commands.get(2) {
                     self.search_options.board = BoardState::from(*board_str);

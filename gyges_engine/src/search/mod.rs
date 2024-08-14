@@ -124,13 +124,41 @@ impl Searcher {
         self.current_ply = 1;
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
-         
-            self.search(board, f64::NEG_INFINITY, f64::INFINITY, Player::One, self.current_ply);
-      
+
+            let (mut alpha, mut beta) = if self.completed_searchs.len() > 0 {
+                let prev_score = self.completed_searchs.last().unwrap().clone().best_move.score;
+                (prev_score - 1000.0, prev_score + 1000.0)
+
+            } else {
+                (f64::NEG_INFINITY, f64::INFINITY)
+
+            };
+
+            'aspiration_windows: loop {
+                let score = self.search(board, alpha, beta, Player::One, self.current_ply);
+                
+                if self.stop || score == f64::INFINITY || score == f64::NEG_INFINITY {
+                    break 'aspiration_windows;
+        
+                }
+
+                if score <= alpha {
+                    alpha -= 1000.0;
+
+                } else if score >= beta {
+                    beta += 1000.0;
+
+                } else {
+                    break 'aspiration_windows;
+
+                }
+
+            }
+                
             if self.stop {
                 break 'iterative_deepening;
     
-            }
+            }   
 
             self.update_search_stats();
             ugi::info_output(self.search_data.clone());
@@ -243,7 +271,7 @@ impl Searcher {
             let mut new_board = board.make_move(mv);
 
             // Principal Variation Search
-            let score: f64 = if i == 0 {
+            let score: f64 = if i < 5 {
                 -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1) // Full search
 
             } else {
