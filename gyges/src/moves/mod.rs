@@ -8,11 +8,8 @@ pub mod move_list;
 pub mod movegen;
 pub mod movegen_consts;
 
-use std::cmp::Ordering;
 use std::fmt::Display;
 
-use crate::board::*;
-use crate::moves::movegen::*;
 use crate::core::*;
 
 /// Designates the type of move.
@@ -83,12 +80,16 @@ impl Move {
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.flag == MoveType::Bounce {
-            write!(f, "({}, {}) : ({}, {})", self.data[0].0, self.data[0].1, self.data[1].0, self.data[1].1)
+            write!(f, "{}{}", READABLE_SQS[self.data[0].1.0 as usize], READABLE_SQS[self.data[1].1.0 as usize])
+
+        } else if self.flag == MoveType::Drop {
+            write!(f, "{}{}{}", READABLE_SQS[self.data[0].1.0 as usize], READABLE_SQS[self.data[1].1.0 as usize], READABLE_SQS[self.data[2].1.0 as usize])
 
         } else {
-            write!(f, "({}, {}) : ({}, {}) : ({}, {})", self.data[0].0, self.data[0].1, self.data[1].0, self.data[1].1, self.data[2].0, self.data[2].1)
+            write!(f, "X")
 
         }
+        
 
     }
 
@@ -102,19 +103,17 @@ impl Display for Move {
 pub struct RootMove {
     pub mv: Move,
     pub score: f64,
-    pub threats: usize,
     pub ply: i8
 
 }
 
 impl RootMove {
     /// Creates a rootmove from its indivudal components.
-    pub fn new(mv: Move, score: f64, ply: i8, threats: usize) -> RootMove {
+    pub fn new(mv: Move, score: f64, ply: i8) -> RootMove {
         RootMove {
             mv,
             score,
             ply,
-            threats,
 
         }
 
@@ -126,7 +125,6 @@ impl RootMove {
             mv: Move::new_null(),
             score: 0.0,
             ply: 0,
-            threats: 0,
 
         }
 
@@ -159,71 +157,4 @@ impl Display for RootMove {
 
     }
 
-}
-
-// Constants for move ordering.
-pub const LOSE_MOVE_SCORE: f64 = -1000000.0;
-pub const TT_MOVE_SCORE: f64 = 1000000.0;
-
-/// Orders a list of moves.
-pub fn order_moves(moves: Vec<Move>, board: &mut BoardState, player: Player, tt_move: Option<Move>) -> Vec<Move> {
-    // For every move calculate a value to sort it by.
-    let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
-        let mut sort_val: f64 = 0.0;
-        let mut new_board = board.make_move(&mv);
-
-        // If the move is the TT sort it first.
-        if tt_move.is_some() && mv == tt_move.unwrap() {
-            return (mv, TT_MOVE_SCORE);
-
-        }
-
-        // If opponent has a threat then remove it as an option because the move would lose.
-        if unsafe{ has_threat(&mut new_board, player.other()) } {
-            return (mv, LOSE_MOVE_SCORE);
-
-        }
-
-        // If the move has a threat then increase the sort value.
-        if unsafe { has_threat(&mut new_board, player) } {
-            sort_val += 1000.0;
-        }
-
-        // Lower the moves sort value based on oppenent move count.
-        sort_val -= unsafe{ valid_move_count(&mut new_board, player.other())} as f64;
-
-        // SLIGHTLY BETTER ORDERING, BUT BIGGER PERFORMANCE HIT
-        // If a move has less then 5 threats then penalize it.
-        // let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
-        // if threat_count <= 5_usize {
-        //     sort_val -= 1000.0 * (5 - threat_count) as f64;
-        // }
-
-        (mv, sort_val)
-
-    }).collect();
-
-    // Sort the moves based on their predicted values.
-    moves_to_sort.sort_by(|a, b| {
-        if a.1 > b.1 {
-            Ordering::Less
-            
-        } else if a.1 == b.1 {
-            Ordering::Equal
-
-        } else {
-            Ordering::Greater
-
-        }
-
-    });
-
-    // Collect the moves.
-    let ordered_moves: Vec<Move> = moves_to_sort.into_iter()
-        .filter(|mv| mv.1 != LOSE_MOVE_SCORE)
-        .map(|x| x.0)
-        .collect();
-
-    ordered_moves
- 
 }

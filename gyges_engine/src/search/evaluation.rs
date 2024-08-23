@@ -13,10 +13,10 @@ pub const UNIQUE_SQUARE_CONTROL_SCORE: f64 = 10.0;
 pub const SHARED_SQUARE_CONTROL_SCORE: f64 = 5.0;
 
 // BEST EVALUATION FUNCTION
-pub fn get_evalulation(board: &mut BoardState) -> f64 {
-    let move_counts = [unsafe{ valid_move_count(board, Player::One) }, unsafe{ valid_move_count(board, Player::Two) }];
-    let control_squares = [unsafe{ controlled_squares(board, Player::One) }, unsafe{ controlled_squares(board, Player::Two) } ];
-    let control_pieces = [unsafe{ controlled_pieces(board, Player::One) }, unsafe{ controlled_pieces(board, Player::Two) } ];
+pub fn get_evalulation(board: &mut BoardState, move_gen: &mut MoveGen) -> f64 {
+    let move_counts = [unsafe{ move_gen.valid_move_count(board, Player::One) }, unsafe{ move_gen.valid_move_count(board, Player::Two) }];
+    let control_squares = [unsafe{ move_gen.controlled_squares(board, Player::One) }, unsafe{ move_gen.controlled_squares(board, Player::Two) } ];
+    let control_pieces = [unsafe{ move_gen.controlled_pieces(board, Player::One) }, unsafe{ move_gen.controlled_pieces(board, Player::Two) } ];
 
     let mut eval = 0.0;
 

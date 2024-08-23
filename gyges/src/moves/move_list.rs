@@ -3,13 +3,10 @@
 //! There is the RawMoveList and the RootMoveList, and both follow the same pattern of storing groups of moves.
 //! 
 
-use std::cmp::Ordering;
-
 use crate::board::*;
 use crate::board::bitboard::*;
 use crate::core::*;
 use crate::moves::*;
-use crate::moves::movegen::*;
 
 /// An Encoded list of moves.
 /// 
@@ -111,114 +108,6 @@ impl RawMoveList {
         }
 
         false
-
-    }
-
-}
-
-/// A sortable list of RootMove's
-/// 
-/// Very simmilar to using `Vec<RootMove>` except implements custom functions for setup and sorting.
-/// 
-#[derive(Clone)]
-pub struct RootMoveList {
-    pub moves: Vec<RootMove>,
-
-}
-
-impl RootMoveList {
-    pub fn new() -> RootMoveList {
-        RootMoveList {
-            moves: vec![],
-
-        }
-
-    }
-    
-    /// Sorts the RootMoveList by whatever move has the greatest score.
-    pub fn sort(&mut self) {
-        self.moves.sort_by(|a, b| {
-            if a.score > b.score {
-                Ordering::Less
-                
-            } else if a.score == b.score {
-                if a.threats > b.threats {
-                    Ordering::Less
-
-                } else if a.threats == b.threats {
-                    Ordering::Equal
-                    
-                } else {
-                    Ordering::Greater
-
-                }
-
-            } else {
-                Ordering::Greater
-    
-            }
-    
-        });
-    
-    }
-
-    /// Updates the score and ply fields of a specific move.
-    pub fn update_move(&mut self, mv: Move, score: f64, ply: i8) {
-        for root_move in self.moves.iter_mut() {
-            if root_move.mv == mv {
-                root_move.set_score_and_ply(score, ply);
-
-            }
-
-        }
-
-        self.sort();
-
-    }
-
-    /// Setups up the RootMoveList from a [BoardState].
-    /// 
-    /// Generates all moves, sorts them, and calculates the number of threats that they each have.
-    /// 
-    pub fn setup(&mut self, board: &mut BoardState) {
-        let moves = order_moves(unsafe { valid_moves(board, Player::One) }.moves(board), board, Player::One, None);
-        
-        let root_moves: Vec<RootMove> = moves.iter().map( |mv| {
-            let mut new_board = board.make_move(mv);
-            let threats: usize = unsafe { valid_threat_count(&mut new_board, Player::One) };
-
-            RootMove::new(*mv, 0.0, 0, threats)
-
-        }).collect();
-
-        self.moves = root_moves;
-
-    }
-
-    /// Returns the first move
-    pub fn first(&self) -> RootMove {
-        self.moves[0]
-
-    }
-
-}
-
-impl From<RootMoveList> for Vec<Move> {
-    fn from(val: RootMoveList) -> Vec<Move> {
-        let moves: Vec<Move> = val.moves.into_iter().map( |mv| {
-            mv.mv
-
-        }).collect();
-
-        moves
-
-    }
-
-}
-
-impl Default for RootMoveList {
-    fn default() -> Self {
-        Self::new()
 
     }
 

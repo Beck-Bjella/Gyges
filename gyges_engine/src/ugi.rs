@@ -70,8 +70,8 @@ impl Ugi {
                     self.parse_position(trimmed, raw_commands)
 
                 },
-                Some(&"showpos") => {
-                    println!("{}", self.search_options.board);
+                Some(&"show") => { // Debugging 
+                    self.show();
 
                 },
                 Some(&"go") => {
@@ -101,7 +101,7 @@ impl Ugi {
     }
 
     pub fn init(&self) {
-        init_tt(2usize.pow(22)); // 400 MB
+        init_tt(2usize.pow(25)); // 400 MB == 22
 
     }
 
@@ -184,6 +184,19 @@ impl Ugi {
 
     }
 
+    /// Shows all configured parameters. Debbug use mainly.
+    pub fn show(&self) {
+        println!("===================== SETTINGS ====================="); 
+        println!("Board: {}", self.search_options.board);
+        println!("MaxPly: {}", self.search_options.maxply);
+        println!("MaxTime: {:?}", self.search_options.maxtime);
+        println!("TT Enabled: {}", self.search_options.tt_enabled);
+        println!(" - tt size (MB): {}", tt().size_megabytes());
+        println!("Searching: {}", self.searching);
+        println!(" ===================================================");
+
+    }
+
     pub fn go(&mut self) {
         unsafe { tt().reset() }; // Reset tt before new search
 
@@ -195,8 +208,8 @@ impl Ugi {
         let search_options = self.search_options.clone();
 
         self.searching_thread = Some(thread::spawn(move || {
-            let mut searcher: Searcher = Searcher::new(sr, search_options);
-            searcher.iterative_deepening_search();
+            let searcher: Searcher = Searcher::new(sr, search_options);
+            searcher.search();
             
         }));
     
@@ -225,15 +238,22 @@ impl Default for Ugi {
 
 }
 
-pub fn info_output(search_data: SearchData) {
-    print!("info ");
+pub fn info_output(search_data: SearchData, thread_id: usize) {
+    print!("{}: info ", thread_id);
     print!("ply {} ", search_data.ply);
     print!("bestmove {} ", search_data.best_move);
     print!("score {} ", search_data.best_move.score);
     print!("nodes {} ", search_data.nodes);
     print!("nps {} ", search_data.nps);
     print!("abf {} ", search_data.average_branching_factor);
-    println!("time {} ", search_data.search_time);
+    print!("time {} ", search_data.search_time);
+
+    print!("pv ");
+    for mv in search_data.pv.iter() {
+        print!("{} ", mv);
+    }
+    println!();
+
 
 }
 
