@@ -1,4 +1,4 @@
-# Description of the Universal Gyges Interface (UGI) [Jan 2024]
+# Description of the Universal Gyges Interface (UGI) [AUG 2024]
 
 ## Move Format:
 
@@ -41,12 +41,15 @@ All communication takes place over the command line.
 
 * `setoption <name> <value>`
 	Used to modify internal parameters.
-	* `MaxPly`: int > 0 
-	* `MaxTime`: int > 0 (time in seconds)
+	* `maxPly`: int > 0 
+	* `maxTime`: int > 0 (time in seconds)
+	* `ttEnabled`: bool
+	* `threadCount`: int > 0
 
 * `setpos <layout>`
 	Sets the board layout; no response is sent.
 	* `bench`
+	* `test`
 	* `start`
 	* `data <_>` followed by the board layout
 
@@ -77,6 +80,7 @@ All communication takes place over the command line.
 	* `maxPly`
 	* `maxTime` 
 	* `ttEnabled`
+	* `threadCount`
 
 * `readyok`
 	Responds with when ready to accept new commands after the `isready` command.
@@ -90,6 +94,7 @@ All communication takes place over the command line.
 	* `nps` (nodes per second)
 	* `abf` (average branching factor)
 	* `time` (time taken to search)
+	* `pv` (principle variation)
 
 * `bestmove <_>`
 	Sent after a completed search to indicate the best move found.
@@ -106,9 +111,10 @@ Communication session between GUI and the engine.
 ugi
 * id name Helios
 * id author beck-bjella
-* option maxply
-* option maxtime
-* option tt_enabled
+* option maxPly
+* option maxTime
+* option ttEnabled
+* option threadCount
 * ugiok
 
 setpos data 321123/000000/000000/000000/000000/321123 
@@ -119,11 +125,11 @@ isready
 * readyok
 
 go
-* info ply 1 bestmove 0|1|9 score 1061 nodes 225 nps 234619 abf 225 time 0.000959
-* info ply 3 bestmove 0|1|14 score 3493 nodes 68861 nps 72432 abf 40.988 time 0.950
+* info ply 1 bestmove 0|1|9 score 1061 nodes 225 nps 234619 abf 225 time 0.000959 pv 0|1|9
+* info ply 3 bestmove 0|1|14 score 3493 nodes 68861 nps 72432 abf 40.988 time 0.950 pv 0|1|14 33|21|16 3|6|21
 
 stop
-* info ply 3 bestmove 0|1|14 score 3493 nodes 68861 nps 72432 abf 40.988 time 0.950
+* info ply 3 bestmove 0|1|14 score 3493 nodes 68861 nps 72432 abf 40.988 time 0.950 pv 0|1|14 33|21|16 3|6|21
 *bestmove 0|1|14
 
 quit

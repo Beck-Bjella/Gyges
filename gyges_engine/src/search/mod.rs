@@ -27,7 +27,6 @@ pub const MAXPLY: i8 = 99;
 // Constants for the threads.
 pub const THREAD_INCREMENTS: [i8; 6] = [1, 2, 3, 4, 5, 6];
 pub const THREAD_START_PLY: [i8; 6] = [1, 1, 1, 1, 1, 1];
-pub const THREAD_COUNT: usize = 6;
 
 // Constants for move ordering.
 pub const LOSE_MOVE_SCORE: f64 = -1000000.0;
@@ -161,8 +160,14 @@ impl ThreadSearcher {
                 self.completed_searchs.push(self.search_data.clone());
 
                 let best_search_data = self.completed_searchs.last().unwrap().clone();
-                ugi::info_output(best_search_data.clone(), self.thread_id);
-                ugi::best_move_output(best_search_data);
+                self.data_sender.send(best_search_data).unwrap(); // Output data
+
+                // Wait for stop signal
+                while !self.stop {
+                    self.check();
+
+                }
+
                 return;
 
             }
@@ -484,7 +489,7 @@ impl Searcher {
         let mut data_receivers = Vec::new();
 
         // Start all threads.
-        for i in 0..THREAD_COUNT {
+        for i in 0..self.options.thread_count {
             let options = self.options.clone();
             
             let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
@@ -532,7 +537,7 @@ impl Searcher {
 
                     // Update threads with the best data.
                     if best_updated {
-                        ugi::info_output(best_search_data.clone().unwrap(), 999);
+                        ugi::info_output(best_search_data.clone().unwrap());
 
                         for sender in data_senders.iter() {
                             sender.send(best_search_data.clone().unwrap()).unwrap();
@@ -568,7 +573,7 @@ impl Searcher {
 
         }
 
-        ugi::info_output(best_search_data.clone().unwrap(), 1000);
+        ugi::info_output(best_search_data.clone().unwrap());
         ugi::best_move_output(best_search_data.clone().unwrap());
 
     }
@@ -661,7 +666,8 @@ pub struct SearchOptions {
     pub board: BoardState,
     pub maxply: i8,
     pub maxtime: Option<f64>,
-    pub tt_enabled: bool
+    pub tt_enabled: bool,
+    pub thread_count: usize
 
 }
 
@@ -671,7 +677,8 @@ impl SearchOptions {
             board: BoardState::from(STARTING_BOARD),   
             maxply: MAXPLY,
             maxtime: Option::None,
-            tt_enabled: true
+            tt_enabled: true,
+            thread_count: 4
 
         }
 

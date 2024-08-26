@@ -52,9 +52,10 @@ impl Ugi {
                 Some(&"ugi") => {
                     println!("id name Helios");
                     println!("id author beck-bjella");                
-                    println!("option maxply");
-                    println!("option maxtime");
-                    println!("option tt_enabled");
+                    println!("option maxPly");
+                    println!("option maxTime");
+                    println!("option ttEnabled");
+                    println!("option threadCount");
                     println!("ugiok");
 
                 },
@@ -142,6 +143,16 @@ impl Ugi {
                 }
 
             }
+            Some(&"threadCount") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    self.search_options.thread_count = value_str.parse::<usize>().unwrap();
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
             Some(_) | None => {
                 println!("Unknown Command: '{}'", trimmed);
 
@@ -192,6 +203,7 @@ impl Ugi {
         println!("MaxTime: {:?}", self.search_options.maxtime);
         println!("TT Enabled: {}", self.search_options.tt_enabled);
         println!(" - tt size (MB): {}", tt().size_megabytes());
+        println!("Thread Count: {}", self.search_options.thread_count);
         println!("Searching: {}", self.searching);
         println!(" ===================================================");
 
@@ -238,8 +250,8 @@ impl Default for Ugi {
 
 }
 
-pub fn info_output(search_data: SearchData, thread_id: usize) {
-    print!("{}: info ", thread_id);
+pub fn info_output(search_data: SearchData) {
+    print!("info ");
     print!("ply {} ", search_data.ply);
     print!("bestmove {} ", search_data.best_move);
     print!("score {} ", search_data.best_move.score);

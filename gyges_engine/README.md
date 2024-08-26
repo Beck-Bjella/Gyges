@@ -10,6 +10,7 @@ Please note that the Gygès engine is a standalone application and not intended 
 # Features
  - Iterative Deepening Search
     - Alpha-Beta Pruning
+    - LazySMP multi-threading
  - Move Ordering
  - Transposition Table with Zobrist Hashing
  - Complex Evaluation Heuristics

@@ -51,7 +51,9 @@
 //! let player = Player::One;
 //! 
 //! // Generate moves
-//! let mut movelist = unsafe{ valid_moves(&mut board, player) }; // Create a MoveList
+//! let move_gen = MoveGen::new();
+//! 
+//! let mut movelist = unsafe{ move_gen.valid_moves(&mut board, player) }; // Create a MoveList
 //! let moves = movelist.moves(&mut board); // Extract the moves
 //! 
 //! // Make a move
