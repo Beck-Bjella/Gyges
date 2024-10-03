@@ -128,7 +128,7 @@ impl Searcher {
         }
 
         self.root_moves = RootMoveList::new();
-        self.root_moves.setup(board);
+        self.setup_rootmoves(board);
 
         self.start_time = Instant::now();
 

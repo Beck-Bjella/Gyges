@@ -1,37 +1,12 @@
 extern crate gyges_engine;
 
-use std::iter;
-
 use gyges::{moves::movegen::{self, MoveGen, MoveGenRequest, MoveGenType}, BoardState, Player, BENCH_BOARD, STARTING_BOARD};
 // use gyges_engine::ugi::Ugi;
 
 fn main() {
-    let board = BoardState::from(BENCH_BOARD);
-    println!("{}", board);
-
-    let mut movegen = MoveGen::new();
-
-    for i in 0..10000 {
-        movegen.queue(MoveGenRequest::new(board.clone(), Player::One, MoveGenType::ValidMoves, i));
-
-    }
-
-    loop {
-        if let Some(result) = movegen.get() {
-            // println!("{:?}", result.id);
-            if result.id == 9999 {
-                break;
-            }
-
-        }
-
-    }
-
-    // movegen.stop();
     let mut movegen = MoveGen::new();
     
     for i in 0..50 {
-        
         gen_single(&mut movegen);
         gen_batch(&mut movegen);
 

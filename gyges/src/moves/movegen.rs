@@ -313,7 +313,6 @@ impl MoveGenWorker {
     }
 
     pub fn start(&mut self) {
-        println!("Worker {} running", self.worker_id);
         loop {
             // Handle most recent request
             while let Some(mut request) = self.request_receiver.try_recv().ok() {
@@ -336,20 +335,91 @@ impl MoveGenWorker {
 
                     },
                     MoveGenType::ValidMoveCount => {
+                        let move_count = unsafe { self.valid_move_count(&mut request.board, request.player) };
+
+                        let result = MoveGenResult {
+                            id: request.id,
+                            moves: RawMoveList::new(BitBoard::EMPTY),
+                            move_count,
+                            threat_count: 0,
+                            controlled_pieces: BitBoard::EMPTY,
+                            controlled_squares: BitBoard::EMPTY,
+                            has_threat: false
+
+                        };
+
+                        self.result_sender.send(result).unwrap();
 
                     },
                     MoveGenType::ValidThreatCount => {
+                        let threat_count = unsafe { self.valid_threat_count(&mut request.board, request.player) };
+
+                        let result = MoveGenResult {
+                            id: request.id,
+                            moves: RawMoveList::new(BitBoard::EMPTY),
+                            move_count: 0,
+                            threat_count,
+                            controlled_pieces: BitBoard::EMPTY,
+                            controlled_squares: BitBoard::EMPTY,
+                            has_threat: false
+
+                        };
+
+                        self.result_sender.send(result).unwrap();
 
                     },
                     MoveGenType::ControlledPieces => {
+                        let controlled_pieces = unsafe { self.controlled_pieces(&mut request.board, request.player) };
+
+                        let result = MoveGenResult {
+                            id: request.id,
+                            moves: RawMoveList::new(BitBoard::EMPTY),
+                            move_count: 0,
+                            threat_count: 0,
+                            controlled_pieces,
+                            controlled_squares: BitBoard::EMPTY,
+                            has_threat: false
+
+                        };
+
+                        self.result_sender.send(result).unwrap();
 
                     },
                     MoveGenType::ControlledSquares => {
+                        let controlled_squares = unsafe { self.controlled_squares(&mut request.board, request.player) };
+
+                        let result = MoveGenResult {
+                            id: request.id,
+                            moves: RawMoveList::new(BitBoard::EMPTY),
+                            move_count: 0,
+                            threat_count: 0,
+                            controlled_pieces: BitBoard::EMPTY,
+                            controlled_squares,
+                            has_threat: false
+
+                        };
+
+                        self.result_sender.send(result).unwrap();
 
                     },
                     MoveGenType::HasThreat => {
+                        let has_threat = unsafe { self.has_threat(&mut request.board, request.player) };
 
-                    }
+                        let result = MoveGenResult {
+                            id: request.id,
+                            moves: RawMoveList::new(BitBoard::EMPTY),
+                            move_count: 0,
+                            threat_count: 0,
+                            controlled_pieces: BitBoard::EMPTY,
+                            controlled_squares: BitBoard::EMPTY,
+                            has_threat
+
+                        };
+
+                        self.result_sender.send(result).unwrap();
+
+
+                    },
                     
                 }
                 
