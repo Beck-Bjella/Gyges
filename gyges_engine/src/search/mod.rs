@@ -4,6 +4,7 @@
 pub mod evaluation;
 
 use core::f64;
+use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
@@ -18,13 +19,21 @@ use crate::search::evaluation::*;
 use crate::consts::*;
 use crate::ugi;
 
+// Constants
 pub const MAXPLY: i8 = 99;
+
+// Constants for move ordering.
+pub const LOSE_MOVE_SCORE: f64 = -1000000.0;
+pub const TT_MOVE_SCORE: f64 = 1000000.0;
+
 
 /// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
 pub struct Searcher {
     pub best_move: RootMove,
     pub current_ply: i8,
     pub start_time: Instant,
+
+    pub movegen: MoveGen,
 
     pub completed_searchs: Vec<SearchData>,
     pub search_data: SearchData,
@@ -43,6 +52,8 @@ impl Searcher {
             best_move: RootMove::new_null(),
             current_ply: 0,
             start_time: Instant::now(),
+
+            movegen: MoveGen::new(),
             
             completed_searchs: vec![],
             search_data: SearchData::new(1),
@@ -102,7 +113,7 @@ impl Searcher {
 
         let board = &mut self.options.board.clone();
 
-        for mv in unsafe{ valid_moves(board, Player::One).moves(board) } {
+        for mv in self.movegen.gen(board, Player::One, MoveGenType::ValidMoves, 0).moves.moves(board) {
             if mv.is_win() {
                 self.search_data.best_move = RootMove::new(mv, f64::INFINITY, 1, 0);
                 self.completed_searchs.push(self.search_data.clone());
@@ -199,7 +210,7 @@ impl Searcher {
         }
 
         // Generate the Raw move list for this node.
-        let mut move_list: RawMoveList = unsafe { valid_moves(board, player) };
+        let mut move_list: RawMoveList = self.movegen.gen(board, Player::One, MoveGenType::ValidMoves, 0).moves;
 
         // If there is the threat for the current player return INF, because that move would eventualy be picked as best.
         if move_list.has_threat(player) {
@@ -211,7 +222,7 @@ impl Searcher {
 
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
-            let eval = get_evalulation(board) * player.eval_multiplier();
+            let eval = get_evalulation(board, &mut self.movegen) * player.eval_multiplier();
             return eval;
 
         }
@@ -254,7 +265,7 @@ impl Searcher {
             
         } else {
             let moves = move_list.moves(board);
-            order_moves(moves, board, player, tt_move)
+            self.order_moves(moves, board, player, tt_move)
 
         };
 
@@ -329,6 +340,94 @@ impl Searcher {
         best_score
 
     }
+
+    /// Orders a list of moves.
+    pub fn order_moves(&mut self, moves: Vec<Move>, board: &mut BoardState, player: Player, tt_move: Option<Move>) -> Vec<Move> {
+        // For every move calculate a value to sort it by.
+        let mut moves_to_sort: Vec<(Move, f64)> = moves.into_iter().map(|mv| {
+            let mut sort_val: f64 = 0.0;
+            let mut new_board = board.make_move(&mv);
+
+            // If the move is the TT sort it first.
+            if tt_move.is_some() && mv == tt_move.unwrap() {
+                return (mv, TT_MOVE_SCORE);
+
+            }
+
+            // If opponent has a threat then remove it as an option because the move would lose.
+            if self.movegen.gen(&mut new_board, player.other(), MoveGenType::HasThreat, 0).has_threat {
+                return (mv, LOSE_MOVE_SCORE);
+
+            }
+
+            // If the move has a threat then increase the sort value.
+            if self.movegen.gen(&mut new_board, player, MoveGenType::HasThreat, 0).has_threat {
+                sort_val += 1000.0;
+            }
+
+            // Lower the moves sort value based on oppenent move count.
+            sort_val -= self.movegen.gen(&mut new_board, player.other(), MoveGenType::ValidMoveCount, 0).move_count as f64;
+
+            // SLIGHTLY BETTER ORDERING, BUT BIGGER PERFORMANCE HIT
+            // If a move has less then 5 threats then penalize it.
+            // let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
+            // if threat_count <= 5_usize {
+            //     sort_val -= 1000.0 * (5 - threat_count) as f64;
+            // }
+
+            (mv, sort_val)
+
+        }).collect();
+
+        // Sort the moves based on their predicted values.
+        moves_to_sort.sort_by(|a, b| {
+            if a.1 > b.1 {
+                Ordering::Less
+                
+            } else if a.1 == b.1 {
+                Ordering::Equal
+
+            } else {
+                Ordering::Greater
+
+            }
+
+        });
+
+        // Collect the moves.
+        let ordered_moves: Vec<Move> = moves_to_sort.into_iter()
+            .filter(|mv| mv.1 != LOSE_MOVE_SCORE)
+            .map(|x| x.0)
+            .collect();
+
+        ordered_moves
+    
+    }
+
+
+    /// Setups up the RootMoveList from a [BoardState].
+    /// 
+    /// Generates all moves, sorts them, and calculates the number of threats that they each have.
+    /// 
+    pub fn setup_rootmoves(&mut self, board: &mut BoardState) {
+        let moves = self.movegen.gen(board, Player::One, MoveGenType::ValidMoves, 0).moves.moves(board);
+        let ordered: Vec<Move> = self.order_moves(moves, board, Player::One, None);
+        
+        let root_moves: Vec<RootMove> = ordered.iter().map( |mv| {
+            let mut new_board = board.make_move(mv);
+            let threats: usize = self.movegen.gen(&mut new_board, Player::One, MoveGenType::ValidThreatCount, 0).threat_count;
+
+            RootMove::new(*mv, 0.0, 0, threats)
+
+        }).collect();
+
+        let mut rootmove_list = RootMoveList::new();
+        rootmove_list.moves = root_moves;
+
+        self.root_moves = rootmove_list;
+
+    }
+
 
 }
 

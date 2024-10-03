@@ -9,7 +9,7 @@ use crate::board::*;
 use crate::board::bitboard::*;
 use crate::core::*;
 use crate::moves::*;
-use crate::moves::movegen::*;
+
 
 /// An Encoded list of moves.
 /// 
@@ -20,7 +20,7 @@ use crate::moves::movegen::*;
 /// The other main reason is that you can get general infomation about the types of moves that will be in the list before doing the costly transformation into a ```Vec<Move>```.
 /// The most common example of this is checking if any move in the list will move into the opponents goal.
 /// 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct RawMoveList {
     pub drop_positions: BitBoard,
     pub start_indexs: Vec<usize>,
@@ -173,25 +173,6 @@ impl RootMoveList {
         }
 
         self.sort();
-
-    }
-
-    /// Setups up the RootMoveList from a [BoardState].
-    /// 
-    /// Generates all moves, sorts them, and calculates the number of threats that they each have.
-    /// 
-    pub fn setup(&mut self, board: &mut BoardState) {
-        let moves = order_moves(unsafe { valid_moves(board, Player::One) }.moves(board), board, Player::One, None);
-        
-        let root_moves: Vec<RootMove> = moves.iter().map( |mv| {
-            let mut new_board = board.make_move(mv);
-            let threats: usize = unsafe { valid_threat_count(&mut new_board, Player::One) };
-
-            RootMove::new(*mv, 0.0, 0, threats)
-
-        }).collect();
-
-        self.moves = root_moves;
 
     }
 
