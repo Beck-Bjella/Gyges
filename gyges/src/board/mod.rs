@@ -136,7 +136,7 @@ impl BoardState {
 
     /// Checks if the board is valid and panics if it is not.
     /// A board is valid as long as it has all 12 pieces still on it.
-    pub fn check_valid(&self){
+    pub fn check_valid(&self) {
         if self.piece_bb.pop_count() != 12 {
             println!("Board Data: {:?}", self.data);
             panic!("Invalid board state: {} pieces", self.piece_bb.pop_count());

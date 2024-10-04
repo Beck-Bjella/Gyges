@@ -210,7 +210,7 @@ impl Searcher {
         }
 
         // Generate the Raw move list for this node.
-        let mut move_list: RawMoveList = self.movegen.gen(board, Player::One, MoveGenType::ValidMoves, 0).moves;
+        let mut move_list: RawMoveList = self.movegen.gen(board, player, MoveGenType::ValidMoves, 0).moves;
 
         // If there is the threat for the current player return INF, because that move would eventualy be picked as best.
         if move_list.has_threat(player) {

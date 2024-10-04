@@ -8,11 +8,8 @@ pub mod move_list;
 pub mod movegen;
 pub mod movegen_consts;
 
-use std::cmp::Ordering;
 use std::fmt::Display;
 
-use crate::board::*;
-use crate::moves::movegen::*;
 use crate::core::*;
 
 /// Designates the type of move.
