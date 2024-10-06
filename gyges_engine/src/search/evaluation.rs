@@ -4,7 +4,8 @@
 use gyges::board::*;
 use gyges::board::bitboard::*;
 use gyges::core::*;
-use gyges::moves::movegen::{MoveGen, MoveGenType};
+use gyges::moves::movegen::{controlled_squares, controlled_pieces, valid_move_count};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [500.0, 100.0, 50.0];
 pub const SHARED_PIECE_CONTROL_SCORES: [f64; 3] = [75.0, 50.0, 25.0];
@@ -13,23 +14,10 @@ pub const UNIQUE_SQUARE_CONTROL_SCORE: f64 = 10.0;
 pub const SHARED_SQUARE_CONTROL_SCORE: f64 = 5.0;
 
 // BEST EVALUATION FUNCTION
-pub fn get_evalulation(board: &mut BoardState, movegen: &mut MoveGen) -> f64 {
-    let move_count_p1 = movegen.gen(board, Player::One, MoveGenType::ValidMoveCount, 0).move_count;
-    let move_count_p2 = movegen.gen(board, Player::Two, MoveGenType::ValidMoveCount, 0).move_count;
-
-    let control_squares_p1 = movegen.gen(board, Player::One, MoveGenType::ControlledSquares, 0).controlled_squares;
-    let control_squares_p2 = movegen.gen(board, Player::Two, MoveGenType::ControlledSquares, 0).controlled_squares;
-
-    let control_pieces_p1 = movegen.gen(board, Player::One, MoveGenType::ControlledPieces, 0).controlled_pieces;
-    let control_pieces_p2 = movegen.gen(board, Player::Two, MoveGenType::ControlledPieces, 0).controlled_pieces;
-
-    let move_counts = [move_count_p1, move_count_p2];
-    let control_squares = [control_squares_p1, control_squares_p2];
-    let control_pieces = [control_pieces_p1, control_pieces_p2];
-
-    // let move_counts = [unsafe{ valid_move_count(board, Player::One) }, unsafe{ valid_move_count(board, Player::Two) }];
-    // let control_squares = [unsafe{ controlled_squares(board, Player::One) }, unsafe{ controlled_squares(board, Player::Two) } ];
-    // let control_pieces = [unsafe{ controlled_pieces(board, Player::One) }, unsafe{ controlled_pieces(board, Player::Two) } ];
+pub fn get_evalulation(board: &mut BoardState) -> f64 {
+    let move_counts = [unsafe{ valid_move_count(board, Player::One) }, unsafe{ valid_move_count(board, Player::Two) }];
+    let control_squares = [unsafe{ controlled_squares(board, Player::One) }, unsafe{ controlled_squares(board, Player::Two) } ];
+    let control_pieces = [unsafe{ controlled_pieces(board, Player::One) }, unsafe{ controlled_pieces(board, Player::Two) } ];
 
     let mut eval = 0.0;
 
