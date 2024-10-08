@@ -30,12 +30,11 @@ pub const TT_MOVE_SCORE: f64 = 1000000.0;
 
 /// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
 pub struct Searcher {
-    pub best_move: RootMove,
     pub current_ply: i8,
-    pub start_time: Instant,
 
     pub completed_searchs: Vec<SearchData>,
     pub search_data: SearchData,
+    pub search_stats: SearchStats,
     pub root_moves: RootMoveList,
 
     pub options: SearchOptions,
@@ -48,12 +47,11 @@ impl Searcher {
     /// Creates a new searcher.
     pub fn new(stop_in: Receiver<bool>, options: SearchOptions) -> Searcher {
         Searcher {
-            best_move: RootMove::new_null(),
             current_ply: 0,
-            start_time: Instant::now(),
             
             completed_searchs: vec![],
             search_data: SearchData::new(1),
+            search_stats: SearchStats::new(),
             root_moves: RootMoveList::new(),
 
             options, 
@@ -74,7 +72,7 @@ impl Searcher {
 
         // Check if the max time has been reached.
         if let Some(maxtime) = self.options.maxtime {
-            if self.search_data.start_time.elapsed().as_secs_f64() >= maxtime {
+            if self.search_stats.start_time.elapsed().as_secs_f64() >= maxtime {
                 self.stop = true;
 
             }
@@ -84,11 +82,12 @@ impl Searcher {
     }
 
     /// Updates the search data based on the collected data.
-    pub fn update_search_stats(&mut self) {
-        self.search_data.search_time = self.search_data.start_time.elapsed().as_secs_f64();
-        self.search_data.nps = (self.search_data.nodes as f64 / self.search_data.search_time) as usize;
-        self.search_data.average_branching_factor = (self.search_data.nodes as f64).powf(1.0 / self.search_data.ply as f64);
-
+    pub fn update_search_data(&mut self) {
+        // Stats
+        self.search_stats.search_time = self.search_stats.start_time.elapsed().as_secs_f64();
+        self.search_stats.nps = (self.search_stats.nodes as f64 / self.search_stats.search_time) as usize;
+        
+        // Results
         self.root_moves.sort();
         self.search_data.best_move = self.root_moves.first();
 
@@ -103,6 +102,7 @@ impl Searcher {
         }
 
     } 
+
     
     /// Iterative deepening search.
     pub fn iterative_deepening_search(&mut self) {
@@ -120,7 +120,7 @@ impl Searcher {
                 self.completed_searchs.push(self.search_data.clone());
 
                 let best_search_data = self.completed_searchs.last().unwrap().clone();
-                ugi::info_output(best_search_data.clone());
+                ugi::info_output(best_search_data.clone(), self.search_stats.clone());
                 ugi::best_move_output(best_search_data);
                 return;
 
@@ -131,7 +131,7 @@ impl Searcher {
         self.root_moves = RootMoveList::new();
         self.setup_rootmoves(board);
 
-        self.start_time = Instant::now();
+        self.search_stats.start_time = Instant::now();
 
         // Start iterative deepening
         self.current_ply = 1;
@@ -173,8 +173,8 @@ impl Searcher {
     
             }   
 
-            self.update_search_stats();
-            ugi::info_output(self.search_data.clone());
+            self.update_search_data();
+            ugi::info_output(self.search_data.clone(), self.search_stats.clone());
             
             self.completed_searchs.push(self.search_data.clone());
            
@@ -191,7 +191,7 @@ impl Searcher {
         }
         
         let best_search_data = self.completed_searchs.last().unwrap().clone();
-        ugi::info_output(best_search_data.clone());
+        ugi::info_output(best_search_data.clone(), self.search_stats.clone());
         ugi::best_move_output(best_search_data);
 
     }
@@ -206,7 +206,7 @@ impl Searcher {
         if self.stop {
             return 0.0;
     
-        } else if self.search_data.nodes % 1000 == 0 {
+        } else if self.search_stats.nodes % 1000 == 0 {
             self.check_stop();
 
         }
@@ -220,7 +220,7 @@ impl Searcher {
             
         }
 
-        self.search_data.nodes += 1;
+        self.search_stats.nodes += 1;
 
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
@@ -283,14 +283,23 @@ impl Searcher {
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
 
+            // Late Move Reduction
+            let reduction = if i > (2 * (current_player_moves.len() / 3)) && ply > 5 {
+                3
+            } else if i > (current_player_moves.len() / 3) && ply > 5 {
+                2
+            } else {
+                0
+            };
+
             // Principal Variation Search
             let score: f64 = if i < 5 {
-                -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1) // Full search
+                -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1 - reduction) // Full search
 
             } else {
-                let mut score = -self.search(&mut new_board, -alpha - 1.0, -alpha, player.other(), ply - 1); // Null window search
+                let mut score = -self.search(&mut new_board, -alpha - 1.0, -alpha, player.other(), ply - 1 - reduction); // Null window search
                 if score > alpha && score < beta { 
-                    score = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1);
+                    score = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1 - reduction);
 
                 }
 
@@ -315,7 +324,6 @@ impl Searcher {
             }
 
             if alpha >= beta {
-                self.search_data.beta_cuts += 1;
                 break;
 
             }
@@ -432,21 +440,10 @@ impl Searcher {
 
 }
 
-/// Structure that holds all of the informaion about a specific search ply.
+/// Structure that holds all of the results from a specific search ply.
 #[derive(Debug, Clone)]
 pub struct SearchData {
     pub best_move: RootMove,
-
-    pub start_time: Instant,
-    pub search_time: f64,
-
-    pub nodes: usize,
-    pub average_branching_factor: f64,
-
-    pub nps: usize,
-
-    pub beta_cuts: usize,
-
     pub ply: i8,
 
     pub game_over: bool,
@@ -458,17 +455,6 @@ impl SearchData {
     pub fn new(ply: i8) -> SearchData {
         SearchData {
             best_move: RootMove::new_null(),
-
-            start_time: std::time::Instant::now(),
-            search_time: 0.0,
-
-            nodes: 0,
-            average_branching_factor: 0.0,
-
-            nps: 0,
-       
-            beta_cuts: 0,
-
             ply,
 
             game_over: false,
@@ -479,6 +465,33 @@ impl SearchData {
     }
 
 }
+
+/// Structure that holds all statistics about a search.
+#[derive(Debug, Clone)]
+pub struct SearchStats {
+    pub nodes: usize,
+    pub nps: usize,
+
+    pub start_time: Instant,
+    pub search_time: f64
+
+}
+
+impl SearchStats {
+    pub fn new() -> SearchStats {
+        SearchStats {
+            nodes: 0,
+            nps: 0,
+
+            start_time: Instant::now(),
+            search_time: 0.0
+
+        }
+
+    }
+
+}
+
 
 /// Holds all of the settings for a spsific search.
 #[derive(Clone)]

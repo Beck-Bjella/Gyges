@@ -225,15 +225,14 @@ impl Default for Ugi {
 
 }
 
-pub fn info_output(search_data: SearchData) {
+pub fn info_output(search_data: SearchData, search_stats: SearchStats) {
     print!("info ");
     print!("ply {} ", search_data.ply);
     print!("bestmove {} ", search_data.best_move);
     print!("score {} ", search_data.best_move.score);
-    print!("nodes {} ", search_data.nodes);
-    print!("nps {} ", search_data.nps);
-    print!("abf {} ", search_data.average_branching_factor);
-    println!("time {} ", search_data.search_time);
+    print!("nodes {} ", search_stats.nodes);
+    print!("nps {} ", search_stats.nps);
+    println!("time {} ", search_stats.search_time);
 
 }
 
