@@ -21,8 +21,6 @@ use crate::search::evaluation::*;
 use crate::consts::*;
 use crate::ugi;
 
-// Constants
-pub const MAXPLY: i8 = 99;
 
 // Constants for move ordering.
 pub const LOSE_MOVE_SCORE: f64 = -1000000.0;
@@ -88,8 +86,8 @@ impl Searcher {
         self.search_stats.nps = (self.search_stats.nodes as f64 / self.search_stats.search_time) as usize;
         
         // Results
-        self.root_moves.sort();
-        self.search_data.best_move = self.root_moves.first();
+        self.search_data.pv = get_pv(&mut self.options.board.clone());
+        self.search_data.best_move = self.search_data.pv.get(0).unwrap().clone();
 
         if self.search_data.best_move.score == f64::INFINITY {
             self.search_data.game_over = true;
@@ -101,14 +99,15 @@ impl Searcher {
 
         }
 
+        // Prune the root moves list.
+        self.root_moves.sort();
+        self.root_moves.moves = self.root_moves.moves.iter().filter(|mv| mv.score != f64::NEG_INFINITY).cloned().collect();
+
     } 
 
     
     /// Iterative deepening search.
     pub fn iterative_deepening_search(&mut self) {
-        // Configure rayon
-        rayon::ThreadPoolBuilder::new().num_threads(4).build_global().unwrap();
-
         // Setup search
         self.stop = false;
 
@@ -134,7 +133,7 @@ impl Searcher {
         self.search_stats.start_time = Instant::now();
 
         // Start iterative deepening
-        self.current_ply = 1;
+        self.current_ply = 3;
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
 
@@ -180,12 +179,12 @@ impl Searcher {
            
             self.current_ply += 2;
 
-            // Prune the root moves list.
-            self.root_moves.moves = self.root_moves.moves.iter().filter(|mv| mv.score != f64::NEG_INFINITY).cloned().collect();
-            
-            if self.current_ply > self.options.maxply {
-                break 'iterative_deepening;
-
+            if let Some(maxply) = self.options.maxply {
+                if self.current_ply >= maxply {
+                    break 'iterative_deepening;
+    
+                }
+    
             }
 
         }
@@ -231,36 +230,33 @@ impl Searcher {
 
         // Handle Transposition Table
         let mut tt_move: Option<Move> = None;
-        if self.options.tt_enabled {
-            let (valid, entry) = unsafe { tt().probe(board_hash) };
-            if valid && entry.depth >= ply {
-                tt_move = Some(entry.bestmove);
+        let (valid, entry) = unsafe { tt().probe(board_hash) };
+        if valid && entry.depth >= ply {
+            tt_move = Some(entry.bestmove);
 
-                match entry.bound {
-                    NodeBound::ExactValue => {
-                        return entry.score
+            match entry.bound {
+                NodeBound::ExactValue => {
+                    return entry.score
 
-                    },
-                    NodeBound::LowerBound => {
-                        alpha = entry.score
+                },
+                NodeBound::LowerBound => {
+                    alpha = entry.score
 
-                    },
-                    NodeBound::UpperBound => {
-                        beta = entry.score
-                    
-                    }
-
-                }
-
-                if alpha >= beta {
-                    return entry.score;
-
+                },
+                NodeBound::UpperBound => {
+                    beta = entry.score
+                
                 }
 
             }
 
+            if alpha >= beta {
+                return entry.score;
+
+            }
+
         }
-        
+
         // Use previous ply search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {
             self.root_moves.clone().into()
@@ -284,13 +280,12 @@ impl Searcher {
             let mut new_board = board.make_move(mv);
 
             // Late Move Reduction
-            let reduction = if i > (2 * (current_player_moves.len() / 3)) && ply > 5 {
-                3
-            } else if i > (current_player_moves.len() / 3) && ply > 5 {
-                2
-            } else {
-                0
-            };
+            // let reduction = if i > (1 * (current_player_moves.len() / 4)) && ply > 5 {
+            //     2
+            // } else {
+            //     0
+            // };
+            let mut reduction = 0;
 
             // Principal Variation Search
             let score: f64 = if i < 5 {
@@ -330,7 +325,7 @@ impl Searcher {
 
         }
 
-        if self.options.tt_enabled && !self.stop {
+        if !self.stop {
             let node_bound: NodeBound = if best_score >= beta {
                 NodeBound::LowerBound
     
@@ -354,19 +349,19 @@ impl Searcher {
     /// Orders a list of moves.
     pub fn order_moves(&mut self, moves: Vec<Move>, board: &mut BoardState, player: Player, tt_move: Option<Move>) -> Vec<Move> {
         // For every move calculate a value to sort it by.
-        let mut moves_to_sort: Vec<(Move, f64)> = moves.into_par_iter().map(|mv| {
+        let mut moves_to_sort: Vec<(Move, f64)> = moves.into_par_iter().filter_map(|mv| {
             let mut sort_val: f64 = 0.0;
             let mut new_board = board.make_move(&mv);
 
-            // If the move is the TT sort it first.
-            if tt_move.is_some() && mv == tt_move.unwrap() {
-                return (mv, TT_MOVE_SCORE);
+            // If opponent has a threat then remove it as an option because the move would lose.
+            if unsafe { has_threat(&mut new_board, player.other()) } {
+                return None;
 
             }
 
-            // If opponent has a threat then remove it as an option because the move would lose.
-            if unsafe { has_threat(&mut new_board, player.other()) } {
-                return (mv, LOSE_MOVE_SCORE);
+            // If the move is the TT sort it first.
+            if tt_move.is_some() && mv == tt_move.unwrap() {
+                return Some((mv, TT_MOVE_SCORE));
 
             }
 
@@ -378,41 +373,28 @@ impl Searcher {
             // Lower the moves sort value based on oppenent move count.
             sort_val -= unsafe { valid_move_count(&mut new_board, player.other()) } as f64;
 
-            // SLIGHTLY BETTER ORDERING, BUT BIGGER PERFORMANCE HIT
-            // If a move has less then 5 threats then penalize it.
-            // let threat_count = unsafe{ valid_threat_count(&mut new_board, player) };
-            // if threat_count <= 5_usize {
-            //     sort_val -= 1000.0 * (5 - threat_count) as f64;
-            // }
+            Some((mv, sort_val))
 
-            (mv, sort_val)
+        }).collect();
 
-        }).filter(|mv| mv.1 != LOSE_MOVE_SCORE).collect();
-
-        // Sort the moves based on their predicted values.
+        // Sort the moves
         moves_to_sort.sort_by(|a, b| {
             if a.1 > b.1 {
                 Ordering::Less
-                
-            } else if a.1 == b.1 {
-                Ordering::Equal
+
+            } else if a.1 < b.1 {
+                Ordering::Greater
 
             } else {
-                Ordering::Greater
+                Ordering::Equal
 
             }
 
         });
-
-        // Collect the moves.
-        let ordered_moves: Vec<Move> = moves_to_sort.into_iter()
-            .map(|x| x.0)
-            .collect();
-
-        ordered_moves
+        
+        moves_to_sort.into_iter().map(|(mv, _)| mv).collect()
     
     }
-
 
     /// Setups up the RootMoveList from a [BoardState].
     /// 
@@ -437,13 +419,37 @@ impl Searcher {
 
     }
 
+}
+
+
+/// Gets the principle variation from the transposition table.
+pub fn get_pv(board: &mut BoardState) -> Vec<RootMove> {
+    let mut pv: Vec<RootMove> = vec![];
+
+    let mut current_board = board.clone();
+    loop {
+        let (valid, entry) = unsafe { tt().probe(current_board.hash()) };
+        if valid {
+            let current_move = entry.bestmove;
+            current_board = current_board.make_move(&current_move);
+
+            pv.push(RootMove::new(current_move, entry.score, 0, 0));
+
+        } else {
+            return pv;
+
+        }
+        
+    }
 
 }
+
 
 /// Structure that holds all of the results from a specific search ply.
 #[derive(Debug, Clone)]
 pub struct SearchData {
     pub best_move: RootMove,
+    pub pv: Vec<RootMove>,
     pub ply: i8,
 
     pub game_over: bool,
@@ -455,6 +461,7 @@ impl SearchData {
     pub fn new(ply: i8) -> SearchData {
         SearchData {
             best_move: RootMove::new_null(),
+            pv: vec![],
             ply,
 
             game_over: false,
@@ -497,9 +504,8 @@ impl SearchStats {
 #[derive(Clone)]
 pub struct SearchOptions {
     pub board: BoardState,
-    pub maxply: i8,
+    pub maxply: Option<i8>,
     pub maxtime: Option<f64>,
-    pub tt_enabled: bool
 
 }
 
@@ -507,9 +513,8 @@ impl SearchOptions {
     pub fn new() -> SearchOptions {
         SearchOptions {
             board: BoardState::from(STARTING_BOARD),   
-            maxply: MAXPLY,
+            maxply: Option::None,
             maxtime: Option::None,
-            tt_enabled: true
 
         }
 

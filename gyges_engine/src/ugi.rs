@@ -1,9 +1,13 @@
 //! Ugi implimentation.
 //! 
 
+
+
 use std::io;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
+
+use rayon;
 
 use gyges::board::*;
 
@@ -101,7 +105,11 @@ impl Ugi {
     }
 
     pub fn init(&self) {
+        // Initialize transposition table
         init_tt(2usize.pow(22)); // 400 MB
+
+        // Configure rayon
+        rayon::ThreadPoolBuilder::new().num_threads(4).build_global().unwrap();
 
     }
 
@@ -109,7 +117,7 @@ impl Ugi {
         match raw_commands.get(1) {
             Some(&"maxPly") => {
                 if let Some(value_str) = raw_commands.get(2) {
-                    self.search_options.maxply = value_str.parse::<i8>().unwrap();
+                    self.search_options.maxply = Some(value_str.parse::<i8>().unwrap());
 
                 } else {
                     println!("Unknown Command: '{}'", trimmed);
@@ -121,21 +129,6 @@ impl Ugi {
                 if let Some(value_str) = raw_commands.get(2) {
                     self.search_options.maxtime = Some(value_str.parse::<f64>().unwrap());
 
-                } else {
-                    println!("Unknown Command: '{}'", trimmed);
-
-                }
-
-            }
-            Some(&"ttEnabled") => {
-                if let Some(value_str) = raw_commands.get(2) {
-                    match *value_str {
-                        "true" => self.search_options.tt_enabled = true,
-                        "false" => self.search_options.tt_enabled = false,
-                        _ => println!("Unknown Command: '{}'", trimmed),
-
-                    }
-                    
                 } else {
                     println!("Unknown Command: '{}'", trimmed);
 
@@ -232,7 +225,13 @@ pub fn info_output(search_data: SearchData, search_stats: SearchStats) {
     print!("score {} ", search_data.best_move.score);
     print!("nodes {} ", search_stats.nodes);
     print!("nps {} ", search_stats.nps);
-    println!("time {} ", search_stats.search_time);
+    print!("time {} ", search_stats.search_time);
+    print!("pv ");
+    for mv in search_data.pv.iter() {
+        print!("{} ", mv);
+
+    }
+    println!()
 
 }
 
