@@ -1354,3 +1354,229 @@ pub unsafe fn has_threat(board: &mut BoardState, player: Player) -> bool {
     })
 
 }
+
+
+// ================= CODE BELOW IS IN TESTING =================
+
+pub unsafe fn piece_control_sqs(board: &mut BoardState, player: Player) -> [BitBoard; 6] {
+    STACK_BUFFER.with_borrow_mut(|stack_buffer| {
+        let active_lines = board.get_active_lines();
+
+        let mut controlled_squares: [BitBoard; 6] = [BitBoard::EMPTY; 6];
+
+        let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
+
+        for x in 0..6 {
+            let starting_sq = active_line_sq + x;
+            if board.piece_at(starting_sq) != Piece::None {
+                let starting_piece = board.piece_at(starting_sq);
+
+                stack_buffer.push((Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+                stack_buffer.push((Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
+                stack_buffer.push((Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+
+            }
+
+        }
+
+        loop {
+            if stack_buffer.is_empty() {
+                break;
+            }
+            let data = stack_buffer.pop().unwrap_unchecked();
+
+            let action = data.0;
+            let backtrack_board = data.1;
+            let banned_positions = data.2;
+            let current_sq = data.3;
+            let current_piece = data.4;
+            let starting_sq = data.5;
+            let starting_piece = data.6;
+            let active_line_idx = data.7;
+            let player: Player = data.8;
+
+            match action {
+                Action::Start => {
+                    board.remove(starting_sq);
+                    board.piece_bb ^= starting_sq.bit();
+                    continue;
+
+                },
+                Action::End => {
+                    board.place(starting_piece, starting_sq);
+                    board.piece_bb ^= starting_sq.bit();
+                    continue;
+                    
+                },
+                Action::Gen => {
+                    match current_piece {
+                        Piece::One => {
+                            let valid_paths_idx = ONE_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(0);
+                            let valid_paths = UNIQUE_ONE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
+                
+                            for i in 0..valid_paths[ONE_PATH_COUNT_IDX] {
+                                let path_idx = valid_paths[i as usize];
+                                let path = UNIQUE_ONE_PATHS.get_unchecked(path_idx as usize);
+                
+                                if (backtrack_board & path.1).is_not_empty() {
+                                    continue;
+                    
+                                }
+                
+                                let end = SQ(path.0[1]);
+                                let end_bit = end.bit();
+                
+                                if end == SQ::P1_GOAL {
+                                    if player == Player::One {
+                                        continue;
+                                    }
+                                    continue;
+                    
+                                } else if end == SQ::P2_GOAL {
+                                    if player == Player::Two {
+                                        continue;
+                                    }
+                                    continue;
+                    
+                                }
+                                
+                                let end_piece = board.piece_at(end);
+                                if end_piece != Piece::None {
+                                    if (banned_positions & end_bit).is_empty() {
+                                        let new_banned_positions = banned_positions ^ end_bit;
+                                        let new_backtrack_board = backtrack_board ^ path.1;
+
+                                        controlled_squares[active_line_idx] |= end_bit;
+
+                                        stack_buffer.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+                
+                                    }
+                                    
+                                } else {
+                                    controlled_squares[active_line_idx] |= end_bit;
+
+                                }
+                    
+                            }
+
+                        },
+                        Piece::Two => {
+                            let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_sq.0 as usize];
+
+                            let valid_paths_idx = TWO_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(intercept_bb.0 as usize % 29);
+                            let valid_paths = UNIQUE_TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
+
+                            for i in 0..valid_paths[TWO_PATH_COUNT_IDX] {
+                                let path_idx = valid_paths[i as usize];
+                                let path = UNIQUE_TWO_PATHS.get_unchecked(path_idx as usize);
+
+                                if (backtrack_board & path.1).is_not_empty() {
+                                    continue;
+                    
+                                }
+
+                                let end = SQ(path.0[2]);
+                                let end_bit = end.bit();
+
+                                if end == SQ::P1_GOAL {
+                                    if player == Player::One {
+                                        continue;
+                                    }
+                                    continue;
+                    
+                                } else if end == SQ::P2_GOAL {
+                                    if player == Player::Two {
+                                        continue;
+                                    }
+                                    continue;
+                    
+                                }
+                                
+                                let end_piece = board.piece_at(end);
+                                if end_piece != Piece::None {
+                                    if (banned_positions & end_bit).is_empty() {
+                                        let new_banned_positions = banned_positions ^ end_bit;
+                                        let new_backtrack_board = backtrack_board ^ path.1;
+
+                                        controlled_squares[active_line_idx] |= end_bit;
+                                        
+                                        stack_buffer.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+
+                                    }
+                                    
+                                } else {
+                                    controlled_squares[active_line_idx] |= end_bit;
+
+                                }
+
+                            }
+
+                        },
+                        Piece::Three => {
+                            let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_sq.0 as usize];
+
+                            let valid_paths_idx = THREE_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(intercept_bb.0 as usize % 11007);
+                            let valid_paths = UNIQUE_THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
+
+                            for i in 0..valid_paths[THREE_PATH_COUNT_IDX] {
+                                let path_idx = valid_paths[i as usize];
+                                let path = UNIQUE_THREE_PATHS.get_unchecked(path_idx as usize);
+
+                                if (backtrack_board & path.1).is_not_empty() {
+                                    continue;
+                    
+                                }
+
+                                let end = SQ(path.0[3]);
+                                let end_bit = end.bit();
+                
+                                if end == SQ::P1_GOAL {
+                                    if player == Player::One {
+                                        continue;
+                                    }
+                                    continue;
+                    
+                                } else if end == SQ::P2_GOAL {
+                                    if player == Player::Two {
+                                        continue;
+                                    }
+                                    continue;
+                    
+                                }
+                                
+                                let end_piece = board.piece_at(end);
+                                if end_piece != Piece::None {
+                                    if (banned_positions & end_bit).is_empty() {
+                                        let new_banned_positions = banned_positions ^ end_bit;
+                                        let new_backtrack_board = backtrack_board ^ path.1;
+
+                                        controlled_squares[active_line_idx] |= end_bit;
+                                        
+                                        stack_buffer.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+
+                                    }
+                                    
+                                } else {
+                                    controlled_squares[active_line_idx] |= end_bit;
+
+                                }
+                    
+                            }
+
+                        },
+                        Piece::None => {}
+
+                    }
+
+                }
+
+            }
+            
+
+        }
+        
+        controlled_squares
+
+    })
+
+}
