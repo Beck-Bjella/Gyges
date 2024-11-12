@@ -12,5 +12,4 @@ pub mod search;
 pub mod consts;
 pub mod ugi;
 
-pub mod matrix;
 pub mod gpu_reach_consts;

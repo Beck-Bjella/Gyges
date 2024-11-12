@@ -11,16 +11,16 @@ extern crate gyges_engine;
 
 use cust::stream;
 use gyges::moves::movegen_consts::*;
+use gyges::BitBoard;
 use gyges_engine::gpu_reach_consts;
-use gyges_engine::matrix::*;
 use core::num;
 use std::{f32::consts::E, io::Write, mem, thread, time::Duration};
-
-use gyges::{board::{self, TEST_BOARD}, core::masks::RANKS, moves::{gen_reach_consts::{UNIQUE_ONE_REACHS, UNIQUE_THREE_REACHS, UNIQUE_TWO_REACHS}, movegen::{has_threat, piece_control_sqs, valid_moves, valid_threat_count}, movegen_consts::ALL_THREE_INTERCEPTS, Move}, BitBoard, BoardState, Piece, Player, BENCH_BOARD, SQ, STARTING_BOARD};
+use gyges::{board::{self, TEST_BOARD}, core::masks::RANKS, moves::{gen_reach_consts::{UNIQUE_ONE_REACHS, UNIQUE_THREE_REACHS, UNIQUE_TWO_REACHS}, movegen::{has_threat, piece_control_sqs, valid_moves, valid_threat_count}, movegen_consts::ALL_THREE_INTERCEPTS, Move}, BoardState, Piece, Player, BENCH_BOARD, SQ, STARTING_BOARD};
 
 
 use cust::{error::CudaError, memory::{AsyncCopyDestination, LockedBuffer}};
 use cust::prelude::*;
+
 
 fn main() -> Result<(), CudaError> {
     // Intialize CUDA
@@ -44,25 +44,50 @@ fn main() -> Result<(), CudaError> {
     //     3, 0, 1, 0, 0, 1,
     //     0, 0
     // ]);
+    // let mut board = BoardState::from(
+    // [
+    //     0, 0, 1, 0, 0, 0,
+    //     0, 3, 3, 0, 2, 0,
+    //     0, 2, 2, 0, 1, 0,
+    //     0, 0, 0, 0, 3, 0,
+    //     0, 0, 2, 3, 0, 0,
+    //     0, 0, 1, 0, 2, 0,
+    //     0, 0
+    // ]);
     let player = Player::One;
     println!("{}", board);
 
     let mut mv_gen = BlockingMoveGen::new().expect("Failed to initialize blocking move generator");
 
-    let norm = unsafe { gen_all_blocking_moves(&mut board, player) };
-    let batch = unsafe { mv_gen.gen_all(&mut board, player) };
+    let new_batch = unsafe { mv_gen.new_gen_all(&mut board, player) };
+    println!("New Batch: {}", new_batch.len());
 
-    println!("Norm: {}", norm.len());
+    let new_batch = unsafe { mv_gen.new_gen_all(&mut board, player) };
+    println!("New Batch: {}", new_batch.len());
+    
+
+    let batch = unsafe { mv_gen.gen_all(&mut board, player) };
     println!("Batch: {}", batch.len());
     println!("");
 
     unsafe {
         // MAIN BENCHMARKS
 
+        // NEWNEW
+        let mut num = 0;
+        let start: std::time::Instant = std::time::Instant::now();
+        for _ in 0..40000 {
+            let moves = mv_gen.new_gen_all(&mut board, player);
+            num += moves.len();
+
+        }
+        let elapsed = start.elapsed().as_secs_f64();
+        println!("NewNew Elapsed: {:?}, {}", elapsed, num);
+
         // NEW
         let mut num = 0;
         let start = std::time::Instant::now();
-        for _ in 0..4000 {
+        for _ in 0..40000 {
             let moves = mv_gen.gen_all(&mut board, player);
             num += moves.len();
 
@@ -73,7 +98,7 @@ fn main() -> Result<(), CudaError> {
         // Native
         let mut num = 0;
         let start = std::time::Instant::now();
-        for _ in 0..4000 {
+        for _ in 0..40000 {
             let moves = valid_moves(&mut board, player).moves(&board);
             let mut pruned = vec![];
             for mv in moves.iter() {
@@ -101,20 +126,15 @@ pub struct BlockingMoveGen {
     one_reach_d: DeviceBuffer<u64>,
     two_reach_d: DeviceBuffer<u64>,
     three_reach_d: DeviceBuffer<u64>,
-
     all_two_intercepts_d: DeviceBuffer<u64>,
     all_three_intercepts_d: DeviceBuffer<u64>,
-
     one_map_d: DeviceBuffer<[u8; 1]>,
     two_map_d: DeviceBuffer<[u16; 29]>,
     three_map_d: DeviceBuffer<[u16; 11007]>,
 
     // GPU and Host buffers
-    board_input_buffer_d: DeviceBuffer<u8>,
-    board_bb_input_buffer_d: DeviceBuffer<u64>,
-
-    board_input_buffer_h: LockedBuffer<u8>,
-    board_bb_input_buffer_h: LockedBuffer<u64>,
+    input_buffer_d: DeviceBuffer<u64>,
+    input_buffer_h: LockedBuffer<u64>,
 
     final_d: DeviceBuffer<f32>,
     final_h: LockedBuffer<f32>,
@@ -147,11 +167,8 @@ impl BlockingMoveGen {
         let three_map_d = DeviceBuffer::from_slice(&gpu_reach_consts::THREE_MAP)?;
 
         // Board and BB input buffers
-        let board_input_buffer_d = DeviceBuffer::from_slice(&vec![0; 38 * 1000])?;
-        let board_bb_input_buffer_d = DeviceBuffer::from_slice(&vec![0; 1000])?;
-
-        let board_input_buffer_h = LockedBuffer::new(&0, 38 * 1000)?;
-        let board_bb_input_buffer_h = LockedBuffer::new(&0, 1000)?;
+        let input_buffer_d: DeviceBuffer<u64> = DeviceBuffer::from_slice(&vec![0; 1000])?;
+        let input_buffer_h = LockedBuffer::new(&0, 1000)?;
 
         // Results
         let final_d =  DeviceBuffer::from_slice(&vec![0.0; 1000])?;
@@ -163,23 +180,18 @@ impl BlockingMoveGen {
             one_reach_d,
             two_reach_d,
             three_reach_d,
-
             all_two_intercepts_d,
             all_three_intercepts_d,
-
             one_map_d,
             two_map_d,
             three_map_d,
 
-            board_input_buffer_d,
-            board_bb_input_buffer_d,
-
-            board_input_buffer_h,
-            board_bb_input_buffer_h,
+            input_buffer_d,
+            input_buffer_h,
 
             final_d,
             final_h,
-
+    
             stream,
             module
 
@@ -187,22 +199,20 @@ impl BlockingMoveGen {
 
     }
 
-    pub fn batch_check(&mut self, num_boards: u32) -> Result<(), CudaError> {
+    pub fn new_batch_check(&mut self, num_boards: u32) -> Result<(), CudaError> {
         // Constants
         let stream = &self.stream;
             
         // Copy data to the GPU
-        self.board_input_buffer_d.copy_from(&self.board_input_buffer_h)?;
-        self.board_bb_input_buffer_d.copy_from(&self.board_bb_input_buffer_h)?;
-
+        self.input_buffer_d.copy_from(&self.input_buffer_h)?;
+        
         // Load kernel
-        let unified_kernel = self.module.get_function("unified_kernel")?;
+        let new_unified_kernel = self.module.get_function("unified_kernel")?;
 
         // Start
         unsafe{
-            launch!(unified_kernel<<<(num_boards, 1, 1), (38, 1, 1), 0, stream>>>(
-                self.board_input_buffer_d.as_device_ptr(),
-                self.board_bb_input_buffer_d.as_device_ptr(),
+            launch!(new_unified_kernel<<<(num_boards, 1, 1), (38, 1, 1), 0, stream>>>(
+                self.input_buffer_d.as_device_ptr(),
                 self.final_d.as_device_ptr(),
 
                 // Lookup tables
@@ -227,7 +237,9 @@ impl BlockingMoveGen {
         
     }
 
-    pub fn gen_all(&mut self, board: &mut BoardState, player: Player) -> Vec<Move> {
+    pub fn new_gen_all(&mut self, board: &mut BoardState, player: Player) -> Vec<Move> {
+        let mut bit_state = BitState::from(board);
+
         let mut moves = Vec::with_capacity(600);
         let mut idx = 0;
 
@@ -254,40 +266,21 @@ impl BlockingMoveGen {
 
                 match block_piece {
                     Piece::None => { // Empty square: Try placing piece
-                        let mut new_board = board.clone();
-                        new_board.place(starting_piece, block_sq);
-                        new_board.remove(starting_sq);
+                        let new_state = bit_state.make_bounce_mv(starting_sq.0 as u64, block_sq.0 as u64);
+                        self.input_buffer_h[idx] = new_state.0;
 
-                        let new_piece_bb = board.piece_bb ^ (starting_sq.bit() | block_sq.bit());
-
-                        // Store
-                        for (i, x) in new_board.data.iter().enumerate() {
-                            let input_idx = 38 * idx + i;
-                            self.board_input_buffer_h[input_idx] = *x as u8;
-                        }
-                        self.board_bb_input_buffer_h[idx] = new_piece_bb.0;
                         moves.push(Move::new([(Piece::None, starting_sq), (starting_piece, block_sq), (Piece::None, SQ::NONE)], gyges::moves::MoveType::Bounce));
 
                         idx += 1;
 
                     },
-                    Piece::One | Piece::Two | Piece::Three => { // Occupied square: Try replacement
+                    _ => { // Occupied square: Try replacement
                         for empty_pos in drops.iter() {
                             let empty_sq = SQ(*empty_pos as u8);
 
-                            let mut new_board = board.clone();
-                            new_board.place(starting_piece, block_sq);
-                            new_board.place(block_piece, empty_sq);
-                            new_board.remove(starting_sq);
-
-                            let new_piece_bb = board.piece_bb ^ (starting_sq.bit() | empty_sq.bit());
-
-                            // Store    
-                            for (i, x) in new_board.data.iter().enumerate() {
-                                let input_idx = 38 * idx + i;
-                                self.board_input_buffer_h[input_idx] = *x as u8;
-                            }
-                            self.board_bb_input_buffer_h[idx] = new_piece_bb.0;
+                            let mut new_state = bit_state.make_drop_mv(starting_sq.0 as u64, block_sq.0 as u64, empty_sq.0 as u64);
+                            self.input_buffer_h[idx] = new_state.0;
+      
                             moves.push(Move::new([(Piece::None, starting_sq), (starting_piece, block_sq), (block_piece, empty_sq)], gyges::moves::MoveType::Bounce));
 
                             idx += 1;
@@ -304,7 +297,7 @@ impl BlockingMoveGen {
 
         // Run on GPU
         let board_count = idx;
-        self.batch_check(board_count as u32).expect("Failed to batch check routes");
+        self.new_batch_check(board_count as u32).expect("Failed to batch check routes");
 
         // Check and filter blocking moves
         let mut blocking_moves = vec![];
@@ -323,322 +316,520 @@ impl BlockingMoveGen {
 }
 
 
-// ================== ROUTE CHECKING FUNCTIONS ==================
+// ================== BitState Representation ==================
 
-/// Checks if there is a theorical route between two nodes in a 
-/// binary adjacency matrix in up to 'max_pow' steps.
-/// 
-/// If True is returned, there is a chance that the route is a false positive, and
-/// it backtracked.
-/// 
-/// If False is returned, there is no route between the two nodes garanteed.
-pub unsafe fn check_route(adj: &BinaryMatrix, max_pow: usize, start_idxs: &Vec<usize>, end: usize) -> bool {
-    let mut current_power_matrix = adj.clone();
+use std::{ops::{Not, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Shl, ShlAssign, Shr, ShrAssign}, fmt::Display};
 
-    for _ in 0..max_pow {
-        current_power_matrix = simd_binary_matrix_multiply(&current_power_matrix, &adj);
+// /// Bits 0..38 are the positions of the pieces on the board
+// /// Bits 38..62 are the types of pieces in order.
+// /// Bit 63 is the player to move.
+// #[derive(Debug, Copy, Clone, PartialEq)]
+// pub struct BitState(pub u64);
 
-        // Get full col of the matrix [end] and check if it has any 1s
-            for i in start_idxs.iter() {
-            if (current_power_matrix[*i] & (1 << end)) != 0 { // ROUTE FOUND
-                return true;
-            }
-        }
+// impl BitState {
+//     /// Creates a new BitState from an existing BoardState
+//     pub fn from(board: &BoardState) -> Self {
+//         let mut bb = BitState(0);
+//         let mut piece_idx = 0;
+//         for i in 0..38 {
+//             let piece: u8 = board.data[i] as u8;
+           
+//             if piece != 3 {
+//                 // Set the piece
+//                 bb |= 1 << i;
+
+//                 // Set the piece type
+//                 bb |= ((piece + 1) as u64) << (38 + (piece_idx * 2));
+
+//                 piece_idx += 1;
+
+//             }
+
+//         }
+
+//         // Set the player to move
+//         bb |= (board.player as u64) << 63;
+
+//         bb
+
+//     }
+
+//     pub fn make_bounce_mv(&self, start_pos: u64, end_pos: u64) -> BitState {
+//         // Copy the current state
+//         let mut new_state = *self;
+
+//         // Update the piece bitboard
+//         new_state ^= 1 << start_pos;
+
+//         // Starting piece
+//         let starting_idx = self.piece_idx(start_pos as usize);
+//         let starting_piece = self.piece_at(start_pos as usize) as u8;
+
+//         new_state.remove_type(starting_idx);
+
+//         // Ending piece
+//         let ending_idx = new_state.piece_idx(end_pos as usize);
+//         new_state.add_type(ending_idx, starting_piece);
+
+//         new_state ^= 1 << end_pos;
+
+//         new_state
+
+//     }
+
+//     pub fn make_drop_mv(&self, start_pos: u64, pickup_pos: u64, drop_pos: u64) -> BitState {
+//         // Copy the current state
+//         let mut new_state = *self;
+
+      
+
+//         // Starting piece
+//         let starting_idx = self.piece_idx(start_pos as usize);
+//         let starting_piece = self.piece_type(starting_idx) as u8;
+
+//         new_state.remove_type(starting_idx);
+//         new_state ^= 1 << start_pos;
+
+//         // Pickup piece
+//         let pickup_idx = new_state.piece_idx(pickup_pos as usize);
+//         let pickup_piece = new_state.piece_type(pickup_idx) as u8;
+//         new_state.set_type_data(pickup_idx, starting_piece);
+
         
-    }
 
-    false
+//         // Drop piece   
+//         let drop_idx = new_state.piece_idx(drop_pos as usize);
+//         new_state.add_type(drop_idx, pickup_piece);
+        
+//         // Update the piece bitboard
+//         let piece_bb_mask = 1 << drop_pos;
+//         new_state ^= piece_bb_mask;
 
-}
+//         new_state
 
+//     }
 
-pub unsafe fn gen_all_blocking_moves(board: &mut BoardState, player: Player) -> Vec<Move> {
-    let mut moves = Vec::with_capacity(1000);
+//     // ======================== MOVE MAKING HELPERS ========================
+
+//     /// Removes a existing piece type
+//     pub fn remove_type(&mut self, piece_idx: usize) {
+//         // Save the data to the right of the removed piece    
+//         let save_mask: u64 = !0 << (38 + (piece_idx * 2) + 2); 
+//         let saved = self.0 & save_mask;
     
-    let active_lines = board.get_active_lines();
-    let mut active_pieces = board.piece_bb & RANKS[active_lines[player.other() as usize] as usize];
-    let active_piece_idxs = active_pieces.get_data();
+//         // Clear all data from the removed piece to the left
+//         let clear_mask = !0 << (38 + (piece_idx * 2));     
+//         let cleared = self.0 & !clear_mask; 
 
-    let piece_control: [BitBoard; 6] = unsafe { piece_control_sqs(board, player) };
+//         self.0 = (saved >> 2) | cleared;
 
-    let active_lines = board.get_active_lines();
-    let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
+//     }
 
-    for x in 0..6 {
-        let starting_sq = active_line_sq + x;
-        let starting_piece = board.piece_at(starting_sq);
+//     /// Adds in a new piece type 
+//     pub fn add_type(&mut self, piece_idx: usize, piece_type: u8) {
+//         // Save the data to the right of the removed piece    
+//         let save_mask: u64 = !0 << (38 + (piece_idx * 2)); 
+//         let saved = self.0 & save_mask;
+    
+//         // Clear all data from the removed piece to the left
+//         let clear_mask = !0 << (38 + (piece_idx * 2));     
+//         let cleared = self.0 & !clear_mask; 
 
-        if starting_piece == Piece::None {
-            continue;
-        }
+//         // Create the new data
+//         let type_data = (piece_type as u64) << (38 + (piece_idx * 2));
 
-        // BRUTE FORCE: Try all valid placements
-        for block_pos in piece_control[x].clone().get_data() {
-            let block_sq = SQ(block_pos as u8);
-            let block_piece = board.piece_at(block_sq);
+//         self.0 = (saved << 2) | type_data | cleared;
 
-            match block_piece {
-                Piece::None => { // Empty square: Try placing piece
-                    board.place(starting_piece, block_sq);
-                    board.remove(starting_sq);
-                    board.piece_bb ^= starting_sq.bit() | block_sq.bit();
+//     }
 
-                    // Check threat
-                    if !check_route(&unsafe{adj_matrix(board)}, 8, &active_piece_idxs, 36) {
-                        let mv = Move::new([(Piece::None, starting_sq), (starting_piece, block_sq), (Piece::None, SQ::NONE)], gyges::moves::MoveType::Bounce);
-                        moves.push(mv);
-                    }
+//     /// Changes the type data at one of the type data slots
+//     pub fn set_type_data(&mut self, piece_idx: usize, piece_type: u8) {
+//         // Save the data to the right of the removed piece    
+//         let save_mask: u64 = !0 << (38 + (piece_idx * 2) + 2); 
+//         let saved = self.0 & save_mask;     
 
-                    board.remove(block_sq);
-                    board.place(starting_piece, starting_sq);
-                    board.piece_bb ^= starting_sq.bit() | block_sq.bit();
+//         // Clear all data from the removed piece to the left
+//         let clear_mask = !0 << (38 + (piece_idx * 2));     
+//         let cleared = self.0 & !clear_mask; 
 
-                },
-                Piece::One | Piece::Two | Piece::Three => { // Occupied square: Try replacement     ;    !!!!!missing starting position!!!!!! - todo
-                    let mut drops = board.get_drops(active_lines, player);
-                    for empty_pos in drops.get_data() {
-                        let empty_sq = SQ(empty_pos as u8);
+    
+//         // Create the new data
+//         let type_data = (piece_type as u64) << (38 + (piece_idx * 2));
+//         let new_data = saved | type_data;
 
-                        board.place(starting_piece, block_sq);
-                        board.place(block_piece, empty_sq);
-                        board.remove(starting_sq);
-                        board.piece_bb ^= starting_sq.bit() | empty_sq.bit();
+//         self.0 = new_data | cleared;
 
-                        if !check_route(&unsafe{adj_matrix(board)}, 8, &active_piece_idxs, 36) {
-                            let mv = Move::new([(Piece::None, starting_sq), (starting_piece, block_sq), (block_piece, empty_sq)], gyges::moves::MoveType::Drop);
-                            moves.push(mv);
-                        }
+//     }
 
-                        board.remove(empty_sq);
-                        board.place(block_piece, block_sq);
-                        board.place(starting_piece, starting_sq);
-                        board.piece_bb ^= starting_sq.bit() | empty_sq.bit();
+//     // ======================== GETTERS ========================
 
-                    }
+//     /// Gets a u8 of the piece at a square
+//     /// 0 = None
+//     /// 1 = One
+//     /// 2 = Two
+//     /// 3 = Three
+//     pub const fn piece_at(&self, pos: usize) -> u8 {
+//         // Empty
+//         if (self.0 & (1 << pos)) == 0 {
+//             return 0;
 
-                }
+//         }
 
+//         self.piece_type(self.piece_idx(pos))
+        
+//     }
+
+//     /// Gets the piece bitboard
+//     pub const fn piece_bb(&self) -> u64 {
+//         self.0 & 0b111111_111111_111111_111111_111111_111111 // First 38 bits
+    
+//     }
+
+//     /// Gets the idx of the piece at a position
+//     pub const fn piece_idx(&self, pos: usize) -> usize {
+//         // Pieces before the requested position
+//         // (<< 26) : cuts off the piece type bits and the player bit
+//         // (38 - pos) : cuts off the pieces after the requested position
+//         if pos == 0 { // Piece at pos 0 allways is idx 0
+//             return 0;
+
+//         }
+
+//         let before = self.piece_bb() << (26 + 2 + (36 - pos));  
+
+//         // Number of pieces before the requested position == idx
+//         before.count_ones() as usize
+
+//     }
+
+//     /// Idx is the index of the piece not its position. 
+//     /// Ex. 0 = first piece, 1 = second piece, etc.
+//     pub const fn piece_type(&self, piece_idx: usize) -> u8 {
+//         ((self.0 >> (38 + (piece_idx * 2))) & 0b11) as u8
+
+//     }
+
+//     /// Gets the player to move
+//     /// 0 = Player One
+//     /// 1 = Player Two
+//     pub const fn player(&self) -> u8 {
+//         (self.0 >> 63) as u8
+
+//     }
+
+// }
+
+/// Bits 0..37 are the positions of the pieces on the board.
+/// Bits 38..62 are the types of pieces in order.
+/// Bit 63 is the player to move.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct BitState(pub u64);
+
+impl BitState {
+    /// Creates a new BitState from an existing BoardState
+    pub fn from(board: &BoardState) -> Self {
+        let mut bb = 0u64;
+        let mut piece_idx = 0;
+        for i in 0..38 {
+            let piece = board.data[i] as u8;
+            if piece != 3 {
+                // Set the piece bit
+                bb |= 1 << i;
+                // Set the piece type
+                bb |= ((piece + 1) as u64) << (38 + (piece_idx * 2));
+                piece_idx += 1;
             }
-
         }
+        // Set the player to move
+        bb |= (board.player as u64) << 63;
+
+        BitState(bb)
 
     }
 
-    moves
+    pub fn make_bounce_mv(&self, start_pos: u64, end_pos: u64) -> BitState {
+        let mut new_state = *self;
 
-}
+        // Update the piece bitboard
+        new_state.0 ^= (1 << start_pos) | (1 << end_pos);
 
-// ================== ADJACENCY MATRIX FUNCTIONS ==================
+        // Starting piece index and type
+        let starting_idx = self.piece_idx(start_pos as usize);
+        let starting_piece = self.piece_type(starting_idx);
 
-/// Generates a binary adjacency matrix
-#[inline(always)]
-pub unsafe fn adj_matrix(board: &mut BoardState) -> BinaryMatrix {
-    // Initialize the binary adjacency matrix, with each u64 representing a row
-    let mut adj = [0; 38];
+        // Remove the piece type at starting index
+        new_state.remove_type(starting_idx);
 
-    // Loop through each square (node) in the board
-    for i in 0..36 {
-        let sq = SQ(i as u8);
-        let piece = board.piece_at(sq);
-        if piece == Piece::None {
-            continue;
-        }
+        // Since we've removed a piece type, adjust the ending index
+        let ending_idx = if start_pos < end_pos {
+            self.piece_idx(end_pos as usize) - 1
+        } else {
+            self.piece_idx(end_pos as usize)
+        };
 
-        // Get reachable positions for this piece
-        let reach = fast_reach(board, sq) & (board.piece_bb | (SQ::P1_GOAL.bit() | SQ::P2_GOAL.bit()));
-        adj[i] = reach.0;
+        // Add the starting piece type at the new index
+        new_state.add_type(ending_idx, starting_piece);
 
-    }   
-
-    adj
-
-}
-
-/// Generates a binary piece adjacency matrix
-#[inline(always)]
-pub unsafe fn piece_adj_matrix(board: &mut BoardState) -> [u16; 14] {
-    // Create a map of squares to piece IDs
-    let mut piece_id_map = std::collections::HashMap::new();
-    let mut curr_id = 0;
-    for i in 0..38 {
-        let sq = SQ(i as u8);
-        let piece = board.piece_at(sq);
-        
-        if sq == SQ::P1_GOAL || sq == SQ::P2_GOAL { // Goals get an ID
-            piece_id_map.insert(sq.0, curr_id);
-
-            curr_id += 1;
-
-        }
-        
-        if piece == Piece::None {
-            continue;
-
-        }
-
-        // Add id to piece_id_map
-        piece_id_map.insert(sq.0, curr_id);
-
-        curr_id += 1;
+        new_state
 
     }
 
-    // Initialize a 14x14 adjacency matrix
-    let mut adj = [0u16; 14];
+    pub fn make_drop_mv(&self, start_pos: u64, pickup_pos: u64, drop_pos: u64) -> BitState {
+        let mut new_state = *self;
 
-    // Precompute goal bits and piece bitboard
-    let goal_bits = SQ::P1_GOAL.bit() | SQ::P2_GOAL.bit();
-    let reachable_mask = board.piece_bb | goal_bits;
+        // Starting piece index and type
+        let starting_idx = self.piece_idx(start_pos as usize);
+        let starting_piece = self.piece_type(starting_idx);
 
-    // Loop through each square (node) in the board
-    for i in 0..36 {
-        let sq = SQ(i as u8);
-        let piece = board.piece_at(sq);
+        // Remove the starting piece
+        new_state.remove_type(starting_idx);
+        new_state.0 ^= 1 << start_pos;
 
-        if piece == Piece::None {
-            continue;
+        // Pickup piece index and type
+        let pickup_idx = new_state.piece_idx(pickup_pos as usize);
+        let pickup_piece = new_state.piece_type(pickup_idx);
 
-        }
+        // Set the pickup piece's type to the starting piece's type
+        new_state.set_type_data(pickup_idx, starting_piece);
 
-        if let Some(curr_id) = piece_id_map.get(&sq.0) {
-            // Get reachable positions for this piece, filtered by reachable_mask
-            let mut reach = fast_reach(board, sq) & reachable_mask;
+        // Drop piece index
+        let drop_idx = new_state.piece_idx(drop_pos as usize);
 
-            // Map each reachable board position to its piece ID
-            for pos in reach.get_data() {
-                let reach_sq = SQ(pos as u8);
-                if let Some(&reach_id) = piece_id_map.get(&reach_sq.0) {
-                    // Set the bit in the adjacency matrix for the piece-to-piece connection
-                    adj[*curr_id] |= 1 << reach_id;
-                }
+        // Add the pickup piece type at the drop index
+        new_state.add_type(drop_idx, pickup_piece);
 
-            }
-        
-        }
+        // Update the piece bitboard
+        new_state.0 ^= 1 << drop_pos;
 
-    }
-
-    adj
-
-}
-
-
-/// Writes the calculated adj matrix into a pre-allocated buffer
-#[inline(always)]
-pub unsafe fn adj_matrix_flat(board: &mut BoardState, matrix_id: usize, buffer: *mut f32) {
-    // Loop through each square (node) in the board
-    for i in 0..36 {
-        let sq = SQ(i as u8);
-        let piece = board.piece_at(sq);
-        if piece == Piece::None {
-            continue;
-
-        }
-
-        // Get reachable positions for this piece
-        let mut reach = fast_reach(board, sq) & (board.piece_bb | (SQ::P1_GOAL.bit() | SQ::P2_GOAL.bit()));
-        for pos in reach.get_data() {
-            let buffer_offset = (matrix_id * 1444) + (i * 38) + pos as usize;
-            buffer.add(buffer_offset).write(1.0);
-
-        }
-
-    }   
-
-}
-
-// ================== HELPER FUNCTIONS ==================
-
-/// Returns the squares reachable by a piece
-pub unsafe fn reach(board: &mut BoardState, sq: SQ) -> BitBoard {
-    let mut reachable = BitBoard::EMPTY;
-
-    // Get contol of this piece
-    match board.piece_at(sq) {
-        Piece::One => {
-            let valid_paths_idx = ONE_MAP.get_unchecked(sq.0 as usize).get_unchecked(0);
-            let valid_paths = UNIQUE_ONE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
-
-            for i in 0..valid_paths[ONE_PATH_COUNT_IDX] {
-                let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_ONE_PATHS.get_unchecked(path_idx as usize);
-
-                let end = SQ(path.0[1]);
-                let end_bit = end.bit();
-
-                reachable |= end_bit;
-                
-            }
-
-        },
-        Piece::Two => {
-            let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[sq.0 as usize];
-
-            let valid_paths_idx = TWO_MAP.get_unchecked(sq.0 as usize).get_unchecked(intercept_bb.0 as usize % 29);
-            let valid_paths = UNIQUE_TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
-
-            for i in 0..valid_paths[TWO_PATH_COUNT_IDX] {
-                let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_TWO_PATHS.get_unchecked(path_idx as usize);
-
-                let end = SQ(path.0[2]);
-                let end_bit = end.bit();
-
-                reachable |= end_bit;
-            
-            }
-
-        },
-        Piece::Three => {
-            let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[sq.0 as usize];
-
-            let valid_paths_idx = THREE_MAP.get_unchecked(sq.0 as usize).get_unchecked(intercept_bb.0 as usize % 11007);
-            let valid_paths = UNIQUE_THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
-
-            for i in 0..valid_paths[THREE_PATH_COUNT_IDX] {
-                let path_idx = valid_paths[i as usize];
-                let path = UNIQUE_THREE_PATHS.get_unchecked(path_idx as usize);
-
-                let end = SQ(path.0[3]);
-                let end_bit = end.bit();
-
-                reachable |= end_bit;
-
-            }
-
-        }
-        _ => {}
+        new_state
         
     }
 
-    reachable
+    // ======================== MOVE MAKING HELPERS ========================
 
-}
+    /// Removes an existing piece type
+    pub fn remove_type(&mut self, piece_idx: usize) {
+        let type_pos = 38 + (piece_idx * 2);
 
-/// Looksup the correct reach positions for a piece.
-#[inline(always)]
-pub unsafe fn fast_reach(board: &mut BoardState, sq: SQ) -> BitBoard {
-    let piece: Piece = board.piece_at(sq);
-    if piece == Piece::One {
-        let valid_paths_idx = ONE_MAP.get_unchecked(sq.0 as usize).get_unchecked(0);
-        return *UNIQUE_ONE_REACHS.get_unchecked(*valid_paths_idx as usize);
+        // Clear the two bits at type_pos
+        let clear_mask = !(0b11u64 << type_pos);
+        self.0 &= clear_mask;
 
-    } else if piece == Piece::Two {
-        let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[sq.0 as usize];
+        // Shift higher bits down by 2
+        let higher_bits_mask = !0u64 << (type_pos + 2);
+        let higher_bits = (self.0 & higher_bits_mask) >> 2;
+        self.0 = (self.0 & !higher_bits_mask) | higher_bits;
 
-        let valid_paths_idx = TWO_MAP.get_unchecked(sq.0 as usize).get_unchecked(intercept_bb.0 as usize % 29);
-        return *UNIQUE_TWO_REACHS.get_unchecked(*valid_paths_idx as usize);
+    }
 
-    } else if piece == Piece::Three {
-        let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[sq.0 as usize];
+    /// Adds a new piece type
+    pub fn add_type(&mut self, piece_idx: usize, piece_type: u8) {
+        let type_pos = 38 + (piece_idx * 2);
+
+        // Shift higher bits up by 2 to make space
+        let higher_bits_mask = !0u64 << type_pos;
+        let higher_bits = (self.0 & higher_bits_mask) << 2;
+        self.0 = (self.0 & !higher_bits_mask) | higher_bits;
+
+        // Set the new piece type
+        self.0 |= (piece_type as u64) << type_pos;
         
-        let valid_paths_idx = THREE_MAP.get_unchecked(sq.0 as usize).get_unchecked(intercept_bb.0 as usize % 11007);
-        return *UNIQUE_THREE_REACHS.get_unchecked(*valid_paths_idx as usize);
+    }
 
-    } else {
-        return BitBoard::EMPTY;
+    /// Changes the type data at one of the type data slots
+    pub fn set_type_data(&mut self, piece_idx: usize, piece_type: u8) {
+        let type_pos = 38 + (piece_idx * 2);
+
+        // Mask to clear the two bits at type_pos
+        let clear_mask = !(0b11u64 << type_pos);
+
+        // Clear and set the piece type bits at piece_idx
+        self.0 = (self.0 & clear_mask) | ((piece_type as u64) << type_pos);
+
+    }
+    
+    // ======================== GETTERS ========================
+
+    /// Gets the piece at a square
+    /// 0 = None
+    /// 1 = One
+    /// 2 = Two
+    /// 3 = Three
+    pub fn piece_at(&self, pos: usize) -> u8 {
+        if (self.0 & (1 << pos)) == 0 {
+            return 0;
+
+        }
+
+        let idx = self.piece_idx(pos);
+        self.piece_type(idx)
+
+    }
+
+    /// Gets the piece bitboard
+    pub fn piece_bb(&self) -> u64 {
+        self.0 & ((1u64 << 38) - 1)
+
+    }
+
+    /// Gets the index of the piece at a position
+    pub fn piece_idx(&self, pos: usize) -> usize {
+        let mask = (1u64 << pos) - 1;
+        let bits_before = self.piece_bb() & mask;
+        bits_before.count_ones() as usize
+
+    }
+
+    /// Gets the piece type at a given index
+    pub fn piece_type(&self, piece_idx: usize) -> u8 {
+        ((self.0 >> (38 + (piece_idx * 2))) & 0b11) as u8
+
+    }
+
+    /// Gets the player to move
+    pub fn player(&self) -> u8 {
+        (self.0 >> 63) as u8
+
     }
 
 }
 
-// ======================================================
+
+
+// Impl bit opperators
+impl Not for BitState {
+    type Output = Self;
+
+    fn not(self) -> Self::Output {
+        Self(!self.0)
+    }
+
+}
+
+impl BitOr<BitState> for BitState {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+
+}
+
+impl BitOr<u64> for BitState {
+    type Output = Self;
+
+    fn bitor(self, rhs: u64) -> Self::Output {
+        Self(self.0 | rhs)
+    }
+
+}
+
+impl BitOrAssign<BitState> for BitState {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+
+}
+
+impl BitOrAssign<u64> for BitState {
+    fn bitor_assign(&mut self, rhs: u64) {
+        self.0 |= rhs;
+    }
+
+}
+
+impl BitAnd<BitState> for BitState {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+
+}
+
+impl BitAnd<u64> for BitState {
+    type Output = Self;
+
+    fn bitand(self, rhs: u64) -> Self::Output {
+        Self(self.0 & rhs)
+    }
+
+}
+
+impl BitAndAssign<BitState> for BitState {
+    fn bitand_assign(&mut self, rhs: Self) {
+        self.0 &= rhs.0;
+    }
+
+}
+
+impl BitAndAssign<u64> for BitState {
+    fn bitand_assign(&mut self, rhs: u64) {
+        self.0 &= rhs;
+    }
+
+}
+
+impl BitXor<BitState> for BitState {
+    type Output = Self;
+
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        Self(self.0 ^ rhs.0)
+    }
+
+}
+
+impl BitXor<u64> for BitState {
+    type Output = Self;
+
+    fn bitxor(self, rhs: u64) -> Self::Output {
+        Self(self.0 ^ rhs)
+    }
+
+}
+
+impl BitXorAssign<BitState> for BitState {
+    fn bitxor_assign(&mut self, rhs: Self) {
+        self.0 ^= rhs.0;
+    }
+
+}
+
+impl BitXorAssign<u64> for BitState {
+    fn bitxor_assign(&mut self, rhs: u64) {
+        self.0 ^= rhs;
+    }
+
+}
+
+impl Shl<usize> for BitState {
+    type Output = Self;
+
+    fn shl(self, rhs: usize) -> Self::Output {
+        Self(self.0 << rhs)
+    }
+
+}
+
+impl ShlAssign<usize> for BitState {
+    fn shl_assign(&mut self, rhs: usize) {
+        self.0 <<= rhs;
+    }
+
+}
+
+impl Shr<usize> for BitState {
+    type Output = Self;
+
+    fn shr(self, rhs: usize) -> Self::Output {
+        Self(self.0 >> rhs)
+    }
+
+}
+
+impl ShrAssign<usize> for BitState {
+    fn shr_assign(&mut self, rhs: usize) {
+        self.0 >>= rhs;
+    }
+
+}

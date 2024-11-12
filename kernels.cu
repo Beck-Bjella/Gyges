@@ -26,6 +26,8 @@ extern "C" __device__ void print_bb(uint64_t bb) {
 
 }
 
+
+
 extern "C" __device__ uint64_t get_reach(
     // Inputs
     const uint8_t piece_type,
@@ -73,9 +75,8 @@ extern "C" __device__ uint64_t get_reach(
 // ==================== KERNELS ======================
 
 extern "C" __global__ void unified_kernel(
-    const uint8_t* boards,       // Input boards
-    const uint64_t* piece_bbs,   // Input bitboards for each board
-    float* routes,               // Output routes
+    const uint64_t* boards,   // Input boards
+    float* routes,            // Output routes
 
     // Lookup tables
     const uint64_t* one_reach,
@@ -91,16 +92,28 @@ extern "C" __global__ void unified_kernel(
     uint64_t matrix_id = blockIdx.x;       // Each block processes one matrix
     uint64_t thread_id = threadIdx.x;      // Each thread processes one row
 
-    // Shared memory for the adjacency matrixes
+    // Init shared memory
     __shared__ uint64_t adj_matrix[38];
     __shared__ uint64_t result_matrix[38];
     adj_matrix[thread_id] = 0;
     result_matrix[thread_id] = 0;
 
-    // Step 1: Adjacency Matrix Generation
-    uint8_t piece_type = boards[(matrix_id * 38) + thread_id];
-    uint64_t piece_bb = piece_bbs[matrix_id];
+    // Step 0 : Get Board information
+    uint64_t board = boards[matrix_id];
+    uint64_t piece_bb = board & 0xFFFFFFFFF; // Extract the piece bitboard
 
+    uint64_t before_bits = piece_bb << (26 + (38 - thread_id)); // Bits before the current position
+    uint8_t piece_type;
+    if ((board & ((uint64_t)1 << thread_id)) == 0) { // Empty 
+        piece_type = 3;
+
+    } else { // Non empty
+        uint64_t piece_idx = __popcll(before_bits);
+        piece_type = (uint8_t)((board >> (38 + (piece_idx * 2))) & 0b11) - 1;
+
+    }
+
+    // Step 1: Adjacency Matrix Generation
     if (piece_type != 3 && thread_id < 36) { // Non empty spot   
         uint64_t reach = get_reach(
             piece_type,
