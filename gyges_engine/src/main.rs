@@ -9,29 +9,179 @@ extern crate gyges_engine;
 
 // =================================== BLOCKING MOVE GEN ===================================
 
-use cust::stream;
-use gyges::moves::movegen_consts::*;
-use gyges::BitBoard;
-use gyges_engine::gpu_reach_consts;
-use core::num;
-use std::{f32::consts::E, io::Write, mem, thread, time::Duration};
-use gyges::{board::{self, TEST_BOARD}, core::masks::RANKS, moves::{gen_reach_consts::{UNIQUE_ONE_REACHS, UNIQUE_THREE_REACHS, UNIQUE_TWO_REACHS}, movegen::{has_threat, piece_control_sqs, valid_moves, valid_threat_count}, movegen_consts::ALL_THREE_INTERCEPTS, Move}, BoardState, Piece, Player, BENCH_BOARD, SQ, STARTING_BOARD};
+
+use gyges_engine::gpu_reach_consts::*;
+
+use gyges::{
+    board::{
+        self, TEST_BOARD
+        
+    }, 
+    moves::{
+        movegen::{
+            has_threat, 
+            piece_control_sqs, 
+            valid_moves, 
+
+        },
+        Move
+    }, 
+    BoardState, 
+    BitBoard,
+    Piece, 
+    Player, 
+    SQ
+
+};
 
 
-use cust::{error::CudaError, memory::{AsyncCopyDestination, LockedBuffer}};
-use cust::prelude::*;
+use cuda_sys::cuda::*;
+use std::{ffi::{c_void, CString}, ptr};
+
+pub fn cuda_init() -> Result<CUcontext, CUresult> {
+    // Initialize the CUDA driver
+    let init_result = unsafe { cuInit(0) };
+    if init_result != cudaError_t::CUDA_SUCCESS {
+        return Err(init_result);
+
+    }
+
+    // Get the first available device
+    let mut device: CUdevice = 0;
+    let device_result = unsafe { cuDeviceGet(&mut device, 0) };
+    if device_result != cudaError_t::CUDA_SUCCESS {
+        return Err(device_result);
+
+    }
+
+    // Create a context for the device
+    let mut context: CUcontext = ptr::null_mut();
+    let context_result = unsafe { cuCtxCreate_v2(&mut context, 0, device) };
+    if context_result == cudaError_t::CUDA_SUCCESS {
+        Ok(context)  // Return the context if successful
+
+    } else {
+        Err(context_result)  // Return the error code on failure
+
+    }
+
+}
 
 
-fn main() -> Result<(), CudaError> {
-    // Intialize CUDA
-    let _ctx = cust::quick_init().expect("Failed to quick initialize CUDA");
-    let device = Device::get_device(0).expect("Failed to retrieve device");
-    let name = device.name().expect("Failed to retrieve device name");
-    let mem = device.total_memory().expect("Failed to retrieve device memory");
+pub fn device_mem_alloc<T>(size: usize) -> Result<CUdeviceptr, CUresult> {
+    let mut device_ptr: CUdeviceptr = CUdeviceptr::default();
 
-    println!("CUDA Device: {}", name);
-    println!("Total VRAM: {}mb", mem / 1_000_000);
-    println!("");
+    let result: cudaError_t = unsafe {
+        cuMemAlloc_v2(
+            &mut device_ptr,
+            size * std::mem::size_of::<T>(),
+
+        )
+
+    };
+
+    if result == cudaError_t::CUDA_SUCCESS {
+        Ok(device_ptr)
+
+    } else {
+        Err(result)
+
+    }
+
+}
+
+pub fn device_mem_free(device_ptr: CUdeviceptr) -> Result<(), CUresult> {
+    let result: cudaError_t = unsafe { cuMemFree_v2(device_ptr as CUdeviceptr) };
+
+    if result == cudaError_t::CUDA_SUCCESS {
+        Ok(())
+
+    } else {
+        Err(result)
+
+    }
+
+}
+
+pub fn mem_copy_to_device<T>(device_ptr: CUdeviceptr, host_data: &[T]) -> Result<(), CUresult> {
+    let size_in_bytes = host_data.len() * std::mem::size_of::<T>();
+
+    let result: cudaError_t = unsafe {
+        cuMemcpyHtoD_v2(
+            device_ptr,
+            host_data.as_ptr() as *const std::ffi::c_void,
+            size_in_bytes
+
+        )
+
+    };
+
+    if result == cudaError_t::CUDA_SUCCESS {
+        Ok(())
+
+    } else {
+        Err(result)
+
+    }
+
+}
+
+pub fn mem_copy_to_host<T>(device_ptr: CUdeviceptr, host_data: &mut [T]) -> Result<(), CUresult> {
+    let size_in_bytes = host_data.len() * std::mem::size_of::<T>();
+
+    let result: cudaError_t = unsafe {
+        cuMemcpyDtoH_v2(host_data.as_mut_ptr() as *mut c_void, device_ptr, size_in_bytes)
+    };
+
+    if result == cudaError_t::CUDA_SUCCESS {
+        Ok(())
+
+    } else {
+        Err(result)
+
+    }
+
+}
+
+pub fn load_module_from_ptx(ptx: &str) -> Result<CUmodule, cudaError_t> {
+    let c_file_path = CString::new(ptx).expect("Failed to convert PTX to CString");
+
+    let mut module: CUmodule = ptr::null_mut();
+
+    let result: cudaError_t = unsafe {
+        cuModuleLoad(&mut module, c_file_path.as_ptr())
+    };
+
+    if result == cudaError_t::CUDA_SUCCESS {
+        Ok(module)
+
+    } else {
+        Err(result)
+
+    }
+
+}
+
+pub fn get_kernel_function(module: CUmodule, kernel_name: &str) -> Result<CUfunction, CUresult> {
+    let c_kernel_name = CString::new(kernel_name).expect("Failed to create CString for kernel name");
+
+    let mut function: CUfunction = ptr::null_mut();
+
+    let result: cudaError_t = unsafe { cuModuleGetFunction(&mut function, module, c_kernel_name.as_ptr()) };
+
+    if result == cudaError_t::CUDA_SUCCESS {
+        Ok(function)
+
+    } else {
+        Err(result)
+
+    }
+
+}
+
+fn main() -> Result<(), CUresult> {
+    // Initialize CUDA
+    let _ctx: CUcontext = cuda_init().expect("Failed to initialize CUDA context");
 
     // Initialize board
     let mut board = BoardState::from(TEST_BOARD);
@@ -59,46 +209,28 @@ fn main() -> Result<(), CudaError> {
 
     let mut mv_gen = BlockingMoveGen::new().expect("Failed to initialize blocking move generator");
 
-    let new_batch = unsafe { mv_gen.new_gen_all(&mut board, player) };
+    let new_batch = mv_gen.gen_all(&mut board, player);
     println!("New Batch: {}", new_batch.len());
-
-    let new_batch = unsafe { mv_gen.new_gen_all(&mut board, player) };
-    println!("New Batch: {}", new_batch.len());
-    
-
-    let batch = unsafe { mv_gen.gen_all(&mut board, player) };
-    println!("Batch: {}", batch.len());
-    println!("");
 
     unsafe {
         // MAIN BENCHMARKS
+        let iters = 40000;
 
-        // NEWNEW
+        // NEW
         let mut num = 0;
         let start: std::time::Instant = std::time::Instant::now();
-        for _ in 0..40000 {
-            let moves = mv_gen.new_gen_all(&mut board, player);
+        for _ in 0..iters {
+            let moves = mv_gen.gen_all(&mut board, player);
             num += moves.len();
 
         }
         let elapsed = start.elapsed().as_secs_f64();
         println!("NewNew Elapsed: {:?}, {}", elapsed, num);
 
-        // NEW
-        let mut num = 0;
-        let start = std::time::Instant::now();
-        for _ in 0..40000 {
-            let moves = mv_gen.gen_all(&mut board, player);
-            num += moves.len();
-
-        }
-        let elapsed = start.elapsed().as_secs_f64();
-        println!("New Elapsed: {:?}, {}", elapsed, num);
-
         // Native
         let mut num = 0;
         let start = std::time::Instant::now();
-        for _ in 0..40000 {
+        for _ in 0..iters {
             let moves = valid_moves(&mut board, player).moves(&board);
             let mut pruned = vec![];
             for mv in moves.iter() {
@@ -117,63 +249,67 @@ fn main() -> Result<(), CudaError> {
 
     }
 
+    mv_gen.mem_free();
+
     Ok(())
         
 }
 
 pub struct BlockingMoveGen {
     // Lookup tables
-    one_reach_d: DeviceBuffer<u64>,
-    two_reach_d: DeviceBuffer<u64>,
-    three_reach_d: DeviceBuffer<u64>,
-    all_two_intercepts_d: DeviceBuffer<u64>,
-    all_three_intercepts_d: DeviceBuffer<u64>,
-    one_map_d: DeviceBuffer<[u8; 1]>,
-    two_map_d: DeviceBuffer<[u16; 29]>,
-    three_map_d: DeviceBuffer<[u16; 11007]>,
+    one_reach_d: CUdeviceptr,
+    two_reach_d: CUdeviceptr,
+    three_reach_d: CUdeviceptr,
+    all_two_intercepts_d: CUdeviceptr,
+    all_three_intercepts_d: CUdeviceptr,
+    one_map_d: CUdeviceptr,
+    two_map_d: CUdeviceptr,
+    three_map_d: CUdeviceptr,
 
     // GPU and Host buffers
-    input_buffer_d: DeviceBuffer<u64>,
-    input_buffer_h: LockedBuffer<u64>,
+    input_buffer_d: CUdeviceptr,
+    input_buffer_h: Vec<u64>,
 
-    final_d: DeviceBuffer<f32>,
-    final_h: LockedBuffer<f32>,
+    final_d: CUdeviceptr,
+    final_h: Vec<f32>,
 
     // CUDA
-    stream: Stream,
-    module: Module
+    module: CUmodule,
 
 }
 
 impl BlockingMoveGen {
-    pub fn new() -> Result<Self, CudaError> {
-        // Create a stream
-        let stream = Stream::new(StreamFlags::NON_BLOCKING, None)?; 
-
+    pub fn new() -> Result<Self, CUresult> {
         // Load kernels from PTX
-        let ptx = std::fs::read_to_string("kernels.ptx").expect("Failed to read PTX file");
-        let module = Module::from_ptx(ptx, &[])?;
+        let module: CUmodule = load_module_from_ptx("kernels.ptx")?;
 
         // Load lookup tables into GPU
-        let one_reach_d = DeviceBuffer::from_slice(&gpu_reach_consts::UNIQUE_ONE_REACHS)?;
-        let two_reach_d = DeviceBuffer::from_slice(&gpu_reach_consts::UNIQUE_TWO_REACHS)?;
-        let three_reach_d = DeviceBuffer::from_slice(&gpu_reach_consts::UNIQUE_THREE_REACHS)?;
+        let one_reach_d: CUdeviceptr = device_mem_alloc::<u64>(36)?;
+        mem_copy_to_device(one_reach_d, &UNIQUE_ONE_REACHS)?;
+        let two_reach_d: CUdeviceptr = device_mem_alloc::<u64>(365)?;
+        mem_copy_to_device(two_reach_d, &UNIQUE_TWO_REACHS)?;
+        let three_reach_d: CUdeviceptr = device_mem_alloc::<u64>(8389)?;
+        mem_copy_to_device(three_reach_d, &UNIQUE_THREE_REACHS)?;
 
-        let all_two_intercepts_d = DeviceBuffer::from_slice(&gpu_reach_consts::ALL_TWO_INTERCEPTS)?;
-        let all_three_intercepts_d = DeviceBuffer::from_slice(&gpu_reach_consts::ALL_THREE_INTERCEPTS)?;
+        let all_two_intercepts_d: CUdeviceptr = device_mem_alloc::<u64>(36)?;
+        mem_copy_to_device(all_two_intercepts_d, &ALL_TWO_INTERCEPTS)?;
+        let all_three_intercepts_d: CUdeviceptr = device_mem_alloc::<u64>(36)?;
+        mem_copy_to_device(all_three_intercepts_d, &ALL_THREE_INTERCEPTS)?;
 
-        let one_map_d: DeviceBuffer<[u8; 1]> = DeviceBuffer::from_slice(&gpu_reach_consts::ONE_MAP)?;
-        let two_map_d = DeviceBuffer::from_slice(&gpu_reach_consts::TWO_MAP)?;
-        let three_map_d = DeviceBuffer::from_slice(&gpu_reach_consts::THREE_MAP)?;
+        let one_map_d: CUdeviceptr = device_mem_alloc::<u8>(36)?;
+        mem_copy_to_device(one_map_d, &ONE_MAP)?;
+        let two_map_d: CUdeviceptr = device_mem_alloc::<u16>(29 * 36)?;
+        mem_copy_to_device(two_map_d, &TWO_MAP)?;
+        let three_map_d: CUdeviceptr = device_mem_alloc::<u16>(11007 * 36)?;
+        mem_copy_to_device(three_map_d, &THREE_MAP)?;
 
         // Board and BB input buffers
-        let input_buffer_d: DeviceBuffer<u64> = DeviceBuffer::from_slice(&vec![0; 1000])?;
-        let input_buffer_h = LockedBuffer::new(&0, 1000)?;
+        let input_buffer_d: CUdeviceptr = device_mem_alloc::<u64>(1000)?;
+        let input_buffer_h = vec![0; 1000];
 
         // Results
-        let final_d =  DeviceBuffer::from_slice(&vec![0.0; 1000])?;
-        let final_h = LockedBuffer::new(&0.0, 1000)?;
-
+        let final_d = device_mem_alloc::<f32>(1000)?;
+        let final_h = vec![0.0; 1000];
 
         // Create the BMG instance  
         Ok(Self {
@@ -192,52 +328,57 @@ impl BlockingMoveGen {
             final_d,
             final_h,
     
-            stream,
-            module
+            module,
 
         })
 
     }
 
-    pub fn new_batch_check(&mut self, num_boards: u32) -> Result<(), CudaError> {
-        // Constants
-        let stream = &self.stream;
-            
+    pub fn batch_check(&mut self, num_boards: u32) -> Result<(), CUresult> {
         // Copy data to the GPU
-        self.input_buffer_d.copy_from(&self.input_buffer_h)?;
-        
-        // Load kernel
-        let new_unified_kernel = self.module.get_function("unified_kernel")?;
+        mem_copy_to_device(self.input_buffer_d, self.input_buffer_h.as_slice())?;
 
-        // Start
-        unsafe{
-            launch!(new_unified_kernel<<<(num_boards, 1, 1), (38, 1, 1), 0, stream>>>(
-                self.input_buffer_d.as_device_ptr(),
-                self.final_d.as_device_ptr(),
+        // Launch kernel
+        unsafe {
+            let args: [*mut c_void; 10] = [
+                &mut self.input_buffer_d as *mut CUdeviceptr as *mut c_void,
+                &mut self.final_d as *mut CUdeviceptr as *mut c_void,
+                &mut self.one_reach_d as *mut CUdeviceptr as *mut c_void,
+                &mut self.two_reach_d as *mut CUdeviceptr as *mut c_void,
+                &mut self.three_reach_d as *mut CUdeviceptr as *mut c_void,
+                &mut self.all_two_intercepts_d as *mut CUdeviceptr as *mut c_void,
+                &mut self.all_three_intercepts_d as *mut CUdeviceptr as *mut c_void,
+                &mut self.one_map_d as *mut CUdeviceptr as *mut c_void,
+                &mut self.two_map_d as *mut CUdeviceptr as *mut c_void,
+                &mut self.three_map_d as *mut CUdeviceptr as *mut c_void
+            ];
 
-                // Lookup tables
-                self.one_reach_d.as_device_ptr(),
-                self.two_reach_d.as_device_ptr(),
-                self.three_reach_d.as_device_ptr(),
-                self.all_two_intercepts_d.as_device_ptr(),
-                self.all_three_intercepts_d.as_device_ptr(),
-                self.one_map_d.as_device_ptr(),
-                self.two_map_d.as_device_ptr(),
-                self.three_map_d.as_device_ptr()
+            let result = cuLaunchKernel(
+                get_kernel_function(self.module, "unified_kernel")?,
+                num_boards, 1, 1,
+                38, 1, 1,
+                0,
+                ptr::null_mut(),
+                args.as_ptr() as *mut *mut c_void,
+                ptr::null_mut(),  // No extra arguments
+            );
+            if result != cudaError_t::CUDA_SUCCESS {
+                eprintln!("Failed to launch kernel: {:?}", result);
+                return Err(result);
 
-            ))?;
+            }
 
         }
 
         // Copy final results back to the host
-        self.final_d.copy_to(&mut self.final_h)?;
+        mem_copy_to_host(self.final_d, &mut self.final_h)?;
 
         Ok(())
 
-        
     }
 
-    pub fn new_gen_all(&mut self, board: &mut BoardState, player: Player) -> Vec<Move> {
+    pub fn gen_all(&mut self, board: &mut BoardState, player: Player) -> Vec<Move> {
+        // Gen all moves
         let mut bit_state = BitState::from(board);
 
         let mut moves = Vec::with_capacity(600);
@@ -297,7 +438,7 @@ impl BlockingMoveGen {
 
         // Run on GPU
         let board_count = idx;
-        self.new_batch_check(board_count as u32).expect("Failed to batch check routes");
+        self.batch_check(board_count as u32).expect("Failed to batch check routes");
 
         // Check and filter blocking moves
         let mut blocking_moves = vec![];
@@ -313,211 +454,28 @@ impl BlockingMoveGen {
 
     }
 
+    /// Frees all allocated GPU memory
+    pub fn mem_free(&mut self) {
+        device_mem_free(self.one_reach_d).expect("Failed to free one reach table");
+        device_mem_free(self.two_reach_d).expect("Failed to free two reach table");
+        device_mem_free(self.three_reach_d).expect("Failed to free three reach table");
+        device_mem_free(self.all_two_intercepts_d).expect("Failed to free all two intercepts table");
+        device_mem_free(self.all_three_intercepts_d).expect("Failed to free all three intercepts table");
+        device_mem_free(self.one_map_d).expect("Failed to free one map table");
+        device_mem_free(self.two_map_d).expect("Failed to free two map table");
+        device_mem_free(self.three_map_d).expect("Failed to free three map table");
+
+        device_mem_free(self.input_buffer_d).expect("Failed to free input buffer");
+        device_mem_free(self.final_d).expect("Failed to free final buffer");
+
+    }
+
 }
 
 
 // ================== BitState Representation ==================
 
-use std::{ops::{Not, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Shl, ShlAssign, Shr, ShrAssign}, fmt::Display};
-
-// /// Bits 0..38 are the positions of the pieces on the board
-// /// Bits 38..62 are the types of pieces in order.
-// /// Bit 63 is the player to move.
-// #[derive(Debug, Copy, Clone, PartialEq)]
-// pub struct BitState(pub u64);
-
-// impl BitState {
-//     /// Creates a new BitState from an existing BoardState
-//     pub fn from(board: &BoardState) -> Self {
-//         let mut bb = BitState(0);
-//         let mut piece_idx = 0;
-//         for i in 0..38 {
-//             let piece: u8 = board.data[i] as u8;
-           
-//             if piece != 3 {
-//                 // Set the piece
-//                 bb |= 1 << i;
-
-//                 // Set the piece type
-//                 bb |= ((piece + 1) as u64) << (38 + (piece_idx * 2));
-
-//                 piece_idx += 1;
-
-//             }
-
-//         }
-
-//         // Set the player to move
-//         bb |= (board.player as u64) << 63;
-
-//         bb
-
-//     }
-
-//     pub fn make_bounce_mv(&self, start_pos: u64, end_pos: u64) -> BitState {
-//         // Copy the current state
-//         let mut new_state = *self;
-
-//         // Update the piece bitboard
-//         new_state ^= 1 << start_pos;
-
-//         // Starting piece
-//         let starting_idx = self.piece_idx(start_pos as usize);
-//         let starting_piece = self.piece_at(start_pos as usize) as u8;
-
-//         new_state.remove_type(starting_idx);
-
-//         // Ending piece
-//         let ending_idx = new_state.piece_idx(end_pos as usize);
-//         new_state.add_type(ending_idx, starting_piece);
-
-//         new_state ^= 1 << end_pos;
-
-//         new_state
-
-//     }
-
-//     pub fn make_drop_mv(&self, start_pos: u64, pickup_pos: u64, drop_pos: u64) -> BitState {
-//         // Copy the current state
-//         let mut new_state = *self;
-
-      
-
-//         // Starting piece
-//         let starting_idx = self.piece_idx(start_pos as usize);
-//         let starting_piece = self.piece_type(starting_idx) as u8;
-
-//         new_state.remove_type(starting_idx);
-//         new_state ^= 1 << start_pos;
-
-//         // Pickup piece
-//         let pickup_idx = new_state.piece_idx(pickup_pos as usize);
-//         let pickup_piece = new_state.piece_type(pickup_idx) as u8;
-//         new_state.set_type_data(pickup_idx, starting_piece);
-
-        
-
-//         // Drop piece   
-//         let drop_idx = new_state.piece_idx(drop_pos as usize);
-//         new_state.add_type(drop_idx, pickup_piece);
-        
-//         // Update the piece bitboard
-//         let piece_bb_mask = 1 << drop_pos;
-//         new_state ^= piece_bb_mask;
-
-//         new_state
-
-//     }
-
-//     // ======================== MOVE MAKING HELPERS ========================
-
-//     /// Removes a existing piece type
-//     pub fn remove_type(&mut self, piece_idx: usize) {
-//         // Save the data to the right of the removed piece    
-//         let save_mask: u64 = !0 << (38 + (piece_idx * 2) + 2); 
-//         let saved = self.0 & save_mask;
-    
-//         // Clear all data from the removed piece to the left
-//         let clear_mask = !0 << (38 + (piece_idx * 2));     
-//         let cleared = self.0 & !clear_mask; 
-
-//         self.0 = (saved >> 2) | cleared;
-
-//     }
-
-//     /// Adds in a new piece type 
-//     pub fn add_type(&mut self, piece_idx: usize, piece_type: u8) {
-//         // Save the data to the right of the removed piece    
-//         let save_mask: u64 = !0 << (38 + (piece_idx * 2)); 
-//         let saved = self.0 & save_mask;
-    
-//         // Clear all data from the removed piece to the left
-//         let clear_mask = !0 << (38 + (piece_idx * 2));     
-//         let cleared = self.0 & !clear_mask; 
-
-//         // Create the new data
-//         let type_data = (piece_type as u64) << (38 + (piece_idx * 2));
-
-//         self.0 = (saved << 2) | type_data | cleared;
-
-//     }
-
-//     /// Changes the type data at one of the type data slots
-//     pub fn set_type_data(&mut self, piece_idx: usize, piece_type: u8) {
-//         // Save the data to the right of the removed piece    
-//         let save_mask: u64 = !0 << (38 + (piece_idx * 2) + 2); 
-//         let saved = self.0 & save_mask;     
-
-//         // Clear all data from the removed piece to the left
-//         let clear_mask = !0 << (38 + (piece_idx * 2));     
-//         let cleared = self.0 & !clear_mask; 
-
-    
-//         // Create the new data
-//         let type_data = (piece_type as u64) << (38 + (piece_idx * 2));
-//         let new_data = saved | type_data;
-
-//         self.0 = new_data | cleared;
-
-//     }
-
-//     // ======================== GETTERS ========================
-
-//     /// Gets a u8 of the piece at a square
-//     /// 0 = None
-//     /// 1 = One
-//     /// 2 = Two
-//     /// 3 = Three
-//     pub const fn piece_at(&self, pos: usize) -> u8 {
-//         // Empty
-//         if (self.0 & (1 << pos)) == 0 {
-//             return 0;
-
-//         }
-
-//         self.piece_type(self.piece_idx(pos))
-        
-//     }
-
-//     /// Gets the piece bitboard
-//     pub const fn piece_bb(&self) -> u64 {
-//         self.0 & 0b111111_111111_111111_111111_111111_111111 // First 38 bits
-    
-//     }
-
-//     /// Gets the idx of the piece at a position
-//     pub const fn piece_idx(&self, pos: usize) -> usize {
-//         // Pieces before the requested position
-//         // (<< 26) : cuts off the piece type bits and the player bit
-//         // (38 - pos) : cuts off the pieces after the requested position
-//         if pos == 0 { // Piece at pos 0 allways is idx 0
-//             return 0;
-
-//         }
-
-//         let before = self.piece_bb() << (26 + 2 + (36 - pos));  
-
-//         // Number of pieces before the requested position == idx
-//         before.count_ones() as usize
-
-//     }
-
-//     /// Idx is the index of the piece not its position. 
-//     /// Ex. 0 = first piece, 1 = second piece, etc.
-//     pub const fn piece_type(&self, piece_idx: usize) -> u8 {
-//         ((self.0 >> (38 + (piece_idx * 2))) & 0b11) as u8
-
-//     }
-
-//     /// Gets the player to move
-//     /// 0 = Player One
-//     /// 1 = Player Two
-//     pub const fn player(&self) -> u8 {
-//         (self.0 >> 63) as u8
-
-//     }
-
-// }
+use std::ops::{Not, BitOr, BitOrAssign, BitAnd, BitAndAssign, BitXor, BitXorAssign, Shl, ShlAssign, Shr, ShrAssign};
 
 /// Bits 0..37 are the positions of the pieces on the board.
 /// Bits 38..62 are the types of pieces in order.
@@ -693,8 +651,6 @@ impl BitState {
     }
 
 }
-
-
 
 // Impl bit opperators
 impl Not for BitState {
