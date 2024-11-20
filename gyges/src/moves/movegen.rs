@@ -1426,16 +1426,7 @@ pub unsafe fn piece_control_sqs(board: &mut BoardState, player: Player) -> [BitB
                                 let end = SQ(path.0[1]);
                                 let end_bit = end.bit();
                 
-                                if end == SQ::P1_GOAL {
-                                    if player == Player::One {
-                                        continue;
-                                    }
-                                    continue;
-                    
-                                } else if end == SQ::P2_GOAL {
-                                    if player == Player::Two {
-                                        continue;
-                                    }
+                                if end == SQ::P1_GOAL || end == SQ::P2_GOAL {
                                     continue;
                     
                                 }
@@ -1478,16 +1469,7 @@ pub unsafe fn piece_control_sqs(board: &mut BoardState, player: Player) -> [BitB
                                 let end = SQ(path.0[2]);
                                 let end_bit = end.bit();
 
-                                if end == SQ::P1_GOAL {
-                                    if player == Player::One {
-                                        continue;
-                                    }
-                                    continue;
-                    
-                                } else if end == SQ::P2_GOAL {
-                                    if player == Player::Two {
-                                        continue;
-                                    }
+                                if end == SQ::P1_GOAL || end == SQ::P2_GOAL {
                                     continue;
                     
                                 }
@@ -1530,16 +1512,7 @@ pub unsafe fn piece_control_sqs(board: &mut BoardState, player: Player) -> [BitB
                                 let end = SQ(path.0[3]);
                                 let end_bit = end.bit();
                 
-                                if end == SQ::P1_GOAL {
-                                    if player == Player::One {
-                                        continue;
-                                    }
-                                    continue;
-                    
-                                } else if end == SQ::P2_GOAL {
-                                    if player == Player::Two {
-                                        continue;
-                                    }
+                                if end == SQ::P1_GOAL || end == SQ::P2_GOAL {
                                     continue;
                     
                                 }
@@ -1572,7 +1545,6 @@ pub unsafe fn piece_control_sqs(board: &mut BoardState, player: Player) -> [BitB
 
             }
             
-
         }
         
         controlled_squares

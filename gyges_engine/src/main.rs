@@ -10,33 +10,24 @@ extern crate gyges_engine;
 // =================================== BLOCKING MOVE GEN ===================================
 
 
-use gyges_engine::gpu_reach_consts::*;
-
+use cust::sys::cuMemHostGetDevicePointer_v2;
+use gyges_engine::merged_reach_consts::*;
 use gyges::{
     board::{
         self, TEST_BOARD
         
-    }, 
-    moves::{
+    }, moves::{
         movegen::{
-            has_threat, 
-            piece_control_sqs, 
-            valid_moves, 
+            has_threat, piece_control_sqs, valid_moves 
 
-        },
-        Move
-    }, 
-    BoardState, 
-    BitBoard,
-    Piece, 
-    Player, 
-    SQ
+        }, movegen_consts::ALL_THREE_INTERCEPTS, Move
+    }, BitBoard, BoardState, Piece, Player, SQ
 
 };
 
 
-use cuda_sys::cuda::*;
-use std::{ffi::{c_void, CString}, ptr};
+use cuda_sys::{cuda::*, cudart::cudaFreeHost};
+use std::{ffi::{c_void, CString}, num, ptr};
 
 pub fn cuda_init() -> Result<CUcontext, CUresult> {
     // Initialize the CUDA driver
@@ -66,7 +57,6 @@ pub fn cuda_init() -> Result<CUcontext, CUresult> {
     }
 
 }
-
 
 pub fn device_mem_alloc<T>(size: usize) -> Result<CUdeviceptr, CUresult> {
     let mut device_ptr: CUdeviceptr = CUdeviceptr::default();
@@ -103,6 +93,31 @@ pub fn device_mem_free(device_ptr: CUdeviceptr) -> Result<(), CUresult> {
 
 }
 
+pub fn allocate_zero_copy_memory<T>(size: usize) -> Result<(*mut T, CUdeviceptr), CUresult> {
+    let mut host_ptr: *mut c_void = std::ptr::null_mut();
+    let bytes = size * std::mem::size_of::<T>();
+
+    // Allocate pinned host memory
+    let result: cudaError_t = unsafe {
+        cuMemHostAlloc(
+            &mut host_ptr as *mut *mut c_void,
+            bytes,
+            CU_MEMHOSTALLOC_DEVICEMAP
+        )
+    };
+    if result != cudaError_t::CUDA_SUCCESS {
+        return Err(result);
+
+    }
+
+    // Retrieve the device pointer for the mapped memory
+    let mut device_ptr: CUdeviceptr = 0;
+    unsafe { cuMemHostGetDevicePointer_v2(&mut device_ptr, host_ptr, 0) };
+
+    Ok((host_ptr as *mut T, device_ptr))
+
+}
+
 pub fn mem_copy_to_device<T>(device_ptr: CUdeviceptr, host_data: &[T]) -> Result<(), CUresult> {
     let size_in_bytes = host_data.len() * std::mem::size_of::<T>();
 
@@ -126,11 +141,11 @@ pub fn mem_copy_to_device<T>(device_ptr: CUdeviceptr, host_data: &[T]) -> Result
 
 }
 
-pub fn mem_copy_to_host<T>(device_ptr: CUdeviceptr, host_data: &mut [T]) -> Result<(), CUresult> {
-    let size_in_bytes = host_data.len() * std::mem::size_of::<T>();
+pub fn mem_copy_to_host<T>(device_ptr: CUdeviceptr, host_data: *mut T, size: usize) -> Result<(), CUresult> {
+    let size_in_bytes = size * std::mem::size_of::<T>();
 
     let result: cudaError_t = unsafe {
-        cuMemcpyDtoH_v2(host_data.as_mut_ptr() as *mut c_void, device_ptr, size_in_bytes)
+        cuMemcpyDtoH_v2(host_data as *mut c_void, device_ptr, size_in_bytes)
     };
 
     if result == cudaError_t::CUDA_SUCCESS {
@@ -183,17 +198,9 @@ fn main() -> Result<(), CUresult> {
     // Initialize CUDA
     let _ctx: CUcontext = cuda_init().expect("Failed to initialize CUDA context");
 
+
     // Initialize board
     let mut board = BoardState::from(TEST_BOARD);
-    // let mut board = BoardState::from([
-    //     0, 0, 2, 1, 0, 2,
-    //     0, 0, 0, 0, 0, 0,
-    //     3, 0, 2, 0, 0, 0,
-    //     0, 0, 0, 0, 0, 0,
-    //     0, 0, 0, 0, 0, 0,
-    //     3, 0, 1, 0, 0, 1,
-    //     0, 0
-    // ]);
     // let mut board = BoardState::from(
     // [
     //     0, 0, 1, 0, 0, 0,
@@ -206,26 +213,26 @@ fn main() -> Result<(), CUresult> {
     // ]);
     let player = Player::One;
     println!("{}", board);
-
+    
     let mut mv_gen = BlockingMoveGen::new().expect("Failed to initialize blocking move generator");
 
-    let new_batch = mv_gen.gen_all(&mut board, player);
+    let new_batch = mv_gen.gen(&mut board, player);
     println!("New Batch: {}", new_batch.len());
 
     unsafe {
         // MAIN BENCHMARKS
-        let iters = 40000;
+        let iters = 100000;
 
         // NEW
         let mut num = 0;
         let start: std::time::Instant = std::time::Instant::now();
         for _ in 0..iters {
-            let moves = mv_gen.gen_all(&mut board, player);
+            let moves = mv_gen.gen(&mut board, player);
             num += moves.len();
 
         }
         let elapsed = start.elapsed().as_secs_f64();
-        println!("NewNew Elapsed: {:?}, {}", elapsed, num);
+        println!("New Elapsed: {:?}, {}", elapsed, num);
 
         // Native
         let mut num = 0;
@@ -255,218 +262,163 @@ fn main() -> Result<(), CUresult> {
         
 }
 
+
 pub struct BlockingMoveGen {
     // Lookup tables
     one_reach_d: CUdeviceptr,
     two_reach_d: CUdeviceptr,
     three_reach_d: CUdeviceptr,
-    all_two_intercepts_d: CUdeviceptr,
-    all_three_intercepts_d: CUdeviceptr,
-    one_map_d: CUdeviceptr,
-    two_map_d: CUdeviceptr,
-    three_map_d: CUdeviceptr,
 
-    // GPU and Host buffers
-    input_buffer_d: CUdeviceptr,
-    input_buffer_h: Vec<u64>,
-
+    // Zero-copy buffers
+    state_input_d: CUdeviceptr,
+    state_input_h: *mut u64,
+    move_input_d: CUdeviceptr,
+    move_input_h: *mut u8,
     final_d: CUdeviceptr,
-    final_h: Vec<f32>,
+    final_h: *mut f32,
 
     // CUDA
     module: CUmodule,
+    kernel: CUfunction,
 
 }
 
 impl BlockingMoveGen {
     pub fn new() -> Result<Self, CUresult> {
-        // Load kernels from PTX
+        // Load kernel from PTX
         let module: CUmodule = load_module_from_ptx("kernels.ptx")?;
+        let kernel = get_kernel_function(module, "unified_kernel")?;
 
-        // Load lookup tables into GPU
-        let one_reach_d: CUdeviceptr = device_mem_alloc::<u64>(36)?;
-        mem_copy_to_device(one_reach_d, &UNIQUE_ONE_REACHS)?;
-        let two_reach_d: CUdeviceptr = device_mem_alloc::<u64>(365)?;
-        mem_copy_to_device(two_reach_d, &UNIQUE_TWO_REACHS)?;
-        let three_reach_d: CUdeviceptr = device_mem_alloc::<u64>(8389)?;
-        mem_copy_to_device(three_reach_d, &UNIQUE_THREE_REACHS)?;
+        // Allocate lookup tables
+        let one_reach_d = device_mem_alloc::<u64>(36)?;
+        mem_copy_to_device(one_reach_d, MERGED_ONE_REACHS.as_ref())?;
+        let two_reach_d = device_mem_alloc::<u64>(29 * 36)?;
+        mem_copy_to_device(two_reach_d, MERGED_TWO_REACHS.as_flattened())?;
+        let three_reach_d = device_mem_alloc::<u64>(11007 * 36)?;
+        mem_copy_to_device(three_reach_d, MERGED_THREE_REACHS.as_flattened())?;
+      
+        // Allocate buffers
+        let (state_input_h, state_input_d) = allocate_zero_copy_memory::<u64>(1)?;
+        let (move_input_h, move_input_d) = allocate_zero_copy_memory::<u8>(1000*3)?;
+        let (final_h, final_d) = allocate_zero_copy_memory::<f32>(1000)?;
 
-        let all_two_intercepts_d: CUdeviceptr = device_mem_alloc::<u64>(36)?;
-        mem_copy_to_device(all_two_intercepts_d, &ALL_TWO_INTERCEPTS)?;
-        let all_three_intercepts_d: CUdeviceptr = device_mem_alloc::<u64>(36)?;
-        mem_copy_to_device(all_three_intercepts_d, &ALL_THREE_INTERCEPTS)?;
-
-        let one_map_d: CUdeviceptr = device_mem_alloc::<u8>(36)?;
-        mem_copy_to_device(one_map_d, &ONE_MAP)?;
-        let two_map_d: CUdeviceptr = device_mem_alloc::<u16>(29 * 36)?;
-        mem_copy_to_device(two_map_d, &TWO_MAP)?;
-        let three_map_d: CUdeviceptr = device_mem_alloc::<u16>(11007 * 36)?;
-        mem_copy_to_device(three_map_d, &THREE_MAP)?;
-
-        // Board and BB input buffers
-        let input_buffer_d: CUdeviceptr = device_mem_alloc::<u64>(1000)?;
-        let input_buffer_h = vec![0; 1000];
-
-        // Results
-        let final_d = device_mem_alloc::<f32>(1000)?;
-        let final_h = vec![0.0; 1000];
-
-        // Create the BMG instance  
+        // Create the instance  
         Ok(Self {
             one_reach_d,
             two_reach_d,
             three_reach_d,
-            all_two_intercepts_d,
-            all_three_intercepts_d,
-            one_map_d,
-            two_map_d,
-            three_map_d,
-
-            input_buffer_d,
-            input_buffer_h,
-
+    
+            move_input_d,
+            move_input_h,
             final_d,
             final_h,
-    
+            state_input_d,
+            state_input_h,
+
             module,
+            kernel
 
         })
 
     }
 
-    pub fn batch_check(&mut self, num_boards: u32) -> Result<(), CUresult> {
-        // Copy data to the GPU
-        mem_copy_to_device(self.input_buffer_d, self.input_buffer_h.as_slice())?;
-
-        // Launch kernel
-        unsafe {
-            let args: [*mut c_void; 10] = [
-                &mut self.input_buffer_d as *mut CUdeviceptr as *mut c_void,
-                &mut self.final_d as *mut CUdeviceptr as *mut c_void,
-                &mut self.one_reach_d as *mut CUdeviceptr as *mut c_void,
-                &mut self.two_reach_d as *mut CUdeviceptr as *mut c_void,
-                &mut self.three_reach_d as *mut CUdeviceptr as *mut c_void,
-                &mut self.all_two_intercepts_d as *mut CUdeviceptr as *mut c_void,
-                &mut self.all_three_intercepts_d as *mut CUdeviceptr as *mut c_void,
-                &mut self.one_map_d as *mut CUdeviceptr as *mut c_void,
-                &mut self.two_map_d as *mut CUdeviceptr as *mut c_void,
-                &mut self.three_map_d as *mut CUdeviceptr as *mut c_void
-            ];
-
-            let result = cuLaunchKernel(
-                get_kernel_function(self.module, "unified_kernel")?,
-                num_boards, 1, 1,
-                38, 1, 1,
-                0,
-                ptr::null_mut(),
-                args.as_ptr() as *mut *mut c_void,
-                ptr::null_mut(),  // No extra arguments
-            );
-            if result != cudaError_t::CUDA_SUCCESS {
-                eprintln!("Failed to launch kernel: {:?}", result);
-                return Err(result);
-
-            }
-
-        }
-
-        // Copy final results back to the host
-        mem_copy_to_host(self.final_d, &mut self.final_h)?;
-
-        Ok(())
-
-    }
-
-    pub fn gen_all(&mut self, board: &mut BoardState, player: Player) -> Vec<Move> {
-        // Gen all moves
-        let mut bit_state = BitState::from(board);
-
-        let mut moves = Vec::with_capacity(600);
-        let mut idx = 0;
-
-        // Calculate boards
+    pub fn gen(&mut self, board: &mut BoardState, player: Player) -> Vec<(u8, u8, u8)> {
+        let bit_state = BitState::from(board);
+        unsafe { *self.state_input_h = bit_state.0; } // Set the input state
+        
         let mut piece_control: [BitBoard; 6] = unsafe { piece_control_sqs(board, player) };
 
         let active_lines = board.get_active_lines();
+        let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
         let drops = board.get_drops(active_lines, player).get_data();
 
-        let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
-
+        let mut idx = 0;
         for x in 0..6 {
             let starting_sq = active_line_sq + x;
             let starting_piece = board.piece_at(starting_sq);
-
-            if starting_piece == Piece::None {
-                continue;
-            }
-
-            // BRUTE FORCE: Try all valid placements
-            for block_pos in piece_control[x].get_data() {
-                let block_sq = SQ(block_pos as u8);
-                let block_piece = board.piece_at(block_sq);
-
-                match block_piece {
-                    Piece::None => { // Empty square: Try placing piece
-                        let new_state = bit_state.make_bounce_mv(starting_sq.0 as u64, block_sq.0 as u64);
-                        self.input_buffer_h[idx] = new_state.0;
-
-                        moves.push(Move::new([(Piece::None, starting_sq), (starting_piece, block_sq), (Piece::None, SQ::NONE)], gyges::moves::MoveType::Bounce));
-
+            if starting_piece != Piece::None {
+                for block_pos in piece_control[x].get_data() {
+                    let block_sq = SQ(block_pos as u8);
+                    let block_piece = board.piece_at(block_sq);
+    
+                    if block_piece == Piece::None {
+                        unsafe { self.move_input_h.add(idx * 3).copy_from([starting_sq.0, block_sq.0, 100].as_ptr(), 3); } // Copy move data 
                         idx += 1;
-
-                    },
-                    _ => { // Occupied square: Try replacement
+    
+                    } else {
                         for empty_pos in drops.iter() {
-                            let empty_sq = SQ(*empty_pos as u8);
-
-                            let mut new_state = bit_state.make_drop_mv(starting_sq.0 as u64, block_sq.0 as u64, empty_sq.0 as u64);
-                            self.input_buffer_h[idx] = new_state.0;
-      
-                            moves.push(Move::new([(Piece::None, starting_sq), (starting_piece, block_sq), (block_piece, empty_sq)], gyges::moves::MoveType::Bounce));
-
+                            unsafe { self.move_input_h.add(idx * 3).copy_from([starting_sq.0, block_sq.0, *empty_pos as u8].as_ptr(), 3); } // Copy move data 
                             idx += 1;
-
+    
                         }
-
+    
                     }
-
+    
                 }
 
             }
 
         }
+        let num_boards: u32 = idx as u32;
 
-        // Run on GPU
-        let board_count = idx;
-        self.batch_check(board_count as u32).expect("Failed to batch check routes");
+        // Launch kernel
+        unsafe {
+            cuLaunchKernel(
+                self.kernel,
+                num_boards as u32, 1, 1,
+                38, 1, 1,
+                0,
+                ptr::null_mut(),
+                [
+                    &mut self.state_input_d as *mut CUdeviceptr as *mut c_void,
+                    &mut self.move_input_d as *mut CUdeviceptr as *mut c_void,
+                    &mut self.final_d as *mut CUdeviceptr as *mut c_void,
+                    &mut self.one_reach_d as *mut CUdeviceptr as *mut c_void,
+                    &mut self.two_reach_d as *mut CUdeviceptr as *mut c_void,
+                    &mut self.three_reach_d as *mut CUdeviceptr as *mut c_void
+                ].as_ptr() as *mut *mut c_void,
+                ptr::null_mut(),  // No extra arguments
+            );
 
-        // Check and filter blocking moves
-        let mut blocking_moves = vec![];
-        for i in 0..board_count {
-            if self.final_h[i] == 0.0 {
-                blocking_moves.push(moves[i]);
+        }
 
+        // Sync results
+        unsafe { cuCtxSynchronize(); }
+
+        // IMPACT ON PERFORMANCE: MINIMAL 
+        // Filter blocking moves from the results
+        let mut blocking_moves = Vec::with_capacity(50);
+        for i in 0..num_boards {
+            if unsafe{ self.final_h.add(i as usize).read() == 0.0 } {
+                unsafe {
+                    let mv = self.move_input_h.add(i as usize * 3);
+                    blocking_moves.push((mv.read(), mv.add(1).read(), mv.add(2).read()));
+
+                }
+     
             }
 
         }
 
+        // Return the blocking moves
         blocking_moves
 
     }
 
     /// Frees all allocated GPU memory
     pub fn mem_free(&mut self) {
+        // Free lookup tables
         device_mem_free(self.one_reach_d).expect("Failed to free one reach table");
         device_mem_free(self.two_reach_d).expect("Failed to free two reach table");
         device_mem_free(self.three_reach_d).expect("Failed to free three reach table");
-        device_mem_free(self.all_two_intercepts_d).expect("Failed to free all two intercepts table");
-        device_mem_free(self.all_three_intercepts_d).expect("Failed to free all three intercepts table");
-        device_mem_free(self.one_map_d).expect("Failed to free one map table");
-        device_mem_free(self.two_map_d).expect("Failed to free two map table");
-        device_mem_free(self.three_map_d).expect("Failed to free three map table");
 
-        device_mem_free(self.input_buffer_d).expect("Failed to free input buffer");
-        device_mem_free(self.final_d).expect("Failed to free final buffer");
+        // Free buffers
+        unsafe {
+            cuMemFreeHost(self.state_input_h as *mut c_void);
+            cuMemFreeHost(self.move_input_h as *mut c_void);
+            cuMemFreeHost(self.final_h as *mut c_void);
+
+        }
 
     }
 
@@ -486,7 +438,7 @@ pub struct BitState(pub u64);
 impl BitState {
     /// Creates a new BitState from an existing BoardState
     pub fn from(board: &BoardState) -> Self {
-        let mut bb = 0u64;
+        let mut bb: u64 = 0u64;
         let mut piece_idx = 0;
         for i in 0..38 {
             let piece = board.data[i] as u8;
