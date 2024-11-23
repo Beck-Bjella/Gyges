@@ -242,17 +242,52 @@ __device__ uint64_t make_drop_mv(uint64_t state, uint8_t start_pos, uint8_t pick
     return new_state;
 }
 
-// ==================== KERNELS ======================
+// ==================== HELPERS ====================
 
-extern "C" __global__ void unified_kernel(
-    const uint64_t* init_state, // Starting state
-    const uint8_t* move_data,   // Move data
-    float* routes,              // Output 
+extern "C" __device__ uint64_t reach(
+    uint64_t piece_bb,
+    uint8_t piece_type,
+    uint64_t piece_pos,
 
     // Lookup tables
-    const uint64_t* one_reach,
-    const uint64_t* two_reach,
-    const uint64_t* three_reach
+    const uint64_t* __restrict__ one_reach,
+    const uint64_t* __restrict__ two_reach,
+    const uint64_t* __restrict__ three_reach
+) {
+    uint64_t reach;
+    uint64_t intercepts;
+    if (piece_type == 1) {
+        reach = one_reach[piece_pos];
+        
+    } else if (piece_type == 2) {
+        intercepts = piece_bb & ALL_INTERCEPTS[piece_pos];
+        reach = two_reach[(piece_pos * 29) + (intercepts % 29)];
+        
+    } else if (piece_type == 3) {
+        intercepts = piece_bb & ALL_INTERCEPTS[piece_pos + 36];
+        reach = three_reach[(piece_pos * 11007) + (intercepts % 11007)];
+
+    }
+
+    // Mask reach
+    uint64_t masked_reach = reach & (piece_bb | GOALS_MASK);
+
+    return masked_reach;
+
+}
+
+// ==================== KERNELS ======================
+
+// Adj matrix vairant
+extern "C" __global__ void adj_kernel(
+    uint64_t* init_state, // Starting state
+    uint8_t* move_data,   // Move data
+    float* routes,        // Output 
+
+    // Lookup tables
+    const uint64_t* __restrict__ one_reach,
+    const uint64_t* __restrict__ two_reach,
+    const uint64_t* __restrict__ three_reach
 
 ) {
     uint64_t matrix_id = blockIdx.x;       // Each block processes one matrix
@@ -261,47 +296,44 @@ extern "C" __global__ void unified_kernel(
     // Init shared memory
     __shared__ uint64_t adj_matrix[38];
     __shared__ uint64_t result_matrix[38];
-    adj_matrix[thread_id] = 0;
-    result_matrix[thread_id] = 0;
-    
-    // Step 0: Load data
-    uint8_t start_pos = move_data[(matrix_id * 3)];
-    uint8_t pickup_pos = move_data[(matrix_id * 3) + 1];
-    uint8_t end_pos = move_data[(matrix_id * 3) + 2];
-    uint64_t new_state = (end_pos == 100)
-        ? make_bounce_mv(init_state[0], start_pos, pickup_pos)
-        : make_drop_mv(init_state[0], start_pos, pickup_pos, end_pos);
+    __shared__ uint64_t shared_new_state;
 
-    uint64_t piece_bb = get_piece_bb(new_state);
-    uint8_t piece_type = piece_at(new_state, thread_id);
+    if (thread_id == 0) {
+        uint8_t start_pos = move_data[(matrix_id * 3)];
+        uint8_t pickup_pos = move_data[(matrix_id * 3) + 1];
+        uint8_t end_pos = move_data[(matrix_id * 3) + 2];
 
-    // Step 1: Adjacency Matrix Generation
-    if (piece_type != 0 && thread_id < 36) { // Non empty spot   
-        // Lookup reach
-        uint64_t reach;
-        uint64_t intercepts;
-        if (piece_type == 1) {
-            reach = one_reach[thread_id];
-            
-        } else if (piece_type == 2) {
-            intercepts = piece_bb & ALL_INTERCEPTS[thread_id];
-            reach = two_reach[(thread_id * 29) + (intercepts % 29)];
-            
-        } else if (piece_type == 3) {
-            intercepts = piece_bb & ALL_INTERCEPTS[thread_id + 36];
-            reach = three_reach[(thread_id * 11007) + (intercepts % 11007)];
+        uint64_t new_state = (end_pos == 100)
+            ? make_bounce_mv(init_state[0], start_pos, pickup_pos)
+            : make_drop_mv(init_state[0], start_pos, pickup_pos, end_pos);
 
-        }
+        shared_new_state = new_state;
 
-        // Mask reach
-        uint64_t masked_reach = reach & (piece_bb | GOALS_MASK);
+    }
 
-        // Store result in shared memory
-        adj_matrix[thread_id] = masked_reach;
-        result_matrix[thread_id] = masked_reach;
+    __syncthreads(); // Sync threads
+
+    // Step 1: Generate Adj Matrix
+    uint8_t piece_type = piece_at(shared_new_state, thread_id);
+    if (piece_type != 0) {
+        uint64_t piece_bb = get_piece_bb(shared_new_state);
+
+        adj_matrix[thread_id] = reach(
+            piece_bb,
+            piece_type,
+            thread_id,
+            one_reach,
+            two_reach,
+            three_reach
+        );
+
+    } else {
+        adj_matrix[thread_id] = 0;
 
     }
     
+    result_matrix[thread_id] = adj_matrix[thread_id];
+
     __syncthreads(); // Sync threads
 
     // Step 2: Bitwise Matrix Multiplication
@@ -332,6 +364,105 @@ extern "C" __global__ void unified_kernel(
         }
 
         routes[matrix_id] = 0.0; // No path to the goal -> blocked the threat
+
+    }
+
+}
+
+// Wavefront variant
+extern "C" __global__ void wavefront_kernel(
+    uint64_t* init_state, // Starting state
+    uint8_t* move_data,   // Move data
+    float* routes,        // Output 
+
+    // Lookup tables
+    const uint64_t* __restrict__ one_reach,
+    const uint64_t* __restrict__ two_reach,
+    const uint64_t* __restrict__ three_reach
+
+) {
+    uint64_t block_id = blockIdx.x;       // Each block processes one matrix
+    uint64_t thread_id = threadIdx.x;     // Each thread processes one row
+
+    // Shared memory
+    __shared__ uint64_t current_frontier; // Current wavefront of nodes
+    __shared__ uint64_t next_frontier;    // Next wavefront of nodes
+    __shared__ uint64_t reached;          // Reached nodes
+
+    __shared__ uint64_t shared_state;
+    __shared__ uint64_t shared_bb;
+
+    if (thread_id == 0) {
+        // Frontiers
+        current_frontier = 0ULL;
+        current_frontier |= (1ULL << 31) | (1ULL << 33); // NEED TO CHANGE
+
+        next_frontier = 0ULL;
+
+        reached = current_frontier;
+        
+        // Shared state
+        uint8_t start_pos = move_data[(block_id * 3)];
+        uint8_t pickup_pos = move_data[(block_id * 3) + 1];
+        uint8_t end_pos = move_data[(block_id * 3) + 2];
+
+        uint64_t new_state = (end_pos == 100)
+            ? make_bounce_mv(init_state[0], start_pos, pickup_pos)
+            : make_drop_mv(init_state[0], start_pos, pickup_pos, end_pos);
+
+        shared_state = new_state;
+        shared_bb = get_piece_bb(new_state);
+
+    }
+
+    __syncthreads(); // Sync threads
+
+    for (int depth = 0; depth < 8; depth++) {
+        // Exit condition
+        if (current_frontier == 0ULL || current_frontier & BIT_36_MASK) {
+            break;
+        }
+
+        if ((1ULL << thread_id) & current_frontier) {
+            uint8_t piece_type = piece_at(shared_state, thread_id);
+            if (piece_type != 0) {
+                uint64_t reachable = reach(
+                    shared_bb,
+                    piece_type,
+                    thread_id,
+                    one_reach,
+                    two_reach,
+                    three_reach
+                );
+
+                // Remove already reached positions
+                reachable &= ~reached;
+
+                // Update next frontier
+                atomicOr(&next_frontier, reachable);
+
+            }
+
+        }
+
+        __syncthreads(); // Sync threads
+
+        // Swap frontiers
+        if (thread_id == 0) {
+            current_frontier = next_frontier;
+            next_frontier = 0ULL;
+
+            atomicOr(&reached, current_frontier);
+
+        }
+
+        __syncthreads(); // Sync threads
+
+    }
+
+    // Store result
+    if (thread_id == 0) {
+        routes[block_id] = (current_frontier & BIT_36_MASK) ? 1.0f : 0.0f;
 
     }
 

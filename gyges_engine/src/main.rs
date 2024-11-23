@@ -9,25 +9,19 @@ extern crate gyges_engine;
 
 // =================================== BLOCKING MOVE GEN ===================================
 
-
-use cust::sys::cuMemHostGetDevicePointer_v2;
 use gyges_engine::merged_reach_consts::*;
 use gyges::{
-    board::{
-        self, TEST_BOARD
-        
-    }, moves::{
-        movegen::{
-            has_threat, piece_control_sqs, valid_moves 
-
-        }, movegen_consts::ALL_THREE_INTERCEPTS, Move
-    }, BitBoard, BoardState, Piece, Player, SQ
+    board::TEST_BOARD, 
+    moves::movegen::{has_threat, piece_control_sqs, valid_moves}, 
+    BitBoard, 
+    BoardState,
+    Piece,
+    Player, 
+    SQ
 
 };
-
-
-use cuda_sys::{cuda::*, cudart::cudaFreeHost};
-use std::{ffi::{c_void, CString}, num, ptr};
+use cuda_sys::cuda::*;
+use std::{ffi::{c_void, CString}, fmt::Display, ptr};
 
 pub fn cuda_init() -> Result<CUcontext, CUresult> {
     // Initialize the CUDA driver
@@ -198,11 +192,9 @@ fn main() -> Result<(), CUresult> {
     // Initialize CUDA
     let _ctx: CUcontext = cuda_init().expect("Failed to initialize CUDA context");
 
-
     // Initialize board
-    let mut board = BoardState::from(TEST_BOARD);
-    // let mut board = BoardState::from(
-    // [
+    let mut board = BoardState::from(TEST_BOARD); // TESTING CASE
+    // let mut board2 = BoardState::from([ // REAL CASE
     //     0, 0, 1, 0, 0, 0,
     //     0, 3, 3, 0, 2, 0,
     //     0, 2, 2, 0, 1, 0,
@@ -211,48 +203,63 @@ fn main() -> Result<(), CUresult> {
     //     0, 0, 1, 0, 2, 0,
     //     0, 0
     // ]);
+    // let mut board = BoardState::from([ // SPARCE CASE
+    //     0, 0, 2, 0, 0, 0,
+    //     0, 0, 0, 0, 0, 0,
+    //     3, 0, 0, 0, 0, 0,
+    //     0, 0, 0, 0, 0, 0,
+    //     0, 0, 0, 0, 0, 0,
+    //     3, 0, 0, 0, 0, 0,
+    //     0, 0
+    // ]);
     let player = Player::One;
     println!("{}", board);
     
     let mut mv_gen = BlockingMoveGen::new().expect("Failed to initialize blocking move generator");
 
     let new_batch = mv_gen.gen(&mut board, player);
-    println!("New Batch: {}", new_batch.len());
+    println!("{:?}", new_batch.len());
 
     unsafe {
         // MAIN BENCHMARKS
-        let iters = 100000;
+        let iters = 10000;
 
-        // NEW
-        let mut num = 0;
-        let start: std::time::Instant = std::time::Instant::now();
-        for _ in 0..iters {
-            let moves = mv_gen.gen(&mut board, player);
-            num += moves.len();
+        for batch in 0..2 {
+            // NEW
+            let mut num = 0;
+            let start: std::time::Instant = std::time::Instant::now();
+            for _ in 0..iters {
+                let moves = mv_gen.gen(&mut board, player);
+                num += moves.len();
+    
+            }
+            let elapsed = start.elapsed().as_secs_f64();
+            println!("{}: WAVE Elapsed: {:?}, {}", batch, elapsed / iters as f64, num);
 
         }
-        let elapsed = start.elapsed().as_secs_f64();
-        println!("New Elapsed: {:?}, {}", elapsed, num);
 
-        // Native
-        let mut num = 0;
-        let start = std::time::Instant::now();
-        for _ in 0..iters {
-            let moves = valid_moves(&mut board, player).moves(&board);
-            let mut pruned = vec![];
-            for mv in moves.iter() {
-                let mut new_board = board.clone().make_move(mv);
-                let has_threat = has_threat(&mut new_board, player.other());
-                if !has_threat {
-                    pruned.push(mv);
-                    num += 1;
+        for batch in 0..2 {
+            // Native
+            let mut num = 0;
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                let moves = valid_moves(&mut board, player).moves(&board);
+                let mut pruned = vec![];
+                for mv in moves.iter() {
+                    let mut new_board = board.clone().make_move(mv);
+                    let has_threat = has_threat(&mut new_board, player.other());
+                    if !has_threat {
+                        pruned.push(mv);
+                        num += 1;
+                    }
+
                 }
 
             }
+            let elapsed = start.elapsed().as_secs_f64();
+            println!("{}: Native Elapsed: {:?}, {}", batch, elapsed / iters as f64, num);
 
         }
-        let elapsed = start.elapsed().as_secs_f64();
-        println!("Native Elapsed: {:?}, {}", elapsed, num);
 
     }
 
@@ -261,7 +268,6 @@ fn main() -> Result<(), CUresult> {
     Ok(())
         
 }
-
 
 pub struct BlockingMoveGen {
     // Lookup tables
@@ -278,17 +284,17 @@ pub struct BlockingMoveGen {
     final_h: *mut f32,
 
     // CUDA
-    module: CUmodule,
-    kernel: CUfunction,
+    _module: CUmodule,
+    wavefront_kernel: CUfunction,
 
 }
 
 impl BlockingMoveGen {
     pub fn new() -> Result<Self, CUresult> {
         // Load kernel from PTX
-        let module: CUmodule = load_module_from_ptx("kernels.ptx")?;
-        let kernel = get_kernel_function(module, "unified_kernel")?;
-
+        let _module: CUmodule = load_module_from_ptx("kernels.ptx")?;
+        let wavefront_kernel = get_kernel_function(_module, "wavefront_kernel")?; // Old kernel: "adj_kernel"
+        
         // Allocate lookup tables
         let one_reach_d = device_mem_alloc::<u64>(36)?;
         mem_copy_to_device(one_reach_d, MERGED_ONE_REACHS.as_ref())?;
@@ -307,16 +313,16 @@ impl BlockingMoveGen {
             one_reach_d,
             two_reach_d,
             three_reach_d,
-    
+
+            state_input_d,
+            state_input_h,
             move_input_d,
             move_input_h,
             final_d,
             final_h,
-            state_input_d,
-            state_input_h,
 
-            module,
-            kernel
+            _module,
+            wavefront_kernel,
 
         })
 
@@ -326,7 +332,7 @@ impl BlockingMoveGen {
         let bit_state = BitState::from(board);
         unsafe { *self.state_input_h = bit_state.0; } // Set the input state
         
-        let mut piece_control: [BitBoard; 6] = unsafe { piece_control_sqs(board, player) };
+        let piece_control: [BitBoard; 6] = unsafe { piece_control_sqs(board, player) };
 
         let active_lines = board.get_active_lines();
         let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
@@ -335,38 +341,42 @@ impl BlockingMoveGen {
         let mut idx = 0;
         for x in 0..6 {
             let starting_sq = active_line_sq + x;
-            let starting_piece = board.piece_at(starting_sq);
-            if starting_piece != Piece::None {
-                for block_pos in piece_control[x].get_data() {
-                    let block_sq = SQ(block_pos as u8);
-                    let block_piece = board.piece_at(block_sq);
-    
-                    if block_piece == Piece::None {
-                        unsafe { self.move_input_h.add(idx * 3).copy_from([starting_sq.0, block_sq.0, 100].as_ptr(), 3); } // Copy move data 
+            if board.piece_at(starting_sq) == Piece::None {
+                continue;
+
+            }
+
+            // Cant reach the starting square
+            let mut new_piece_control = piece_control[x] & !(1 << starting_sq.0);
+
+            for block_pos in new_piece_control.get_data() {
+                let block_sq = SQ(block_pos as u8);
+                let block_piece = board.piece_at(block_sq);
+
+                if block_piece == Piece::None {
+                    unsafe { self.move_input_h.add(idx * 3).copy_from([starting_sq.0, block_sq.0, 100].as_ptr(), 3); } // Copy move data 
+                    idx += 1;
+
+                } else {
+                    for empty_pos in drops.iter() {
+                        unsafe { self.move_input_h.add(idx * 3).copy_from([starting_sq.0, block_sq.0, *empty_pos as u8].as_ptr(), 3); } // Copy move data 
                         idx += 1;
-    
-                    } else {
-                        for empty_pos in drops.iter() {
-                            unsafe { self.move_input_h.add(idx * 3).copy_from([starting_sq.0, block_sq.0, *empty_pos as u8].as_ptr(), 3); } // Copy move data 
-                            idx += 1;
-    
-                        }
-    
+
                     }
-    
+
                 }
 
             }
 
         }
-        let num_boards: u32 = idx as u32;
-
+        let num_moves = idx as u32;
+    
         // Launch kernel
         unsafe {
             cuLaunchKernel(
-                self.kernel,
-                num_boards as u32, 1, 1,
-                38, 1, 1,
+                self.wavefront_kernel,
+                num_moves, 1, 1,
+                36, 1, 1,
                 0,
                 ptr::null_mut(),
                 [
@@ -378,6 +388,7 @@ impl BlockingMoveGen {
                     &mut self.three_reach_d as *mut CUdeviceptr as *mut c_void
                 ].as_ptr() as *mut *mut c_void,
                 ptr::null_mut(),  // No extra arguments
+
             );
 
         }
@@ -385,19 +396,18 @@ impl BlockingMoveGen {
         // Sync results
         unsafe { cuCtxSynchronize(); }
 
-        // IMPACT ON PERFORMANCE: MINIMAL 
         // Filter blocking moves from the results
         let mut blocking_moves = Vec::with_capacity(50);
-        for i in 0..num_boards {
-            if unsafe{ self.final_h.add(i as usize).read() == 0.0 } {
-                unsafe {
+        for i in 0..num_moves {
+            unsafe {
+                if self.final_h.add(i as usize).read() == 0.0 {
                     let mv = self.move_input_h.add(i as usize * 3);
                     blocking_moves.push((mv.read(), mv.add(1).read(), mv.add(2).read()));
-
+         
                 }
-     
-            }
 
+            }
+            
         }
 
         // Return the blocking moves
@@ -599,6 +609,49 @@ impl BitState {
     /// Gets the player to move
     pub fn player(&self) -> u8 {
         (self.0 >> 63) as u8
+
+    }
+
+}
+
+
+impl Display for BitState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.piece_at(37) == 0 {
+            writeln!(f, "                .")?;
+
+        } else {
+            writeln!(f, "                {}", self.piece_at(37))?;
+
+        }
+        writeln!(f, " ")?;
+        writeln!(f, " ")?;
+
+        for y in (0..6).rev() {
+            for x in 0..6 {
+                if self.piece_at(y * 6 + x) == 0 {
+                    write!(f, "    .")?;
+                } else {
+                    write!(f, "    {}", self.piece_at(y * 6 + x))?;
+
+                }
+               
+            }
+            writeln!(f, " ")?;
+            writeln!(f, " ")?;
+
+        }
+
+        writeln!(f, " ")?;
+        if self.piece_at(36) == 0 {
+            writeln!(f, "                .")?;
+
+        } else {
+            writeln!(f, "                {}", self.piece_at(36))?;
+
+        }
+
+        Result::Ok(())
 
     }
 
