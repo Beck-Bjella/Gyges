@@ -508,6 +508,8 @@ __device__ uint64_t remove_piece(uint64_t state, uint8_t pos) {
 
 // ==============================================================
 
+#define MAX_STACK_SIZE 1000
+
 struct OnePath {
     uint64_t backtrack_bb;
     uint8_t p1;
@@ -529,18 +531,13 @@ struct ThreePath {
     uint8_t p4;
 };
 
-// ==============================================================
-
-#define MAX_STACK_SIZE 1000
-
 struct StackData {
     uint64_t banned_bb;
     uint64_t backtrack_bb;
     uint32_t active_line_idx;
     uint8_t current_pos;
     uint8_t current_piece;
-    uint8_t starting_pos;
-    uint8_t starting_piece;
+
 };
 
 struct GenRequest {
@@ -557,378 +554,383 @@ struct GenResult {
     
 };
 
-
-// Gets the idx of the start of a theads stack
-__device__ uint32_t get_stack_idx(uint32_t block_id, uint32_t thread_id) {
-    int idx = (block_id * 36 * MAX_STACK_SIZE) + (thread_id * MAX_STACK_SIZE);
-    return idx;
-    
-}
-
-__device__ uint32_t get_stack_height_idx(uint32_t block_id, uint32_t thread_id) {
-    int idx = (block_id * 36) + thread_id;
-    return idx;
-}
+// ==============================================================
 
 // Pushs to a stach w/o any overflow handling
-__device__ void push(StackData* stack, uint32_t* stack_height, uint32_t stack_idx, uint32_t height_idx, StackData data) {
-    uint32_t* stack_height_ptr = &stack_height[height_idx];
-    uint32_t current_height = atomicAdd(stack_height_ptr, 1); // Get the position to push to
-    stack[stack_idx + current_height] = data;
+__device__ void push(StackData* stack, uint32_t* stack_height, uint32_t block_id, uint32_t type, StackData data) {
+    uint32_t current_height = atomicAdd(stack_height, 1); // Get the position to push to
+    stack[(block_id * MAX_STACK_SIZE * 3) + (type * MAX_STACK_SIZE) + current_height] = data;
 
 }
 
 // Pops from a stack w/o any underflow handling
-__device__ StackData pop(StackData* stack, uint32_t* stack_height, uint32_t stack_idx, uint32_t height_idx) {
-    uint32_t* stack_height_ptr = &stack_height[height_idx];
-    uint32_t current_height = atomicSub(stack_height_ptr, 1) - 1; // Get the position to pop from
-    return stack[stack_idx + current_height];
+__device__ StackData pop(StackData* stack, uint32_t* stack_height, uint32_t block_id, uint32_t type) {
+    uint32_t current_height = atomicSub(stack_height, 1) - 1; // Get the position to pop from
+    return stack[(block_id * MAX_STACK_SIZE * 3) + (type * MAX_STACK_SIZE) + current_height];
 
 }
 
+// ==============================================================
 
+// Lookup tables
+__device__ OnePath* one_paths;
+__device__ TwoPath* two_paths;
+__device__ ThreePath* three_paths;
+__device__ uint16_t* one_path_lists;
+__device__ uint16_t* two_path_lists;
+__device__ uint16_t* three_path_lists;
+__device__ uint8_t* one_map;
+__device__ uint16_t* two_map;
+__device__ uint16_t* three_map;
 
-// WE are going to go to a big work pool, where each thread will process a single item in one stack.
-// Thus the threads directly mean how many items we can process in parallel.
-// We will have a global stack, where each thread will push and pop from.
-// We will have a global stack height, where each thread will update the height of its stack.
+// ==============================================================
 
-// This will still allow multiple blocks, beacuse each block will have its own stack and stack height.
+__device__ void process_one(
+    StackData* stack, 
+    uint32_t* one_stack_height, 
+    uint32_t* two_stack_height,
+    uint32_t* three_stack_height,
+    StackData current_data,
+    uint64_t current_state,
+    uint64_t end_positions,
+    uint64_t* local_end_positions, 
+    uint64_t* local_pickup_positions,
+    uint64_t block_id
+) {
+    uint16_t path_list_idx = one_map[current_data.current_pos];
+    uint16_t path_list_len = one_path_lists[(path_list_idx * 5) + 4];
+
+    for (int i = 0; i < path_list_len; i++) {
+        uint16_t path_idx = one_path_lists[(path_list_idx * 5) + i];
+        OnePath path = one_paths[path_idx];
+
+        uint8_t end_pos = path.p2;
+        uint64_t end_bit = (uint64_t)1 << end_pos;
+
+        uint64_t end_pos_banned = (current_data.banned_bb | end_positions) & end_bit;
+        uint64_t backtrack_conflict = current_data.backtrack_bb & path.backtrack_bb; 
+        bool valid_player = !(((end_bit & BIT_36_MASK) && 0 == 0) || ((end_bit & BIT_37_MASK) && 0 == 1));
+
+        if (backtrack_conflict || end_pos_banned || !valid_player) {
+            continue;
+
+        }           
+            
+        uint64_t end_piece = piece_at(current_state, end_pos);
+        bool is_empty = (end_piece == 0);
+
+        if (is_empty) {
+            *local_end_positions |= end_bit;
+
+        } else {
+            uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
+            uint64_t new_backtrack_bb = current_data.backtrack_bb ^ path.backtrack_bb;
+            
+            *local_pickup_positions |= end_bit;
+
+            StackData new_data = {
+                new_banned_bb,
+                new_backtrack_bb,
+                current_data.active_line_idx,
+                end_pos,
+                (uint8_t)end_piece,
+            };
+
+            int stack_type = end_piece - 1;
+            push(
+                stack, 
+                (stack_type == 0) ? one_stack_height : (stack_type == 1) ? two_stack_height : three_stack_height, 
+                block_id, 
+                stack_type, 
+                new_data
+            );
+
+        }
+            
+    }
+
+}
+
+__device__ void process_two(
+    StackData* stack, 
+    uint32_t* one_stack_height, 
+    uint32_t* two_stack_height,
+    uint32_t* three_stack_height,
+    StackData current_data, 
+    uint64_t current_state,
+    uint64_t end_positions,
+    uint64_t* local_end_positions, 
+    uint64_t* local_pickup_positions,
+    uint64_t block_id
+) {
+    uint64_t intercept_bb = get_piece_bb(current_state) & ALL_INTERCEPTS[current_data.current_pos];
+
+    uint16_t path_list_idx = two_map[(current_data.current_pos * 29) + (intercept_bb % 29)];
+    uint16_t path_list_len = two_path_lists[(path_list_idx * 13) + 12];
+
+    for (int i = 0; i < path_list_len; i++) {
+        uint16_t path_idx = two_path_lists[(path_list_idx * 13) + i];
+        TwoPath path = two_paths[path_idx];
+
+        uint8_t end_pos = path.p3;
+        uint64_t end_bit = (uint64_t)1 << end_pos;
+
+        uint64_t end_pos_banned = (current_data.banned_bb | end_positions) & end_bit;
+        uint64_t backtrack_conflict = current_data.backtrack_bb & path.backtrack_bb; 
+        bool valid_player = !(((end_bit & BIT_36_MASK) && 0 == 0) || ((end_bit & BIT_37_MASK) && 0 == 1));
+
+        if (backtrack_conflict || end_pos_banned || !valid_player) {
+            continue;
+
+        }           
+            
+        uint64_t end_piece = piece_at(current_state, end_pos);
+        bool is_empty = (end_piece == 0);
+
+        if (is_empty) {
+            *local_end_positions |= end_bit;
+
+        } else {
+            uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
+            uint64_t new_backtrack_bb = current_data.backtrack_bb ^ path.backtrack_bb;
+            
+            *local_pickup_positions |= end_bit;
+
+            StackData new_data = {
+                new_banned_bb,
+                new_backtrack_bb,
+                current_data.active_line_idx,
+                end_pos,
+                (uint8_t)end_piece,
+            };
+
+            int stack_type = end_piece - 1;
+            push(
+                stack, 
+                (stack_type == 0) ? one_stack_height : (stack_type == 1) ? two_stack_height : three_stack_height, 
+                block_id, 
+                stack_type, 
+                new_data
+            );
+
+        }
+
+    }
+
+}
+
+__device__ void process_three(
+    StackData* stack, 
+    uint32_t* one_stack_height, 
+    uint32_t* two_stack_height,
+    uint32_t* three_stack_height,
+    StackData current_data, 
+    uint64_t current_state,
+    uint64_t end_positions,
+    uint64_t* local_end_positions, 
+    uint64_t* local_pickup_positions,
+    uint64_t block_id
+) {
+    uint64_t intercept_bb = get_piece_bb(current_state) & ALL_INTERCEPTS[current_data.current_pos + 36];
+
+    uint16_t path_list_idx = three_map[(current_data.current_pos * 11007) + (intercept_bb % 11007)];
+    uint16_t path_list_len = three_path_lists[(path_list_idx * 36) + 35];
+
+    for (int i = 0; i < path_list_len; i++) {
+        uint16_t path_idx = three_path_lists[(path_list_idx * 36) + i];
+        ThreePath path = three_paths[path_idx];
+
+        uint8_t end_pos = path.p4;
+        uint64_t end_bit = (uint64_t)1 << end_pos;
+
+        uint64_t end_pos_banned = (current_data.banned_bb | end_positions) & end_bit;
+        uint64_t backtrack_conflict = current_data.backtrack_bb & path.backtrack_bb; 
+        bool valid_player = !(((end_bit & BIT_36_MASK) && 0 == 0) || ((end_bit & BIT_37_MASK) && 0 == 1));
+
+        if (backtrack_conflict || end_pos_banned || !valid_player) {
+            continue;
+
+        }           
+            
+        uint64_t end_piece = piece_at(current_state, end_pos);
+        bool is_empty = (end_piece == 0);
+
+        if (is_empty) {
+            *local_end_positions |= end_bit;
+
+        } else {
+            uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
+            uint64_t new_backtrack_bb = current_data.backtrack_bb ^ path.backtrack_bb;
+            
+            *local_pickup_positions |= end_bit;
+
+            StackData new_data = {
+                new_banned_bb,
+                new_backtrack_bb,
+                current_data.active_line_idx,
+                end_pos,
+                (uint8_t)end_piece,
+            };
+
+            int stack_type = end_piece - 1;
+            push(
+                stack, 
+                (stack_type == 0) ? one_stack_height : (stack_type == 1) ? two_stack_height : three_stack_height, 
+                block_id, 
+                stack_type, 
+                new_data
+            );
+
+        }
+
+    } 
+
+}
 
 extern "C" __global__ void gen_kernel(
-    // Input & Output
     const GenRequest* __restrict__ in_data,
-    GenResult* out_data,   
-
-    // Stack
-    StackData* stack,           // Global stack
-    uint32_t* stack_height,     // The height of each stack
-
-    // Lookup tables
-    const OnePath* __restrict__ one_paths,
-    const TwoPath* __restrict__ two_paths,
-    const ThreePath* __restrict__ three_paths,
-    const uint16_t* __restrict__ one_path_lists,
-    const uint16_t* __restrict__ two_path_lists,
-    const uint16_t* __restrict__ three_path_lists,
-    const uint8_t* __restrict__ one_map,
-    const uint16_t* __restrict__ two_map,
-    const uint16_t* __restrict__ three_map
+    GenResult* out_data,  
+    StackData* stack
+    
 ) {
     uint32_t block_id = blockIdx.x;       // Each block processes one generation request
-    uint32_t thread_id = threadIdx.x;     // Each thread processes one postion
+    uint32_t thread_id = threadIdx.x;     // 
+    uint32_t warp_id = threadIdx.x / 32;  //
+    uint32_t lane_id = threadIdx.x % 32;  // 
 
-    // Init board
-    __shared__ uint64_t init_state;
+    // Init Shared Memory
+    __shared__ uint32_t one_stack_height;       // Stack height for ones
+    __shared__ uint32_t two_stack_height;       // Stack height for twos
+    __shared__ uint32_t three_stack_height;     // Stack height for threes
+    __shared__ uint64_t init_state;             // Initial state
+    __shared__ uint64_t end_positions[6];       // End positions
+    __shared__ uint64_t pickup_positions[6];    // Pickup positions
+    __shared__ uint64_t drop_positions;         // Drop positions
     if (thread_id == 0) {
+        one_stack_height = 0;
+        two_stack_height = 0;
+        three_stack_height = 0;
         init_state = in_data[block_id].state;
 
-    }
+        for (int i = 0; i < 6; i++) {
+            end_positions[i] = 0ULL;
+            pickup_positions[i] = 0ULL;
 
-    // Init starting states
-    __shared__ uint64_t starting_states[6];
-
-    // Result storage
-    __shared__ uint64_t end_positions[6];
-    __shared__ uint64_t pickup_positions[6];
-    if (thread_id < 6) {
-        end_positions[thread_id] = 0ULL;
-        pickup_positions[thread_id] = 0ULL;
-
-    }
-
-    // Drop positions
-    __shared__ uint64_t drop_positions;
-    if (thread_id == 0) {
+        }
         drop_positions = (~init_state & 0b111111111111111111111111111111111111ULL);
-        
-    }
-
-    // Shared stop condition
-    __shared__ unsigned int continue_processing;
-    if (thread_id == 0) {
-        continue_processing = 1;
 
     }
 
     __syncthreads(); // Sync threads
     
     // Setup
+    __shared__ uint64_t starting_states[6]; // Starting states for active line
     uint64_t start_bb = in_data[block_id].active_bb;
-    if ((1ULL << thread_id) & start_bb) {
-        // Save starting info to shared memory
+    if (((1ULL << thread_id) & start_bb) && thread_id < 6) {
         uint64_t new_state = remove_piece(init_state, thread_id);
         starting_states[thread_id] = new_state; // WRONG INDEX -> ONLY WORKS WHEN STARTING LINE IS ON THE FIRST ROW
 
-        // Store starting data into stack
+        // Create init stack data
+        uint8_t piece = piece_at(init_state, thread_id);
         StackData data = {
             0ULL,
             0ULL,
             thread_id, // WRONG INDEX -> ONLY WORKS WHEN STARTING LINE IS ON THE FIRST ROW
             (uint8_t)thread_id, 
-            piece_at(init_state, thread_id),
-            (uint8_t)thread_id,
-            piece_at(init_state, thread_id)
+            piece,
         };
 
-        uint32_t stack_idx = get_stack_idx(block_id, thread_id);
-        uint32_t height_idx = get_stack_height_idx(block_id, thread_id);
-        push(stack, stack_height, stack_idx, height_idx, data);
+        // Push to stack
+        int stack_type = piece - 1;
+        push(
+            stack, 
+            (stack_type == 0) ? &one_stack_height : (stack_type == 1) ? &two_stack_height : &three_stack_height, 
+            block_id, 
+            stack_type, 
+            data
+        );
 
     }
-
+    
     __syncthreads(); // Sync threads
 
-    // TESTING PURPOSES
-    uint16_t player = 0;    
-
     // MAIN PROCESSING LOOP
-    // int counter = 0;
     while (true) {
-        if (thread_id == 0) {
-            continue_processing = 0;
-
-        }
-
-        __syncthreads(); // Sync threads
-
-        // Has elements in stack
-        uint32_t stack_idx = get_stack_idx(block_id, thread_id);
-        uint32_t height_idx = get_stack_height_idx(block_id, thread_id);
-        uint32_t curr_height = stack_height[height_idx];
-
-        if (curr_height > 1 && continue_processing == 0) {
-            atomicOr(&continue_processing, 1);
-        }
-        
-        if (curr_height != 0) {
-            // Process an item
-            StackData current_data = pop(stack, stack_height, stack_idx, height_idx);
+        if (warp_id == 0 && lane_id < one_stack_height) { // ONES -> warp 0
+            StackData current_data = pop(stack, &one_stack_height, block_id, 0);
             uint64_t current_state = starting_states[current_data.active_line_idx];
 
-            if (current_data.current_piece == 1) { // ONES
-                uint16_t path_list_idx = one_map[thread_id];
-                uint16_t path_list_len = one_path_lists[(path_list_idx * 5) + 4];
+            uint64_t local_end_positions = 0ULL;
+            uint64_t local_pickup_positions = 0ULL;
 
-                for (int i = 0; i < path_list_len; i++) {
-                    uint16_t path_idx = one_path_lists[(path_list_idx * 5) + i];
-                    OnePath path = one_paths[path_idx];
+            process_one(
+                stack,
+                &one_stack_height,
+                &two_stack_height,
+                &three_stack_height,
+                current_data,
+                current_state,
+                end_positions[current_data.active_line_idx],
+                &local_end_positions,
+                &local_pickup_positions,
+                block_id
+            );
 
-                    if (current_data.backtrack_bb & path.backtrack_bb) {
-                        continue;
+            atomicOr(&end_positions[current_data.active_line_idx], local_end_positions);
+            atomicOr(&pickup_positions[current_data.active_line_idx], local_pickup_positions);
 
-                    }
+        } else if (warp_id == 1 && lane_id < two_stack_height) { // TWOS -> warp 1
+            StackData current_data = pop(stack, &two_stack_height, block_id, 1);
+            uint64_t current_state = starting_states[current_data.active_line_idx];
 
-                    uint8_t end_pos = path.p2;
-                    uint64_t end_bit = (uint64_t)1 << end_pos;
+            uint64_t local_end_positions = 0ULL;
+            uint64_t local_pickup_positions = 0ULL;
 
-                    if (end_positions[current_data.active_line_idx] & end_bit) {
-                        continue;
+            process_two(
+                stack,
+                &one_stack_height,
+                &two_stack_height,
+                &three_stack_height,
+                current_data,
+                current_state,
+                end_positions[current_data.active_line_idx],
+                &local_end_positions,
+                &local_pickup_positions,
+                block_id
+            );
 
-                    }
+            atomicOr(&end_positions[current_data.active_line_idx], local_end_positions);
+            atomicOr(&pickup_positions[current_data.active_line_idx], local_pickup_positions);
 
-                    if (end_bit & BIT_36_MASK) {
-                        if (player == 0) {
-                            continue;
-                        }
-                        atomicOr(&end_positions[current_data.active_line_idx], end_bit);
+        } else if (warp_id == 2 && lane_id < three_stack_height) { // THREES -> warp 2
+            StackData current_data = pop(stack, &three_stack_height, block_id, 2);
+            uint64_t current_state = starting_states[current_data.active_line_idx];
 
-                    } else if (end_bit & BIT_37_MASK) {
-                        if (player == 1) {
-                            continue;
-                        }
-                        atomicOr(&end_positions[current_data.active_line_idx], end_bit);
+            uint64_t local_end_positions = 0ULL;
+            uint64_t local_pickup_positions = 0ULL;
 
-                    }
+            process_three(
+                stack,
+                &one_stack_height,
+                &two_stack_height,
+                &three_stack_height,
+                current_data,
+                current_state,
+                end_positions[current_data.active_line_idx],
+                &local_end_positions,
+                &local_pickup_positions,
+                block_id
+            );
 
-                    uint64_t end_piece = piece_at(current_state, end_pos);
-                    if (end_piece != 0) {
-                        if ((current_data.banned_bb & end_bit) == 0) {
-                            uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
-                            uint64_t new_backtrack_bb = current_data.backtrack_bb ^ path.backtrack_bb;
-
-                            atomicOr(&pickup_positions[current_data.active_line_idx], end_bit);
-
-                            StackData new_data = {
-                                new_banned_bb,
-                                new_backtrack_bb,
-                                current_data.active_line_idx,
-                                end_pos,
-                                (uint8_t)end_piece,
-                                current_data.starting_pos,
-                                current_data.starting_piece
-                            };
-
-                            uint32_t stack_idx = get_stack_idx(block_id, end_pos);
-                            uint32_t height_idx = get_stack_height_idx(block_id, end_pos);
-                            push(stack, stack_height, stack_idx, height_idx, new_data);
-
-                            if (continue_processing == 0) {
-                                atomicOr(&continue_processing, 1);
-                            }
-
-                        }
-
-                    } else {
-                        atomicOr(&end_positions[current_data.active_line_idx], end_bit);
-
-                    }
-                        
-                }
-
-            } else if (current_data.current_piece == 2) { // TWOS
-                uint64_t intercept_bb = get_piece_bb(current_state) & ALL_INTERCEPTS[thread_id];
-
-                uint16_t path_list_idx = two_map[(thread_id * 29) + (intercept_bb % 29)];
-                uint16_t path_list_len = two_path_lists[(path_list_idx * 13) + 12];
-
-                for (int i = 0; i < path_list_len; i++) {
-                    uint16_t path_idx = two_path_lists[(path_list_idx * 13) + i];
-                    TwoPath path = two_paths[path_idx];
-
-                    if (current_data.backtrack_bb & path.backtrack_bb) {
-                        continue;
-
-                    }
-
-                    uint8_t end_pos = path.p3;
-                    uint64_t end_bit = (uint64_t)1 << end_pos;
-
-                    if (end_positions[current_data.active_line_idx] & end_bit) {
-                        continue;
-
-                    }
-
-                    if (end_bit & BIT_36_MASK) {
-                        if (player == 0) {
-                            continue;
-                        }
-                        atomicOr(&end_positions[current_data.active_line_idx], end_bit);
-                        
-                    } else if (end_bit & BIT_37_MASK) {
-                        if (player == 1) {
-                            continue;
-                        }
-                        atomicOr(&end_positions[current_data.active_line_idx], end_bit);
-
-                    }
-
-                    uint64_t end_piece = piece_at(current_state, end_pos);
-                    if (end_piece != 0) {
-                        if ((current_data.banned_bb & end_bit) == 0) {
-                            uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
-                            uint64_t new_backtrack_bb = current_data.backtrack_bb ^ path.backtrack_bb;
-
-                            atomicOr(&pickup_positions[current_data.active_line_idx], end_bit);
-
-                            StackData new_data = {
-                                new_banned_bb,
-                                new_backtrack_bb,
-                                current_data.active_line_idx,
-                                end_pos,
-                                (uint8_t)end_piece,
-                                current_data.starting_pos,
-                                current_data.starting_piece
-                            };
-
-                            uint32_t stack_idx = get_stack_idx(block_id, end_pos);
-                            uint32_t height_idx = get_stack_height_idx(block_id, end_pos);
-                            push(stack, stack_height, stack_idx, height_idx, new_data);
-
-                            if (continue_processing == 0) {
-                                atomicOr(&continue_processing, 1);
-                            }
-
-                        }
-
-                    } else {
-                        atomicOr(&end_positions[current_data.active_line_idx], end_bit);
-
-                    }
-
-                }
-
-            } else if (current_data.current_piece == 3) {
-                uint64_t intercept_bb = get_piece_bb(current_state) & ALL_INTERCEPTS[thread_id + 36];
-
-                uint16_t path_list_idx = three_map[(thread_id * 11007) + (intercept_bb % 11007)];
-                uint16_t path_list_len = three_path_lists[(path_list_idx * 36) + 35];
-
-                for (int i = 0; i < path_list_len; i++) {
-                    uint16_t path_idx = three_path_lists[(path_list_idx * 36) + i];
-                    ThreePath path = three_paths[path_idx];
-
-                    if (current_data.backtrack_bb & path.backtrack_bb) {
-                        continue;
-
-                    }
-
-                    uint8_t end_pos = path.p4;
-                    uint64_t end_bit = (uint64_t)1 << end_pos;
-
-                    if (end_positions[current_data.active_line_idx] & end_bit) {
-                        continue;
-
-                    }
-
-                    if (end_bit & BIT_36_MASK) {
-                        if (player == 0) {
-                            continue;
-                        }
-                        atomicOr(&end_positions[current_data.active_line_idx], end_bit);
-                        
-                    } else if (end_bit & BIT_37_MASK) {
-                        if (player == 1) {
-                            continue;
-                        }
-                        atomicOr(&end_positions[current_data.active_line_idx], end_bit);
-
-                    }
-                        
-                    uint64_t end_piece = piece_at(current_state, end_pos);
-                    if (end_piece != 0) {
-                        if ((current_data.banned_bb & end_bit) == 0) {
-                            uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
-                            uint64_t new_backtrack_bb = current_data.backtrack_bb ^ path.backtrack_bb;
-                            
-                            atomicOr(&pickup_positions[current_data.active_line_idx], end_bit);
-
-                            StackData new_data = {
-                                new_banned_bb,
-                                new_backtrack_bb,
-                                current_data.active_line_idx,
-                                end_pos,
-                                (uint8_t)end_piece,
-                                current_data.starting_pos,
-                                current_data.starting_piece
-                            };
-
-                            uint32_t stack_idx = get_stack_idx(block_id, end_pos);
-                            uint32_t height_idx = get_stack_height_idx(block_id, end_pos);
-                            push(stack, stack_height, stack_idx, height_idx, new_data);
-
-                            if (continue_processing == 0) {
-                                atomicOr(&continue_processing, 1);
-                            }
-      
-                        }
-
-                    } else {
-                        atomicOr(&end_positions[current_data.active_line_idx], end_bit);
-
-                    }
-
-                } 
-
-            }
+            atomicOr(&end_positions[current_data.active_line_idx], local_end_positions);
+            atomicOr(&pickup_positions[current_data.active_line_idx], local_pickup_positions);
 
         }
 
-        // === STOP CONDITION ===
-
         __syncthreads(); // Sync threads
 
-        if (continue_processing == 0) {
+        // Exit condition
+        if (one_stack_height == 0 && two_stack_height == 0 && three_stack_height == 0) {
             break;
 
         }
@@ -950,5 +952,302 @@ extern "C" __global__ void gen_kernel(
         out_data[block_id] = result;
 
     }
-    
+
 }
+
+// ==============================================================
+
+
+// extern "C" __global__ void gen_kernel(
+//     const GenRequest* __restrict__ in_data,
+//     GenResult* out_data,   
+//     StackData* stack
+    
+// ) {
+//     uint32_t block_id = blockIdx.x;       // Each block processes one generation request
+//     uint32_t thread_id = threadIdx.x;     // Each thread processes one postion
+
+//     // Init Shared Memory
+//     __shared__ uint32_t stack_height;           // Stack height
+//     __shared__ uint64_t init_state;             // Initial state
+//     __shared__ uint64_t end_positions[6];       // End positions
+//     __shared__ uint64_t pickup_positions[6];    // Pickup positions
+//     __shared__ uint64_t drop_positions;         // Drop positions
+//     if (thread_id == 0) {
+//         stack_height = 0;
+//         init_state = in_data[block_id].state;
+
+//         for (int i = 0; i < 6; i++) {
+//             end_positions[i] = 0ULL;
+//             pickup_positions[i] = 0ULL;
+
+//         }
+//         drop_positions = (~init_state & 0b111111111111111111111111111111111111ULL);
+
+//     }
+
+//     __syncthreads(); // Sync threads
+    
+//     // Setup
+//     __shared__ uint64_t starting_states[6]; // Starting states
+//     uint64_t start_bb = in_data[block_id].active_bb;
+//     if ((1ULL << thread_id) & start_bb) {
+//         // Save starting info to shared memory
+//         uint64_t new_state = remove_piece(init_state, thread_id);
+//         starting_states[thread_id] = new_state; // WRONG INDEX -> ONLY WORKS WHEN STARTING LINE IS ON THE FIRST ROW
+
+//         // Store starting data into stack
+//         StackData data = {
+//             0ULL,
+//             0ULL,
+//             thread_id, // WRONG INDEX -> ONLY WORKS WHEN STARTING LINE IS ON THE FIRST ROW
+//             (uint8_t)thread_id, 
+//             piece_at(init_state, thread_id),
+//         };
+
+//         push(stack, &stack_height, block_id, data);
+
+//     }
+
+//     __syncthreads(); // Sync threads
+
+//     // TESTING PURPOSES
+//     uint16_t player = 0;    
+
+//     // MAIN PROCESSING LOOP
+//     while (true) {
+//         if (thread_id < stack_height) {
+//             StackData current_data = pop(stack, &stack_height, block_id);
+//             uint64_t current_state = starting_states[current_data.active_line_idx];
+
+//             uint64_t local_end_positions = 0ULL;
+//             uint64_t local_pickup_positions = 0ULL;
+
+//             if (current_data.current_piece == 1) { // ONES
+//                 uint16_t path_list_idx = one_map[current_data.current_pos];
+//                 uint16_t path_list_len = one_path_lists[(path_list_idx * 5) + 4];
+
+//                 for (int i = 0; i < path_list_len; i++) {
+//                     uint16_t path_idx = one_path_lists[(path_list_idx * 5) + i];
+//                     OnePath path = one_paths[path_idx];
+
+//                     if (current_data.backtrack_bb & path.backtrack_bb) {
+//                         continue;
+
+//                     }
+
+//                     uint8_t end_pos = path.p2;
+//                     uint64_t end_bit = (uint64_t)1 << end_pos;
+
+//                     if (end_positions[current_data.active_line_idx] & end_bit) {
+//                         continue;
+
+//                     }
+
+//                     if (end_bit & BIT_36_MASK) {
+//                         if (player == 0) {
+//                             continue;
+//                         }
+//                         local_end_positions |= end_bit;
+
+//                     } else if (end_bit & BIT_37_MASK) {
+//                         if (player == 1) {
+//                             continue;
+//                         }
+//                         local_end_positions |= end_bit;
+
+//                     }
+
+//                     uint64_t end_piece = piece_at(current_state, end_pos);
+//                     if (end_piece != 0) {
+//                         if ((current_data.banned_bb & end_bit) == 0) {
+//                             uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
+//                             uint64_t new_backtrack_bb = current_data.backtrack_bb ^ path.backtrack_bb;
+
+//                             local_pickup_positions |= end_bit;
+
+//                             StackData new_data = {
+//                                 new_banned_bb,
+//                                 new_backtrack_bb,
+//                                 current_data.active_line_idx,
+//                                 end_pos,
+//                                 (uint8_t)end_piece,
+//                             };
+
+//                             push(stack, &stack_height, block_id, new_data);
+
+//                         }
+
+//                     } else {
+//                         local_end_positions |= end_bit;
+
+//                     }
+                        
+//                 }
+
+//             } else if (current_data.current_piece == 2) { // TWOS
+//                 uint64_t intercept_bb = get_piece_bb(current_state) & ALL_INTERCEPTS[current_data.current_pos];
+
+//                 uint16_t path_list_idx = two_map[(current_data.current_pos * 29) + (intercept_bb % 29)];
+//                 uint16_t path_list_len = two_path_lists[(path_list_idx * 13) + 12];
+
+//                 for (int i = 0; i < path_list_len; i++) {
+//                     uint16_t path_idx = two_path_lists[(path_list_idx * 13) + i];
+//                     TwoPath path = two_paths[path_idx];
+
+//                     if (current_data.backtrack_bb & path.backtrack_bb) {
+//                         continue;
+
+//                     }
+
+//                     uint8_t end_pos = path.p3;
+//                     uint64_t end_bit = (uint64_t)1 << end_pos;
+
+//                     if (end_positions[current_data.active_line_idx] & end_bit) {
+//                         continue;
+
+//                     }
+
+//                     if (end_bit & BIT_36_MASK) {
+//                         if (player == 0) {
+//                             continue;
+//                         }
+//                         local_end_positions |= end_bit;
+                        
+//                     } else if (end_bit & BIT_37_MASK) {
+//                         if (player == 1) {
+//                             continue;
+//                         }
+//                         local_end_positions |= end_bit;
+
+//                     }
+
+//                     uint64_t end_piece = piece_at(current_state, end_pos);
+//                     if (end_piece != 0) {
+//                         if ((current_data.banned_bb & end_bit) == 0) {
+//                             uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
+//                             uint64_t new_backtrack_bb = current_data.backtrack_bb ^ path.backtrack_bb;
+
+//                             local_pickup_positions |= end_bit;
+
+//                             StackData new_data = {
+//                                 new_banned_bb,
+//                                 new_backtrack_bb,
+//                                 current_data.active_line_idx,
+//                                 end_pos,
+//                                 (uint8_t)end_piece,
+//                             };
+
+//                             push(stack, &stack_height, block_id, new_data);
+
+//                         }
+
+//                     } else {
+//                         local_end_positions |= end_bit;
+
+//                     }
+
+//                 }
+
+//             } else if (current_data.current_piece == 3) {
+//                 uint64_t intercept_bb = get_piece_bb(current_state) & ALL_INTERCEPTS[current_data.current_pos + 36];
+
+//                 uint16_t path_list_idx = three_map[(current_data.current_pos * 11007) + (intercept_bb % 11007)];
+//                 uint16_t path_list_len = three_path_lists[(path_list_idx * 36) + 35];
+
+//                 for (int i = 0; i < path_list_len; i++) {
+//                     uint16_t path_idx = three_path_lists[(path_list_idx * 36) + i];
+//                     ThreePath path = three_paths[path_idx];
+
+//                     if (current_data.backtrack_bb & path.backtrack_bb) {
+//                         continue;
+
+//                     }
+
+//                     uint8_t end_pos = path.p4;
+//                     uint64_t end_bit = (uint64_t)1 << end_pos;
+
+//                     if (end_positions[current_data.active_line_idx] & end_bit) {
+//                         continue;
+
+//                     }
+
+//                     if (end_bit & BIT_36_MASK) {
+//                         if (player == 0) {
+//                             continue;
+//                         }
+//                         local_end_positions |= end_bit;
+       
+//                     } else if (end_bit & BIT_37_MASK) {
+//                         if (player == 1) {
+//                             continue;
+//                         }
+//                         local_end_positions |= end_bit;
+               
+//                     }
+                        
+//                     uint64_t end_piece = piece_at(current_state, end_pos);
+//                     if (end_piece != 0) {
+//                         if ((current_data.banned_bb & end_bit) == 0) {
+//                             uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
+//                             uint64_t new_backtrack_bb = current_data.backtrack_bb ^ path.backtrack_bb;
+                            
+//                             local_pickup_positions |= end_bit;
+
+//                             StackData new_data = {
+//                                 new_banned_bb,
+//                                 new_backtrack_bb,
+//                                 current_data.active_line_idx,
+//                                 end_pos,
+//                                 (uint8_t)end_piece,
+//                             };
+
+//                             push(stack, &stack_height, block_id, new_data);
+                            
+//                         }
+
+//                     } else {
+//                         local_end_positions |= end_bit;
+
+//                     }
+
+//                 } 
+
+//             }
+
+//             // Sync Data
+//             if (current_data.current_piece != 0) {
+//                 atomicOr(&end_positions[current_data.active_line_idx], local_end_positions);
+//                 atomicOr(&pickup_positions[current_data.active_line_idx], local_pickup_positions);
+
+//             }
+            
+//         }
+
+//         __syncthreads(); // Sync threads
+
+//         // Exit condition
+//         if (stack_height == 0) {
+//             break;
+
+//         }
+
+//     }
+
+//     __syncthreads(); // Sync threads
+
+//     // Store results
+//     if (thread_id == 0) {
+//         GenResult result;
+//         for (int i = 0; i < 6; i++) {
+//             result.end_positions[i] = end_positions[i];
+//             result.pickup_positions[i] = pickup_positions[i];
+
+//         }
+//         result.drop_positions = drop_positions;
+
+//         out_data[block_id] = result;
+
+//     }
+
+// }

@@ -11,12 +11,11 @@ extern crate gyges_engine;
 
 use gyges_engine::merged_reach_consts::*;
 use gyges::{
-    board::TEST_BOARD, core::masks::RANKS, moves::{movegen::{has_threat, piece_control_sqs, valid_moves}, movegen_consts::{ONE_MAP, THREE_MAP, TWO_MAP, UNIQUE_ONE_PATHS, UNIQUE_ONE_PATH_LISTS, UNIQUE_THREE_PATHS, UNIQUE_THREE_PATH_LISTS, UNIQUE_TWO_PATHS, UNIQUE_TWO_PATH_LISTS}, Move, MoveType}, BitBoard, BoardState, Piece, Player, SQ
+    board::TEST_BOARD, core::masks::RANKS, moves::{movegen::{piece_control_sqs, valid_moves}, movegen_consts::{ONE_MAP, THREE_MAP, TWO_MAP, UNIQUE_ONE_PATHS, UNIQUE_ONE_PATH_LISTS, UNIQUE_THREE_PATHS, UNIQUE_THREE_PATH_LISTS, UNIQUE_TWO_PATHS, UNIQUE_TWO_PATH_LISTS}, Move, MoveType}, BitBoard, BoardState, Piece, Player, SQ
 
 };
 use cuda_sys::cuda::*;
-use rayon::iter;
-use std::{ffi::{c_void, CString}, fmt::Display, process::exit, ptr, thread};
+use std::{ffi::{c_void, CString}, fmt::Display, ptr};
 
 // =================================== MOVE GEN ===================================
 
@@ -39,22 +38,17 @@ fn main() -> Result<(), CUresult> {
 
     let mut mg = MoveGen::new().expect("Failed to initialize move generator");
 
-    // let moves = mg.gen(&mut board, player);
-    // let new: Vec<Move> = decode_moves(&mut board, &moves[0]);
+    let moves = mg.gen(&mut board, player);
+    let new: Vec<Move> = decode_moves(&mut board, &moves[0]);
 
-    // let mut moves = unsafe { valid_moves(&mut board, player) };
-    // let real: Vec<Move> = moves.moves(&board);
+    let mut moves = unsafe { valid_moves(&mut board, player) };
+    let real: Vec<Move> = moves.moves(&board);
 
-    // println!("Real: {}, New: {}", real.len(), new.len());
-
-    // for i in 0..real.len() {
-    //     println!("{}     --->      {}", real[i], new[i]);
-
-    // }
+    println!("Real: {}, New: {}", real.len(), new.len());
     
     // BENCHMARKS
     unsafe {
-        let iters = 10000;
+        let iters = 50000;
 
         for batch in 0..3 {
             // NEW
@@ -62,9 +56,10 @@ fn main() -> Result<(), CUresult> {
             let start: std::time::Instant = std::time::Instant::now();
             for _ in 0..iters {
                 let moves: Vec<GenResult> = mg.gen(&mut board, player);
-                let dec = decode_moves(&mut board, &moves[0]);
-                
-                num += dec.len();
+                // let dec = decode_moves(&mut board, &moves[0]);
+                // num += dec.len();
+
+                num += 1;
                
             }
             let elapsed = start.elapsed().as_secs_f64();
@@ -79,9 +74,10 @@ fn main() -> Result<(), CUresult> {
             let start = std::time::Instant::now();
             for _ in 0..iters {
                 let mut moves = valid_moves(&mut board, player);
-                let dec = moves.moves(&board);
+                // let dec = moves.moves(&board);
+                // num += dec.len();
 
-                num += dec.len();
+                num += 1;
                
             }
             let elapsed = start.elapsed().as_secs_f64();
@@ -97,33 +93,52 @@ fn main() -> Result<(), CUresult> {
 
 }
 
-pub struct MoveGen {
-    // GPU Lookup tables
-    unique_one_paths_d: CUdeviceptr,
-    unique_two_paths_d: CUdeviceptr,
-    unique_three_paths_d: CUdeviceptr,
-    unique_one_paths_list_d: CUdeviceptr,
-    unique_two_paths_list_d: CUdeviceptr,
-    unique_three_paths_list_d: CUdeviceptr,
-    one_map_d: CUdeviceptr,
-    two_map_d: CUdeviceptr,
-    three_map_d: CUdeviceptr,
 
-    // GPU Stack buffers
-    stack_d: CUdeviceptr,
-    stack_height_d: CUdeviceptr,
 
-    // Input & Output Buffers
-    input_d: CUdeviceptr,
-    input_h: *mut GenRequest,
-    final_d: CUdeviceptr,
-    final_h: *mut GenResult,
+// CHATGPT GENERATED
+pub unsafe fn set_symbol_device_pointer(
+    module: CUmodule,               // The loaded CUDA module
+    symbol_name: &str,              // The symbol name (device variable)
+    device_ptr: CUdeviceptr,        // The device pointer to copy to the symbol
+) -> Result<(), CUresult> {
+    let mut symbol_address: CUdeviceptr = 0; // Pointer to the symbol in device memory
+    let mut symbol_size: usize = 0;          // Size of the symbol
 
-    // CUDA
-    _module: CUmodule,
-    gen_kernel: CUfunction,
+    // Convert the symbol name to a C-compatible string
+    let c_symbol_name = CString::new(symbol_name).expect("Symbol name conversion failed");
+
+    // Retrieve the symbol address and size in the module
+    let result = cuModuleGetGlobal_v2(
+        &mut symbol_address as *mut CUdeviceptr,
+        &mut symbol_size as *mut usize,
+        module,
+        c_symbol_name.as_ptr(),
+    );
+
+    if result != CUresult::CUDA_SUCCESS {
+        return Err(result); // Symbol not found or invalid
+    }
+
+    // Ensure the symbol size matches the size of a CUdeviceptr
+    if symbol_size != std::mem::size_of::<CUdeviceptr>() {
+        return Err(CUresult::CUDA_ERROR_INVALID_VALUE); // Size mismatch
+    }
+
+    // Copy the device pointer to the symbol's memory location
+    let result = cuMemcpyHtoD_v2(
+        symbol_address,
+        &device_ptr as *const _ as *const std::ffi::c_void,
+        symbol_size,
+    );
+
+    if result != CUresult::CUDA_SUCCESS {
+        return Err(result); // Copy operation failed
+    }
+
+    Ok(())
 
 }
+
 
 // Structs for the CUDA kernel
 
@@ -131,8 +146,8 @@ pub struct MoveGen {
 struct StackData {
     banned_bb: u64,
     backtrack_bb: u64,
-    starting_pos: u8,
-    starting_piece: u8
+    current_pos: u8,
+    current_piece: u8,
 
 }
 
@@ -180,15 +195,30 @@ struct ThreePath {
 }
 
 
+pub struct MoveGen {
+    // GPU Stack buffer
+    stack_d: CUdeviceptr,
+
+    // Input & Output Buffers
+    input_d: CUdeviceptr,
+    input_h: *mut GenRequest,
+    final_d: CUdeviceptr,
+    final_h: *mut GenResult,
+
+    // CUDA
+    module: CUmodule,
+    gen_kernel: CUfunction,
+
+}
+
 impl MoveGen {
     pub const MAX_REQUESTS: usize = 1;
 
     pub fn new() -> Result<Self, CUresult> {
         // Load kernel from PTX
-        let _module: CUmodule = load_module_from_ptx("kernels.ptx")?;
-        let gen_kernel = get_kernel_function(_module, "gen_kernel")?;
+        let module: CUmodule = load_module_from_ptx("kernels.ptx")?;
+        let gen_kernel = get_kernel_function(module, "gen_kernel")?;
 
-        // 'UNIQUE PATHS' LOOKUP TABLES
         let mut one_path_vec = vec![];
         for i in 0..UNIQUE_ONE_PATHS.len() {
             let path: ([u8; 2], u64) = UNIQUE_ONE_PATHS[i];
@@ -228,32 +258,51 @@ impl MoveGen {
 
         }
 
-        let unique_one_paths_d = device_mem_alloc::<OnePath>(UNIQUE_ONE_PATHS.len())?;
-        mem_copy_to_device(unique_one_paths_d, &one_path_vec)?;
-        let unique_two_paths_d = device_mem_alloc::<TwoPath>(UNIQUE_TWO_PATHS.len())?;
-        mem_copy_to_device(unique_two_paths_d, &two_path_vec)?;
-        let unique_three_paths_d = device_mem_alloc::<ThreePath>(UNIQUE_THREE_PATHS.len())?;
-        mem_copy_to_device(unique_three_paths_d, &three_path_vec)?;
+        // Allocate and copy the lookup tables to GPU
+        unsafe {
+            // ========== 'UNIQUE PATHS' LOOKUP TABLES ==========
+            let unique_one_paths_d = device_mem_alloc::<OnePath>(UNIQUE_ONE_PATHS.len())?;
+            mem_copy_to_device(unique_one_paths_d, &one_path_vec)?;
+            set_symbol_device_pointer(module, "one_paths", unique_one_paths_d).expect("Failed to set one paths symbol");
+            
+            let unique_two_paths_d = device_mem_alloc::<TwoPath>(UNIQUE_TWO_PATHS.len())?;
+            mem_copy_to_device(unique_two_paths_d, &two_path_vec)?;
+            set_symbol_device_pointer(module, "two_paths", unique_two_paths_d).expect("Failed to set two paths symbol");
 
-        // 'UNIQUE PATH LISTS' LOOKUP TABLES
-        let unique_one_paths_list_d = device_mem_alloc::<u16>(UNIQUE_ONE_PATH_LISTS.len() * 5)?;
-        mem_copy_to_device(unique_one_paths_list_d, UNIQUE_ONE_PATH_LISTS.as_flattened())?;
-        let unique_two_paths_list_d = device_mem_alloc::<u16>(UNIQUE_TWO_PATH_LISTS.len() * 13)?;
-        mem_copy_to_device(unique_two_paths_list_d, UNIQUE_TWO_PATH_LISTS.as_flattened())?;
-        let unique_three_paths_list_d = device_mem_alloc::<u16>(UNIQUE_THREE_PATH_LISTS.len() * 36)?;
-        mem_copy_to_device(unique_three_paths_list_d, UNIQUE_THREE_PATH_LISTS.as_flattened())?;
+            let unique_three_paths_d = device_mem_alloc::<ThreePath>(UNIQUE_THREE_PATHS.len())?;
+            mem_copy_to_device(unique_three_paths_d, &three_path_vec)?;
+            set_symbol_device_pointer(module, "three_paths", unique_three_paths_d).expect("Failed to set three paths symbol");
 
-        // 'MAPS' LOOKUP TABLES
-        let one_map = device_mem_alloc::<u8>(36)?;
-        mem_copy_to_device(one_map, ONE_MAP.as_flattened())?;
-        let two_map = device_mem_alloc::<u16>(29 * 36)?;
-        mem_copy_to_device(two_map, TWO_MAP.as_flattened())?;
-        let three_map = device_mem_alloc::<u16>(11007 * 36)?;
-        mem_copy_to_device(three_map, THREE_MAP.as_flattened())?;
+            // ========== 'UNIQUE PATH LISTS' LOOKUP TABLES ==========
+            let unique_one_paths_list_d = device_mem_alloc::<u16>(UNIQUE_ONE_PATH_LISTS.len() * 5)?;
+            mem_copy_to_device(unique_one_paths_list_d, UNIQUE_ONE_PATH_LISTS.as_flattened())?;
+            set_symbol_device_pointer(module, "one_path_lists", unique_one_paths_list_d).expect("Failed to set one path lists symbol");
 
+            let unique_two_paths_list_d = device_mem_alloc::<u16>(UNIQUE_TWO_PATH_LISTS.len() * 13)?;
+            mem_copy_to_device(unique_two_paths_list_d, UNIQUE_TWO_PATH_LISTS.as_flattened())?;
+            set_symbol_device_pointer(module, "two_path_lists", unique_two_paths_list_d).expect("Failed to set two path lists symbol");
+
+            let unique_three_paths_list_d = device_mem_alloc::<u16>(UNIQUE_THREE_PATH_LISTS.len() * 36)?;
+            mem_copy_to_device(unique_three_paths_list_d, UNIQUE_THREE_PATH_LISTS.as_flattened())?;
+            set_symbol_device_pointer(module, "three_path_lists", unique_three_paths_list_d).expect("Failed to set three path lists symbol");
+
+            // ========== 'MAPS' LOOKUP TABLES ==========
+            let one_map_d = device_mem_alloc::<u8>(36)?;
+            mem_copy_to_device(one_map_d, ONE_MAP.as_flattened())?;
+            set_symbol_device_pointer(module, "one_map", one_map_d).expect("Failed to set one map symbol");
+
+            let two_map_d = device_mem_alloc::<u16>(29 * 36)?;
+            mem_copy_to_device(two_map_d, TWO_MAP.as_flattened())?;
+            set_symbol_device_pointer(module, "two_map", two_map_d).expect("Failed to set two map symbol");
+
+            let three_map_d = device_mem_alloc::<u16>(11007 * 36)?;
+            mem_copy_to_device(three_map_d, THREE_MAP.as_flattened())?;
+            set_symbol_device_pointer(module, "three_map", three_map_d).expect("Failed to set three map symbol");
+
+        }
+       
         // Allocate stack buffers
-        let stack_d = device_mem_alloc::<StackData>(1 * 36 * 1000)?;
-        let stack_height_d = device_mem_alloc::<u32>(1 * 36)?;
+        let stack_d = device_mem_alloc::<StackData>(1 * 1000 * 3)?;
 
         // Allocate input & output buffers
         let (input_h, input_d) = allocate_zero_copy_memory::<GenRequest>(MoveGen::MAX_REQUESTS)?;
@@ -261,25 +310,14 @@ impl MoveGen {
         
         // Create the instance  
         Ok(Self {
-            unique_one_paths_d,
-            unique_two_paths_d,
-            unique_three_paths_d,
-            unique_one_paths_list_d,
-            unique_two_paths_list_d,
-            unique_three_paths_list_d,
-            one_map_d: one_map,
-            two_map_d: two_map,
-            three_map_d: three_map,
-
             stack_d,
-            stack_height_d,
 
             input_d,
             input_h,
             final_d,
             final_h,
 
-            _module,
+            module,
             gen_kernel,
 
         })
@@ -316,28 +354,13 @@ impl MoveGen {
             cuLaunchKernel(
                 self.gen_kernel,
                 num_requests as u32, 1, 1,
-                36, 1, 1,
+                32 * 3, 1, 1,
                 0,
                 ptr::null_mut(),
                 [
-                    // Input / Output buffers
                     &mut self.input_d as *mut CUdeviceptr as *mut c_void,
                     &mut self.final_d as *mut CUdeviceptr as *mut c_void,
-
-                    // Stack
                     &mut self.stack_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.stack_height_d as *mut CUdeviceptr as *mut c_void,
-
-                    // Lookup tables
-                    &mut self.unique_one_paths_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.unique_two_paths_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.unique_three_paths_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.unique_one_paths_list_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.unique_two_paths_list_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.unique_three_paths_list_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.one_map_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.two_map_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.three_map_d as *mut CUdeviceptr as *mut c_void
                 ].as_ptr() as *mut *mut c_void,
                 ptr::null_mut(),  // No extra arguments
 
@@ -363,21 +386,8 @@ impl MoveGen {
 
     /// Frees all allocated GPU memory
     pub fn mem_free(&mut self) {
-        // Free lookup tables
-        device_mem_free(self.unique_one_paths_d).expect("Failed to free unique one paths table");
-        device_mem_free(self.unique_two_paths_d).expect("Failed to free unique two paths table");
-        device_mem_free(self.unique_three_paths_d).expect("Failed to free unique three paths table");
-        device_mem_free(self.unique_one_paths_list_d).expect("Failed to free unique one paths list table");
-        device_mem_free(self.unique_two_paths_list_d).expect("Failed to free unique two paths list table");
-        device_mem_free(self.unique_three_paths_list_d).expect("Failed to free unique three paths list table");
-        device_mem_free(self.one_map_d).expect("Failed to free one map table");
-        device_mem_free(self.two_map_d).expect("Failed to free two map table");
-        device_mem_free(self.three_map_d).expect("Failed to free three map table");
-
-        // Free Stack buffers
         device_mem_free(self.stack_d).expect("Failed to free stack buffer");
-        device_mem_free(self.stack_height_d).expect("Failed to free stack height buffer");
-
+        
         // Free Host buffers
         unsafe {
             cuMemFreeHost(self.input_h as *mut c_void);
