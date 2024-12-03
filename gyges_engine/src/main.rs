@@ -7,11 +7,20 @@ extern crate gyges_engine;
 
 // }
 
-//
-
-use gyges_engine::merged_reach_consts::*;
 use gyges::{
-    board::TEST_BOARD, core::masks::RANKS, moves::{movegen::{piece_control_sqs, valid_moves}, movegen_consts::{ONE_MAP, THREE_MAP, TWO_MAP, UNIQUE_ONE_PATHS, UNIQUE_ONE_PATH_LISTS, UNIQUE_THREE_PATHS, UNIQUE_THREE_PATH_LISTS, UNIQUE_TWO_PATHS, UNIQUE_TWO_PATH_LISTS}, Move, MoveType}, BitBoard, BoardState, Piece, Player, SQ
+    board::{TEST_BOARD, BENCH_BOARD, STARTING_BOARD},
+    core::masks::RANKS,
+    moves::{
+        movegen::valid_moves,
+        movegen_consts::*, 
+        Move, 
+        MoveType
+    },
+    BitBoard, 
+    BoardState, 
+    Piece, 
+    Player, 
+    SQ, 
 
 };
 use cuda_sys::cuda::*;
@@ -22,23 +31,36 @@ use std::{ffi::{c_void, CString}, fmt::Display, ptr};
 fn main() -> Result<(), CUresult> {
     // Initialize CUDA
     let _ctx: CUcontext = cuda_init().expect("Failed to initialize CUDA context");
-
+    
+    // let mut board = BoardState::from(STARTING_BOARD);
+    // let mut board = BoardState::from(BENCH_BOARD);
     let mut board = BoardState::from(TEST_BOARD);
     // let mut board = BoardState::from([ // SPARCE CASE
-    //     0, 0, 0, 0, 0, 3,
+    //     0, 0, 0, 0, 2, 3,
     //     0, 0, 0, 0, 0, 0,
-    //     0, 0, 0, 0, 2, 0,
-    //     0, 0, 0, 0, 0, 3,
+    //     0, 0, 0, 0, 0, 0,
+    //     0, 0, 0, 0, 0, 0,
     //     0, 0, 0, 0, 0, 0,
     //     0, 0, 0, 0, 0, 1,
     //     0, 0
     // ]);
+    // let mut board = BoardState::from([ // REAL CASE
+    //     0, 3, 0, 0, 1, 3,
+    //     0, 0, 0, 0, 0, 2,
+    //     2, 0, 1, 0, 0, 0,
+    //     3, 0, 0, 0, 0, 0,
+    //     2, 0, 0, 0, 0, 0,
+    //     1, 0, 0, 1, 2, 3,
+    //     0, 0
+    // ]);
     let player = Player::One;
     println!("{}", board);
-
+    
     let mut mg = MoveGen::new().expect("Failed to initialize move generator");
 
-    let moves = mg.gen(&mut board, player);
+    // TESTS
+    let boards = vec![board.clone(); 1];
+    let moves = mg.gen(&boards, player);
     let new: Vec<Move> = decode_moves(&mut board, &moves[0]);
 
     let mut moves = unsafe { valid_moves(&mut board, player) };
@@ -48,22 +70,20 @@ fn main() -> Result<(), CUresult> {
     
     // BENCHMARKS
     unsafe {
-        let iters = 50000;
+        let iters = 10000;
 
+        let boards = vec![board.clone(); 1];
         for batch in 0..3 {
             // NEW
             let mut num = 0;
             let start: std::time::Instant = std::time::Instant::now();
             for _ in 0..iters {
-                let moves: Vec<GenResult> = mg.gen(&mut board, player);
-                // let dec = decode_moves(&mut board, &moves[0]);
-                // num += dec.len();
-
+                let _moves: Vec<GenResult> = mg.gen(&boards, player);
                 num += 1;
                
             }
             let elapsed = start.elapsed().as_secs_f64();
-            println!("{}: New Elapsed: {:?}, {}", batch, elapsed / iters as f64, num);
+            println!("{}: New Elapsed: {:?}, {}", batch, elapsed as f64 / iters as f64, num);
 
         }
 
@@ -73,15 +93,15 @@ fn main() -> Result<(), CUresult> {
             let mut num = 0;
             let start = std::time::Instant::now();
             for _ in 0..iters {
-                let mut moves = valid_moves(&mut board, player);
-                // let dec = moves.moves(&board);
-                // num += dec.len();
+                for _ in 0..1 {
+                    let _moves = valid_moves(&mut board, player);
+                    num += 1;
 
-                num += 1;
+                }
                
             }
             let elapsed = start.elapsed().as_secs_f64();
-            println!("{}: Native Elapsed: {:?}, {}", batch, elapsed / iters as f64, num);
+            println!("{}: Native Elapsed: {:?}, {}", batch, elapsed as f64 / iters as f64, num);
     
         }
 
@@ -92,108 +112,6 @@ fn main() -> Result<(), CUresult> {
     Ok(())
 
 }
-
-
-
-// CHATGPT GENERATED
-pub unsafe fn set_symbol_device_pointer(
-    module: CUmodule,               // The loaded CUDA module
-    symbol_name: &str,              // The symbol name (device variable)
-    device_ptr: CUdeviceptr,        // The device pointer to copy to the symbol
-) -> Result<(), CUresult> {
-    let mut symbol_address: CUdeviceptr = 0; // Pointer to the symbol in device memory
-    let mut symbol_size: usize = 0;          // Size of the symbol
-
-    // Convert the symbol name to a C-compatible string
-    let c_symbol_name = CString::new(symbol_name).expect("Symbol name conversion failed");
-
-    // Retrieve the symbol address and size in the module
-    let result = cuModuleGetGlobal_v2(
-        &mut symbol_address as *mut CUdeviceptr,
-        &mut symbol_size as *mut usize,
-        module,
-        c_symbol_name.as_ptr(),
-    );
-
-    if result != CUresult::CUDA_SUCCESS {
-        return Err(result); // Symbol not found or invalid
-    }
-
-    // Ensure the symbol size matches the size of a CUdeviceptr
-    if symbol_size != std::mem::size_of::<CUdeviceptr>() {
-        return Err(CUresult::CUDA_ERROR_INVALID_VALUE); // Size mismatch
-    }
-
-    // Copy the device pointer to the symbol's memory location
-    let result = cuMemcpyHtoD_v2(
-        symbol_address,
-        &device_ptr as *const _ as *const std::ffi::c_void,
-        symbol_size,
-    );
-
-    if result != CUresult::CUDA_SUCCESS {
-        return Err(result); // Copy operation failed
-    }
-
-    Ok(())
-
-}
-
-
-// Structs for the CUDA kernel
-
-#[repr(C)]
-struct StackData {
-    banned_bb: u64,
-    backtrack_bb: u64,
-    current_pos: u8,
-    current_piece: u8,
-
-}
-
-#[repr(C)]
-pub struct GenRequest {
-    pub state: u64,
-    pub active_bb: u64,
-    pub flag: u8
-
-}
-
-#[repr(C)]
-pub struct GenResult {
-    end_positions: [u64; 6],
-    pickup_positions: [u64; 6],
-    drop_positions: u64,
-
-}
-
-#[repr(C)]
-struct OnePath {
-    backtrack_bb: u64,
-    pos_1: u8,
-    pos_2: u8
-
-}
-
-#[repr(C)]
-struct TwoPath {
-    backtrack_bb: u64,
-    pos_1: u8,
-    pos_2: u8,
-    pos_3: u8
-
-}
-
-#[repr(C)]
-struct ThreePath {
-    backtrack_bb: u64,
-    pos_1: u8,
-    pos_2: u8,
-    pos_3: u8,
-    pos_4: u8
-
-}
-
 
 pub struct MoveGen {
     // GPU Stack buffer
@@ -206,103 +124,104 @@ pub struct MoveGen {
     final_h: *mut GenResult,
 
     // CUDA
-    module: CUmodule,
+    _module: CUmodule,
     gen_kernel: CUfunction,
+    stream: CUstream
 
 }
 
 impl MoveGen {
-    pub const MAX_REQUESTS: usize = 1;
+    pub const MAX_REQUESTS: usize = 500;
+    pub const MAX_STACK_SIZE: usize = 1000;
 
     pub fn new() -> Result<Self, CUresult> {
         // Load kernel from PTX
-        let module: CUmodule = load_module_from_ptx("kernels.ptx")?;
-        let gen_kernel = get_kernel_function(module, "gen_kernel")?;
+        let _module: CUmodule = load_module_from_ptx("kernels.ptx")?;
+        let gen_kernel = get_kernel_function(_module, "gen_kernel")?;
 
-        let mut one_path_vec = vec![];
-        for i in 0..UNIQUE_ONE_PATHS.len() {
-            let path: ([u8; 2], u64) = UNIQUE_ONE_PATHS[i];
-            one_path_vec.push(OnePath {
+        let mut stream = ptr::null_mut();
+        unsafe { cuStreamCreate(&mut stream, 0) };
+
+        // Format lookup tables
+        let one_path_vec = UNIQUE_ONE_PATHS.iter().map(|path| {
+            OnePath {
                 backtrack_bb: path.1,
                 pos_1: path.0[0],
                 pos_2: path.0[1]
 
-            });
+            }
 
-        }
+        }).collect::<Vec<OnePath>>();
 
-        let mut two_path_vec = vec![];
-        for i in 0..UNIQUE_TWO_PATHS.len() {
-            let path: ([u8; 3], u64) = UNIQUE_TWO_PATHS[i];
-            two_path_vec.push(TwoPath {
+        let two_path_vec = UNIQUE_TWO_PATHS.iter().map(|path| {
+            TwoPath {
                 backtrack_bb: path.1,
                 pos_1: path.0[0],
                 pos_2: path.0[1],
                 pos_3: path.0[2]
 
-            });
+            }
 
-        }
+        }).collect::<Vec<TwoPath>>();
 
-        let mut three_path_vec = vec![];
-        for i in 0..UNIQUE_THREE_PATHS.len() {
-            let path: ([u8; 4], u64) = UNIQUE_THREE_PATHS[i];
-            three_path_vec.push(ThreePath {
+        // Simplify the three paths
+        let three_path_vec: Vec<ThreePath> = UNIQUE_THREE_PATHS.iter().map(|path| {
+            ThreePath {
                 backtrack_bb: path.1,
                 pos_1: path.0[0],
                 pos_2: path.0[1],
                 pos_3: path.0[2],
                 pos_4: path.0[3]
 
-            });
+            }
 
-        }
+        }).collect::<Vec<ThreePath>>();
 
         // Allocate and copy the lookup tables to GPU
         unsafe {
             // ========== 'UNIQUE PATHS' LOOKUP TABLES ==========
             let unique_one_paths_d = device_mem_alloc::<OnePath>(UNIQUE_ONE_PATHS.len())?;
             mem_copy_to_device(unique_one_paths_d, &one_path_vec)?;
-            set_symbol_device_pointer(module, "one_paths", unique_one_paths_d).expect("Failed to set one paths symbol");
+            set_symbol_device_pointer(_module, "one_paths", unique_one_paths_d)?;
             
             let unique_two_paths_d = device_mem_alloc::<TwoPath>(UNIQUE_TWO_PATHS.len())?;
             mem_copy_to_device(unique_two_paths_d, &two_path_vec)?;
-            set_symbol_device_pointer(module, "two_paths", unique_two_paths_d).expect("Failed to set two paths symbol");
+            set_symbol_device_pointer(_module, "two_paths", unique_two_paths_d)?;
 
             let unique_three_paths_d = device_mem_alloc::<ThreePath>(UNIQUE_THREE_PATHS.len())?;
             mem_copy_to_device(unique_three_paths_d, &three_path_vec)?;
-            set_symbol_device_pointer(module, "three_paths", unique_three_paths_d).expect("Failed to set three paths symbol");
+            set_symbol_device_pointer(_module, "three_paths", unique_three_paths_d)?;
 
             // ========== 'UNIQUE PATH LISTS' LOOKUP TABLES ==========
             let unique_one_paths_list_d = device_mem_alloc::<u16>(UNIQUE_ONE_PATH_LISTS.len() * 5)?;
             mem_copy_to_device(unique_one_paths_list_d, UNIQUE_ONE_PATH_LISTS.as_flattened())?;
-            set_symbol_device_pointer(module, "one_path_lists", unique_one_paths_list_d).expect("Failed to set one path lists symbol");
+            set_symbol_device_pointer(_module, "one_path_lists", unique_one_paths_list_d)?;
 
             let unique_two_paths_list_d = device_mem_alloc::<u16>(UNIQUE_TWO_PATH_LISTS.len() * 13)?;
             mem_copy_to_device(unique_two_paths_list_d, UNIQUE_TWO_PATH_LISTS.as_flattened())?;
-            set_symbol_device_pointer(module, "two_path_lists", unique_two_paths_list_d).expect("Failed to set two path lists symbol");
+            set_symbol_device_pointer(_module, "two_path_lists", unique_two_paths_list_d)?;
 
             let unique_three_paths_list_d = device_mem_alloc::<u16>(UNIQUE_THREE_PATH_LISTS.len() * 36)?;
             mem_copy_to_device(unique_three_paths_list_d, UNIQUE_THREE_PATH_LISTS.as_flattened())?;
-            set_symbol_device_pointer(module, "three_path_lists", unique_three_paths_list_d).expect("Failed to set three path lists symbol");
+            set_symbol_device_pointer(_module, "three_path_lists", unique_three_paths_list_d)?;
 
             // ========== 'MAPS' LOOKUP TABLES ==========
             let one_map_d = device_mem_alloc::<u8>(36)?;
             mem_copy_to_device(one_map_d, ONE_MAP.as_flattened())?;
-            set_symbol_device_pointer(module, "one_map", one_map_d).expect("Failed to set one map symbol");
+            set_symbol_device_pointer(_module, "one_map", one_map_d)?;
 
             let two_map_d = device_mem_alloc::<u16>(29 * 36)?;
             mem_copy_to_device(two_map_d, TWO_MAP.as_flattened())?;
-            set_symbol_device_pointer(module, "two_map", two_map_d).expect("Failed to set two map symbol");
+            set_symbol_device_pointer(_module, "two_map", two_map_d)?;
 
             let three_map_d = device_mem_alloc::<u16>(11007 * 36)?;
             mem_copy_to_device(three_map_d, THREE_MAP.as_flattened())?;
-            set_symbol_device_pointer(module, "three_map", three_map_d).expect("Failed to set three map symbol");
+            set_symbol_device_pointer(_module, "three_map", three_map_d)?;
 
         }
        
-        // Allocate stack buffers
-        let stack_d = device_mem_alloc::<StackData>(1 * 1000 * 3)?;
+        // Allocate stack buffer
+        let stack_d = device_mem_alloc::<StackData>(MoveGen::MAX_REQUESTS * MoveGen::MAX_STACK_SIZE * 3)?;
 
         // Allocate input & output buffers
         let (input_h, input_d) = allocate_zero_copy_memory::<GenRequest>(MoveGen::MAX_REQUESTS)?;
@@ -317,14 +236,15 @@ impl MoveGen {
             final_d,
             final_h,
 
-            module,
+            _module,
             gen_kernel,
+            stream
 
         })
 
     }
 
-    pub fn create_request(&self, board: &mut BoardState, flag: u8) -> GenRequest {
+    pub fn create_request(&self, board: &BoardState, flag: u8) -> GenRequest {
         let bit_state = BitState::from(board);
 
         let active_lines = board.get_active_lines();
@@ -339,13 +259,13 @@ impl MoveGen {
 
     }
 
-    pub fn gen(&mut self, board: &mut BoardState, _player: Player) -> Vec<GenResult> {
-        let num_requests = 1;
+    pub fn gen(&mut self, boards: &Vec<BoardState>, _player: Player) -> Vec<GenResult> {
+        let num_requests = boards.len();
 
-        // Create and save requests
+        // Set the requests
         for i in 0..num_requests {
-            let request = self.create_request(board, 0);
-            unsafe { self.input_h.add(i).write(request); }
+            let request = self.create_request(&boards[0], 0);
+            unsafe { self.input_h.add(i).write_volatile(request); }
 
         }
 
@@ -356,7 +276,7 @@ impl MoveGen {
                 num_requests as u32, 1, 1,
                 32 * 3, 1, 1,
                 0,
-                ptr::null_mut(),
+                self.stream,
                 [
                     &mut self.input_d as *mut CUdeviceptr as *mut c_void,
                     &mut self.final_d as *mut CUdeviceptr as *mut c_void,
@@ -369,17 +289,19 @@ impl MoveGen {
         }
 
         // Sync results
-        unsafe { cuCtxSynchronize(); }
+        unsafe { cuStreamSynchronize(self.stream); }
 
+        // Copy results to host
         let mut results: Vec<GenResult> = Vec::with_capacity(num_requests);
-        for i in 0..num_requests {
-            unsafe {
-                results.push(self.final_h.add(i).read());
+        unsafe {
+            for i in 0..num_requests {
+                let result = self.final_h.add(i).read_volatile();
+                results.push(result);
 
             }
 
         }
-
+        
         results
 
     }
@@ -438,6 +360,62 @@ pub fn decode_moves(board: &mut BoardState, gen_result: &GenResult) -> Vec<Move>
     moves
 
 }
+
+
+// GPU Data Structures
+#[repr(C)]
+struct StackData {
+    banned_bb: u64,
+    backtrack_bb: u64,
+    current_pos: u8,
+    current_piece: u8,
+
+}
+
+#[repr(C)]
+pub struct GenRequest {
+    pub state: u64,
+    pub active_bb: u64,
+    pub flag: u8
+
+}
+
+#[repr(C)]
+pub struct GenResult {
+    end_positions: [u64; 6],
+    pickup_positions: [u64; 6],
+    drop_positions: u64,
+
+}
+
+#[repr(C)]
+struct OnePath {
+    backtrack_bb: u64,
+    pos_1: u8,
+    pos_2: u8
+
+}
+
+#[repr(C)]
+struct TwoPath {
+    backtrack_bb: u64,
+    pos_1: u8,
+    pos_2: u8,
+    pos_3: u8
+
+}
+
+#[repr(C)]
+struct ThreePath {
+    backtrack_bb: u64,
+    pos_1: u8,
+    pos_2: u8,
+    pos_3: u8,
+    pos_4: u8
+
+}
+
+
 
 // =================================== CUDA HELPERS ===================================
 
@@ -606,254 +584,40 @@ pub fn get_kernel_function(module: CUmodule, kernel_name: &str) -> Result<CUfunc
 
 }
 
-// =================================== BLOCKING MOVE GEN ===================================
+pub unsafe fn set_symbol_device_pointer(module: CUmodule, symbol_name: &str, device_ptr: CUdeviceptr) -> Result<(), CUresult> {
+    let c_symbol_name = CString::new(symbol_name).expect("Symbol name conversion failed");
 
-// fn main() -> Result<(), CUresult> {
-//     // Initialize CUDA
-//     let _ctx: CUcontext = cuda_init().expect("Failed to initialize CUDA context");
+    let mut symbol_address: CUdeviceptr = 0;
+    let mut symbol_size: usize = 0;
 
-//     // Initialize board
-//     let mut board = BoardState::from(TEST_BOARD); // TESTING CASE
-//     // let mut board2 = BoardState::from([ // REAL CASE
-//     //     0, 0, 1, 0, 0, 0,
-//     //     0, 3, 3, 0, 2, 0,
-//     //     0, 2, 2, 0, 1, 0,
-//     //     0, 0, 0, 0, 3, 0,
-//     //     0, 0, 2, 3, 0, 0,
-//     //     0, 0, 1, 0, 2, 0,
-//     //     0, 0
-//     // ]);
-//     // let mut board = BoardState::from([ // SPARCE CASE
-//     //     0, 0, 2, 0, 0, 0,
-//     //     0, 0, 0, 0, 0, 0,
-//     //     3, 0, 0, 0, 0, 0,
-//     //     0, 0, 0, 0, 0, 0,
-//     //     0, 0, 0, 0, 0, 0,
-//     //     3, 0, 0, 0, 0, 0,
-//     //     0, 0
-//     // ]);
-//     let player = Player::One;
-//     println!("{}", board);
-    
-//     let mut mv_gen = BlockingMoveGen::new().expect("Failed to initialize blocking move generator");
+    let result = cuModuleGetGlobal_v2(
+        &mut symbol_address as *mut CUdeviceptr,
+        &mut symbol_size as *mut usize,
+        module,
+        c_symbol_name.as_ptr(),
+    );
 
-//     let new_batch = mv_gen.gen(&mut board, player);
-//     println!("{:?}", new_batch.len());
+    if result != CUresult::CUDA_SUCCESS {
+        return Err(result);
+    }
 
-//     unsafe {
-//         // MAIN BENCHMARKS
-//         let iters = 10000;
+    if symbol_size != std::mem::size_of::<CUdeviceptr>() {
+        return Err(CUresult::CUDA_ERROR_INVALID_VALUE);
+    }
 
-//         for batch in 0..2 {
-//             // NEW
-//             let mut num = 0;
-//             let start: std::time::Instant = std::time::Instant::now();
-//             for _ in 0..iters {
-//                 let moves = mv_gen.gen(&mut board, player);
-//                 num += moves.len();
-    
-//             }
-//             let elapsed = start.elapsed().as_secs_f64();
-//             println!("{}: WAVE Elapsed: {:?}, {}", batch, elapsed / iters as f64, num);
+    let result = cuMemcpyHtoD_v2(
+        symbol_address,
+        &device_ptr as *const _ as *const std::ffi::c_void,
+        symbol_size,
+    );
 
-//         }
+    if result != CUresult::CUDA_SUCCESS {
+        return Err(result);
+    }
 
-//         for batch in 0..2 {
-//             // Native
-//             let mut num = 0;
-//             let start = std::time::Instant::now();
-//             for _ in 0..iters {
-//                 let moves = valid_moves(&mut board, player).moves(&board);
-//                 let mut pruned = vec![];
-//                 for mv in moves.iter() {
-//                     let mut new_board = board.clone().make_move(mv);
-//                     let has_threat = has_threat(&mut new_board, player.other());
-//                     if !has_threat {
-//                         pruned.push(mv);
-//                         num += 1;
-//                     }
-
-//                 }
-
-//             }
-//             let elapsed = start.elapsed().as_secs_f64();
-//             println!("{}: Native Elapsed: {:?}, {}", batch, elapsed / iters as f64, num);
-
-//         }
-
-//     }
-
-//     mv_gen.mem_free();
-
-//     Ok(())
-        
-// }
-
-pub struct BlockingMoveGen {
-    // Lookup tables
-    one_reach_d: CUdeviceptr,
-    two_reach_d: CUdeviceptr,
-    three_reach_d: CUdeviceptr,
-
-    // Zero-copy buffers
-    state_input_d: CUdeviceptr,
-    state_input_h: *mut u64,
-    move_input_d: CUdeviceptr,
-    move_input_h: *mut u8,
-    final_d: CUdeviceptr,
-    final_h: *mut f32,
-
-    // CUDA
-    _module: CUmodule,
-    wavefront_kernel: CUfunction,
+    Ok(())
 
 }
-
-impl BlockingMoveGen {
-    pub fn new() -> Result<Self, CUresult> {
-        // Load kernel from PTX
-        let _module: CUmodule = load_module_from_ptx("kernels.ptx")?;
-        let wavefront_kernel = get_kernel_function(_module, "wavefront_kernel")?; // Old kernel: "adj_kernel"
-        
-        // Allocate lookup tables
-        let one_reach_d = device_mem_alloc::<u64>(36)?;
-        mem_copy_to_device(one_reach_d, MERGED_ONE_REACHS.as_ref())?;
-        let two_reach_d = device_mem_alloc::<u64>(29 * 36)?;
-        mem_copy_to_device(two_reach_d, MERGED_TWO_REACHS.as_flattened())?;
-        let three_reach_d = device_mem_alloc::<u64>(11007 * 36)?;
-        mem_copy_to_device(three_reach_d, MERGED_THREE_REACHS.as_flattened())?;
-      
-        // Allocate buffers
-        let (state_input_h, state_input_d) = allocate_zero_copy_memory::<u64>(1)?;
-        let (move_input_h, move_input_d) = allocate_zero_copy_memory::<u8>(1000*3)?;
-        let (final_h, final_d) = allocate_zero_copy_memory::<f32>(1000)?;
-
-        // Create the instance  
-        Ok(Self {
-            one_reach_d,
-            two_reach_d,
-            three_reach_d,
-
-            state_input_d,
-            state_input_h,
-            move_input_d,
-            move_input_h,
-            final_d,
-            final_h,
-
-            _module,
-            wavefront_kernel,
-
-        })
-
-    }
-
-    pub fn gen(&mut self, board: &mut BoardState, player: Player) -> Vec<(u8, u8, u8)> {
-        let bit_state = BitState::from(board);
-        unsafe { *self.state_input_h = bit_state.0; } // Set the input state
-        
-        let piece_control: [BitBoard; 6] = unsafe { piece_control_sqs(board, player) };
-
-        let active_lines = board.get_active_lines();
-        let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
-        let drops = board.get_drops(active_lines, player).get_data();
-
-        let mut idx = 0;
-        for x in 0..6 {
-            let starting_sq = active_line_sq + x;
-            if board.piece_at(starting_sq) == Piece::None {
-                continue;
-
-            }
-
-            // Cant reach the starting square
-            let mut new_piece_control = piece_control[x] & !(1 << starting_sq.0);
-
-            for block_pos in new_piece_control.get_data() {
-                let block_sq = SQ(block_pos as u8);
-                let block_piece = board.piece_at(block_sq);
-
-                if block_piece == Piece::None {
-                    unsafe { self.move_input_h.add(idx * 3).copy_from([starting_sq.0, block_sq.0, 100].as_ptr(), 3); } // Copy move data 
-                    idx += 1;
-
-                } else {
-                    for empty_pos in drops.iter() {
-                        unsafe { self.move_input_h.add(idx * 3).copy_from([starting_sq.0, block_sq.0, *empty_pos as u8].as_ptr(), 3); } // Copy move data 
-                        idx += 1;
-
-                    }
-
-                }
-
-            }
-
-        }
-        let num_moves = idx as u32;
-    
-        // Launch kernel
-        unsafe {
-            cuLaunchKernel(
-                self.wavefront_kernel,
-                num_moves, 1, 1,
-                36, 1, 1,
-                0,
-                ptr::null_mut(),
-                [
-                    &mut self.state_input_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.move_input_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.final_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.one_reach_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.two_reach_d as *mut CUdeviceptr as *mut c_void,
-                    &mut self.three_reach_d as *mut CUdeviceptr as *mut c_void
-                ].as_ptr() as *mut *mut c_void,
-                ptr::null_mut(),  // No extra arguments
-
-            );
-
-        }
-
-        // Sync results
-        unsafe { cuCtxSynchronize(); }
-
-        // Filter blocking moves from the results
-        let mut blocking_moves = Vec::with_capacity(50);
-        for i in 0..num_moves {
-            unsafe {
-                if self.final_h.add(i as usize).read() == 0.0 {
-                    let mv = self.move_input_h.add(i as usize * 3);
-                    blocking_moves.push((mv.read(), mv.add(1).read(), mv.add(2).read()));
-         
-                }
-
-            }
-            
-        }
-
-        // Return the blocking moves
-        blocking_moves
-
-    }
-
-    /// Frees all allocated GPU memory
-    pub fn mem_free(&mut self) {
-        // Free lookup tables
-        device_mem_free(self.one_reach_d).expect("Failed to free one reach table");
-        device_mem_free(self.two_reach_d).expect("Failed to free two reach table");
-        device_mem_free(self.three_reach_d).expect("Failed to free three reach table");
-
-        // Free buffers
-        unsafe {
-            cuMemFreeHost(self.state_input_h as *mut c_void);
-            cuMemFreeHost(self.move_input_h as *mut c_void);
-            cuMemFreeHost(self.final_h as *mut c_void);
-
-        }
-
-    }
-
-}
-
 
 // ================== BitState Representation ==================
 
