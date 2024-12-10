@@ -87,8 +87,9 @@ __constant__ uint64_t ALL_INTERCEPTS[72] {
 };
 
 // Stack
-#define MAX_STACK_SIZE 1000
+const uint32_t MAX_STACK_SIZE = 75;
 #define STACKIDX(block_id, type) (block_id * MAX_STACK_SIZE * 3) + (type * MAX_STACK_SIZE)
+#define HEIGHTIDX(block_id, type) (block_id * 3) + type
 
 // ==================== STRUCTS ====================
 
@@ -109,7 +110,7 @@ struct GenResult {
 struct StackData {
     uint64_t banned_bb;
     uint64_t backtrack_bb;
-    uint32_t active_line_idx;
+    uint8_t active_line_idx;
     uint8_t current_pos;
     uint8_t current_piece;
 
@@ -341,25 +342,38 @@ __device__ uint64_t remove_piece(uint64_t state, uint8_t pos) {
 
 // Pushs to a stack w/o any overflow handling
 __device__ void push(StackData* stack, uint32_t* stack_height, uint32_t block_id, uint32_t type, StackData data) {
-    uint32_t current_height = atomicAdd(stack_height, 1); // Get the position to push to
-    stack[STACKIDX(block_id, type) + current_height] = data;
+    uint32_t old_height = atomicAdd(&stack_height[HEIGHTIDX(block_id, type)], 1);
+    if (old_height >= MAX_STACK_SIZE) {
+        printf("Error: Stack overflow at block %u, type %u, height %u\n", block_id, type, old_height);
+        atomicSub(stack_height, 1); // revert
+        return; 
+    }
+
+    stack[STACKIDX(block_id, type) + old_height] = data;
 
 }
 
 // Pops from a stack w/o any underflow handling
 __device__ StackData pop(StackData* stack, uint32_t* stack_height, uint32_t block_id, uint32_t type) {
-    uint32_t current_height = atomicSub(stack_height, 1) - 1; // Get the position to pop from
-    return stack[STACKIDX(block_id, type) + current_height];
+    uint32_t old_height = atomicSub(&stack_height[HEIGHTIDX(block_id, type)], 1) - 1;
+    if ((int32_t)old_height < 0) {
+        printf("Error: Stack underflow at block %u, type %u\n", block_id, type);
+        atomicAdd(&stack_height[HEIGHTIDX(block_id, type)], 1);
+        return {0ULL, 0ULL, 0ULL, 0, 0};
+
+    }
+    
+    StackData val = stack[STACKIDX(block_id, type) + old_height];
+
+    return val;
 
 }
 
 __device__ void process_one(
     StackData* stack, 
-    uint32_t* one_stack_height, 
-    uint32_t* two_stack_height,
-    uint32_t* three_stack_height,
+    uint32_t* stack_height, 
     StackData current_data,
-    uint64_t current_state,
+    uint64_t starting_state,
     uint64_t end_positions,
     uint64_t* local_end_positions, 
     uint64_t* local_pickup_positions,
@@ -384,7 +398,7 @@ __device__ void process_one(
 
         }           
             
-        uint64_t end_piece = piece_at(current_state, end_pos);
+        uint64_t end_piece = piece_at(starting_state, end_pos);
         bool is_empty = (end_piece == 0);
 
         if (is_empty) {
@@ -407,7 +421,7 @@ __device__ void process_one(
             int stack_type = end_piece - 1;
             push(
                 stack, 
-                (stack_type == 0) ? one_stack_height : (stack_type == 1) ? two_stack_height : three_stack_height, 
+                stack_height,
                 block_id, 
                 stack_type, 
                 new_data
@@ -421,17 +435,15 @@ __device__ void process_one(
 
 __device__ void process_two(
     StackData* stack, 
-    uint32_t* one_stack_height, 
-    uint32_t* two_stack_height,
-    uint32_t* three_stack_height,
+    uint32_t* stack_height,
     StackData current_data, 
-    uint64_t current_state,
+    uint64_t starting_state,
     uint64_t end_positions,
     uint64_t* local_end_positions, 
     uint64_t* local_pickup_positions,
     uint64_t block_id
 ) {
-    uint64_t intercept_bb = get_piece_bb(current_state) & ALL_INTERCEPTS[current_data.current_pos];
+    uint64_t intercept_bb = get_piece_bb(starting_state) & ALL_INTERCEPTS[current_data.current_pos];
 
     uint16_t path_list_idx = two_map[(current_data.current_pos * 29) + (intercept_bb % 29)];
     uint16_t path_list_len = two_path_lists[(path_list_idx * 13) + 12];
@@ -452,7 +464,7 @@ __device__ void process_two(
 
         }           
             
-        uint64_t end_piece = piece_at(current_state, end_pos);
+        uint64_t end_piece = piece_at(starting_state, end_pos);
         bool is_empty = (end_piece == 0);
 
         if (is_empty) {
@@ -475,7 +487,7 @@ __device__ void process_two(
             int stack_type = end_piece - 1;
             push(
                 stack, 
-                (stack_type == 0) ? one_stack_height : (stack_type == 1) ? two_stack_height : three_stack_height, 
+                stack_height,
                 block_id, 
                 stack_type, 
                 new_data
@@ -489,17 +501,15 @@ __device__ void process_two(
 
 __device__ void process_three(
     StackData* stack, 
-    uint32_t* one_stack_height, 
-    uint32_t* two_stack_height,
-    uint32_t* three_stack_height,
+    uint32_t* stack_height,
     StackData current_data, 
-    uint64_t current_state,
+    uint64_t starting_state,
     uint64_t end_positions,
     uint64_t* local_end_positions, 
     uint64_t* local_pickup_positions,
     uint64_t block_id
 ) {
-    uint64_t intercept_bb = get_piece_bb(current_state) & ALL_INTERCEPTS[current_data.current_pos + 36];
+    uint64_t intercept_bb = get_piece_bb(starting_state) & ALL_INTERCEPTS[current_data.current_pos + 36];
 
     uint16_t path_list_idx = three_map[(current_data.current_pos * 11007) + (intercept_bb % 11007)];
     uint16_t path_list_len = three_path_lists[(path_list_idx * 36) + 35];
@@ -520,7 +530,7 @@ __device__ void process_three(
 
         }
 
-        uint64_t end_piece = piece_at(current_state, end_pos);
+        uint64_t end_piece = piece_at(starting_state, end_pos);
         bool is_empty = (end_piece == 0);
 
         if (is_empty) {
@@ -543,7 +553,7 @@ __device__ void process_three(
             int stack_type = end_piece - 1;
             push(
                 stack, 
-                (stack_type == 0) ? one_stack_height : (stack_type == 1) ? two_stack_height : three_stack_height, 
+                stack_height,
                 block_id, 
                 stack_type, 
                 new_data
@@ -557,8 +567,9 @@ __device__ void process_three(
 
 extern "C" __global__ void gen_kernel(
     const GenRequest* __restrict__ in_data,
-    GenResult* out_data,  
-    StackData* stack
+    GenResult* out_data,
+    StackData* stack,
+    uint32_t* stack_height
     
 ) {
     uint32_t block_id = blockIdx.x;       // Each block processes one generation request
@@ -567,71 +578,78 @@ extern "C" __global__ void gen_kernel(
     uint32_t lane_id = threadIdx.x % 32;  // 
 
     // Init Shared Memory
-    __shared__ uint32_t one_stack_height;       // Stack height for ones
-    __shared__ uint32_t two_stack_height;       // Stack height for twos
-    __shared__ uint32_t three_stack_height;     // Stack height for threes
     __shared__ uint64_t end_positions[6];       // End positions
     __shared__ uint64_t pickup_positions[6];    // Pickup positions
-    if (thread_id == 0) {
-        one_stack_height = 0;
-        two_stack_height = 0;
-        three_stack_height = 0;
+    __shared__ uint64_t starting_states[6];     // Starting states
+    if (thread_id < 6) {
+        if (thread_id == 0) {   // Drop positions
+            out_data[block_id].drop_positions = (~in_data[block_id].state & 0b111111111111111111111111111111111111ULL);
 
-        out_data[block_id].drop_positions = (~in_data[block_id].state & 0b111111111111111111111111111111111111ULL);
+        }
+
+        end_positions[thread_id] = 0ULL;
+        pickup_positions[thread_id] = 0ULL;
+        starting_states[thread_id] = 0ULL;
+
+        uint64_t active_bb = in_data[block_id].active_bb;
+        if ((1ULL << thread_id) & active_bb) {
+            uint64_t new_state = remove_piece(in_data[block_id].state, thread_id);
+            starting_states[thread_id] = new_state;
+
+            // Create init stack data
+            uint8_t piece = piece_at(in_data[block_id].state, thread_id);
+            StackData data = {
+                0ULL,
+                0ULL,
+                (uint8_t)thread_id, // WRONG INDEX -> ONLY WORKS WHEN STARTING LINE IS ON THE FIRST ROW
+                (uint8_t)thread_id, 
+                piece,
+            };
+
+            // Push to stack
+            int stack_type = piece - 1;
+            push(
+                stack, 
+                stack_height, 
+                block_id, 
+                stack_type, 
+                data
+            );
+
+        }
 
     }
-
-    __syncthreads(); // Sync threads
-    
-    // Setup
-    __shared__ uint64_t starting_states[6]; // Starting states for active line
-    uint64_t start_bb = in_data[block_id].active_bb;
-    if (((1ULL << thread_id) & start_bb) && thread_id < 6) {
-        uint64_t new_state = remove_piece(in_data[block_id].state, thread_id);
-        starting_states[thread_id] = new_state; // WRONG INDEX -> ONLY WORKS WHEN STARTING LINE IS ON THE FIRST ROW
-
-        // Create init stack data
-        uint8_t piece = piece_at(in_data[block_id].state, thread_id);
-        StackData data = {
-            0ULL,
-            0ULL,
-            thread_id, // WRONG INDEX -> ONLY WORKS WHEN STARTING LINE IS ON THE FIRST ROW
-            (uint8_t)thread_id, 
-            piece,
-        };
-
-        // Push to stack
-        int stack_type = piece - 1;
-        push(
-            stack, 
-            (stack_type == 0) ? &one_stack_height : (stack_type == 1) ? &two_stack_height : &three_stack_height, 
-            block_id, 
-            stack_type, 
-            data
-        );
-
-    }
-    
-    __syncthreads(); // Sync threads
 
     // MAIN PROCESSING LOOP
     while (true) {
+        // Sync threads
+        __threadfence();
+        __syncthreads();
+
+        // Current stack heights
+        uint32_t one_stack_height = stack_height[HEIGHTIDX(block_id, 0)];
+        uint32_t two_stack_height = stack_height[HEIGHTIDX(block_id, 1)];
+        uint32_t three_stack_height = stack_height[HEIGHTIDX(block_id, 2)];
+        if (one_stack_height == 0 && two_stack_height == 0 && three_stack_height == 0) {
+            break;
+
+        }
+
+        // Process stack
         switch(warp_id) {
             case 0: {
                 if (lane_id < one_stack_height) {
-                    StackData current_data = pop(stack, &one_stack_height, block_id, 0);
-                    uint64_t current_state = starting_states[current_data.active_line_idx];
+                    StackData current_data = pop(stack, stack_height, block_id, 0);
+                    uint64_t starting_state = starting_states[current_data.active_line_idx];
 
                     uint64_t local_end_positions = 0ULL;
                     uint64_t local_pickup_positions = 0ULL;
 
                     process_one(
                         stack,
-                        &one_stack_height,
-                        &two_stack_height,
-                        &three_stack_height,
+                        stack_height,
                         current_data,
-                        current_state,
+                        starting_state,
                         end_positions[current_data.active_line_idx],
                         &local_end_positions,
                         &local_pickup_positions,
@@ -646,22 +664,19 @@ extern "C" __global__ void gen_kernel(
                 break;
 
             }
-
             case 1: {
                 if (lane_id < two_stack_height) {
-                    StackData current_data = pop(stack, &two_stack_height, block_id, 1);
-                    uint64_t current_state = starting_states[current_data.active_line_idx];
+                    StackData current_data = pop(stack, stack_height, block_id, 1);
+                    uint64_t starting_state = starting_states[current_data.active_line_idx];
 
                     uint64_t local_end_positions = 0ULL;
                     uint64_t local_pickup_positions = 0ULL;
 
                     process_two(
                         stack,
-                        &one_stack_height,
-                        &two_stack_height,
-                        &three_stack_height,
+                        stack_height,
                         current_data,
-                        current_state,
+                        starting_state,
                         end_positions[current_data.active_line_idx],
                         &local_end_positions,
                         &local_pickup_positions,
@@ -676,22 +691,19 @@ extern "C" __global__ void gen_kernel(
                 break;
 
             }
-
             case 2: {
                 if (lane_id < three_stack_height) {
-                    StackData current_data = pop(stack, &three_stack_height, block_id, 2);
-                    uint64_t current_state = starting_states[current_data.active_line_idx];
+                    StackData current_data = pop(stack, stack_height, block_id, 2);
+                    uint64_t starting_state = starting_states[current_data.active_line_idx];
 
                     uint64_t local_end_positions = 0ULL;
                     uint64_t local_pickup_positions = 0ULL;
 
                     process_three(
                         stack,
-                        &one_stack_height,
-                        &two_stack_height,
-                        &three_stack_height,
+                        stack_height,
                         current_data,
-                        current_state,
+                        starting_state,
                         end_positions[current_data.active_line_idx],
                         &local_end_positions,
                         &local_pickup_positions,
@@ -700,7 +712,7 @@ extern "C" __global__ void gen_kernel(
 
                     atomicOr(&end_positions[current_data.active_line_idx], local_end_positions);
                     atomicOr(&pickup_positions[current_data.active_line_idx], local_pickup_positions);
-                
+
                 }
 
                 break;
@@ -709,17 +721,9 @@ extern "C" __global__ void gen_kernel(
 
         }
 
-        __syncthreads(); // Sync threads
-
-        // Exit condition
-        if (one_stack_height == 0 && two_stack_height == 0 && three_stack_height == 0) {
-            break;
-
-        }
-
     }
 
-    __syncthreads(); // Sync threads
+    __syncthreads(); 
 
     // Store results
     if (thread_id < 6) {

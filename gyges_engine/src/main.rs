@@ -31,50 +31,82 @@ use std::{ffi::{c_void, CString}, fmt::Display, ptr};
 fn main() -> Result<(), CUresult> {
     // Initialize CUDA
     let _ctx: CUcontext = cuda_init().expect("Failed to initialize CUDA context");
-    
-    // let mut board = BoardState::from(STARTING_BOARD);
-    // let mut board = BoardState::from(BENCH_BOARD);
-    let mut board = BoardState::from(TEST_BOARD);
-    // let mut board = BoardState::from([ // SPARCE CASE
-    //     0, 0, 0, 0, 2, 3,
-    //     0, 0, 0, 0, 0, 0,
-    //     0, 0, 0, 0, 0, 0,
-    //     0, 0, 0, 0, 0, 0,
-    //     0, 0, 0, 0, 0, 0,
-    //     0, 0, 0, 0, 0, 1,
-    //     0, 0
-    // ]);
-    // let mut board = BoardState::from([ // REAL CASE
-    //     0, 3, 0, 0, 1, 3,
-    //     0, 0, 0, 0, 0, 2,
-    //     2, 0, 1, 0, 0, 0,
-    //     3, 0, 0, 0, 0, 0,
-    //     2, 0, 0, 0, 0, 0,
-    //     1, 0, 0, 1, 2, 3,
-    //     0, 0
-    // ]);
+
+    let mut board1 = BoardState::from(TEST_BOARD); 
+    let mut board2 = BoardState::from(STARTING_BOARD);
+    let mut board3 = BoardState::from(BENCH_BOARD);
+    let mut board4 = BoardState::from([ // SPARCE CASE
+        0, 0, 0, 0, 2, 3,
+        0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 1,
+        0, 0
+    ]);
+    let mut board5 = BoardState::from([ // REAL CASE
+        0, 3, 0, 0, 1, 3,
+        0, 0, 0, 0, 0, 2,
+        2, 0, 1, 0, 0, 0,
+        3, 0, 0, 0, 0, 0,
+        2, 0, 0, 0, 0, 0,
+        1, 0, 0, 1, 2, 3,
+        0, 0
+    ]);
     let player = Player::One;
-    println!("{}", board);
-    
+
     let mut mg = MoveGen::new().expect("Failed to initialize move generator");
 
-    // TESTS
-    let boards = vec![board.clone(); 1];
-    let moves = mg.gen(&boards, player);
-    let new: Vec<Move> = decode_moves(&mut board, &moves[0]);
+    // NEW
+    for i in 0..500 {
+        let mut boards: Vec<BoardState> = vec![];
+        for _ in 0..2000 {
+            boards.push(board1.clone());
+            boards.push(board2.clone());
+            boards.push(board3.clone());
+            boards.push(board4.clone());
+            boards.push(board5.clone());
 
-    let mut moves = unsafe { valid_moves(&mut board, player) };
-    let real: Vec<Move> = moves.moves(&board);
+        }
 
-    println!("Real: {}, New: {}", real.len(), new.len());
+        let moves = mg.gen(&boards, player);
+
+        let mut count: usize = 0;
+        for i in 0..moves.len() {
+            count += decode_moves(&mut boards[i], &moves[i]).len();
+
+        }
+
+        println!("{}: New: {}", i, (count / 2000) as f64);
     
+        if (count / 2000) != 1662 {
+            break;
+
+        }
+
+    }
+    
+    // NATIVE 
+    let mut moves1 = unsafe { valid_moves(&mut board1, player) }; 
+    let mut moves2 = unsafe { valid_moves(&mut board2, player) };
+    let mut moves3 = unsafe { valid_moves(&mut board3, player) };
+    let mut moves4 = unsafe { valid_moves(&mut board4, player) };
+    let mut moves5 = unsafe { valid_moves(&mut board5, player) };
+    let real1 = moves1.moves(&board1);
+    let real2 = moves2.moves(&board2);
+    let real3 = moves3.moves(&board3);
+    let real4 = moves4.moves(&board4);
+    let real5 = moves5.moves(&board5);
+    println!("Native: {}", (real1.len() + real2.len() + real3.len() + real4.len() + real5.len()) as f64);
+
     // BENCHMARKS
     unsafe {
-        let iters = 10000;
+        let iters: i32 = 5000;
 
-        let boards = vec![board.clone(); 1];
+        println!("NEW BENCHMARKS");
+        let genbatch_size = 1500;
+        let boards = vec![board1.clone(); genbatch_size];
         for batch in 0..3 {
-            // NEW
             let mut num = 0;
             let start: std::time::Instant = std::time::Instant::now();
             for _ in 0..iters {
@@ -82,27 +114,29 @@ fn main() -> Result<(), CUresult> {
                 num += 1;
                
             }
+            
             let elapsed = start.elapsed().as_secs_f64();
-            println!("{}: New Elapsed: {:?}, {}", batch, elapsed as f64 / iters as f64, num);
+            let iter_time = elapsed / iters as f64;
+            let gens_per_sec = (1.0 / iter_time) * genbatch_size as f64;
+            println!("{}: {} g/s : {} s/iter", batch, gens_per_sec as usize, iter_time);
 
         }
 
-
+        println!("NATIVE BENCHMARKS");
         for batch in 0..3 {
-            // Native
             let mut num = 0;
-            let start = std::time::Instant::now();
+            let start: std::time::Instant = std::time::Instant::now();
             for _ in 0..iters {
-                for _ in 0..1 {
-                    let _moves = valid_moves(&mut board, player);
-                    num += 1;
-
-                }
+                let _moves = valid_moves(&mut board1, player);
+                num += 1;
                
             }
+            
             let elapsed = start.elapsed().as_secs_f64();
-            println!("{}: Native Elapsed: {:?}, {}", batch, elapsed as f64 / iters as f64, num);
-    
+            let iter_time = elapsed / iters as f64;
+            let gens_per_sec = 1.0 / iter_time;
+            println!("{}: {} g/s : {} s/iter", batch, gens_per_sec as usize, iter_time);
+
         }
 
     }
@@ -116,6 +150,7 @@ fn main() -> Result<(), CUresult> {
 pub struct MoveGen {
     // GPU Stack buffer
     stack_d: CUdeviceptr,
+    stack_heights_d: CUdeviceptr,
 
     // Input & Output Buffers
     input_d: CUdeviceptr,
@@ -131,8 +166,8 @@ pub struct MoveGen {
 }
 
 impl MoveGen {
-    pub const MAX_REQUESTS: usize = 500;
-    pub const MAX_STACK_SIZE: usize = 1000;
+    pub const MAX_REQUESTS: usize = 10000;
+    pub const MAX_STACK_SIZE: usize = 75;
 
     pub fn new() -> Result<Self, CUresult> {
         // Load kernel from PTX
@@ -222,6 +257,7 @@ impl MoveGen {
        
         // Allocate stack buffer
         let stack_d = device_mem_alloc::<StackData>(MoveGen::MAX_REQUESTS * MoveGen::MAX_STACK_SIZE * 3)?;
+        let stack_heights_d = device_mem_alloc::<u32>(MoveGen::MAX_REQUESTS * 3)?;
 
         // Allocate input & output buffers
         let (input_h, input_d) = allocate_zero_copy_memory::<GenRequest>(MoveGen::MAX_REQUESTS)?;
@@ -230,6 +266,7 @@ impl MoveGen {
         // Create the instance  
         Ok(Self {
             stack_d,
+            stack_heights_d,
 
             input_d,
             input_h,
@@ -262,9 +299,14 @@ impl MoveGen {
     pub fn gen(&mut self, boards: &Vec<BoardState>, _player: Player) -> Vec<GenResult> {
         let num_requests = boards.len();
 
+        // Error check
+        if num_requests > MoveGen::MAX_REQUESTS {
+            panic!("Exceeded maximum number of requests");
+        }
+
         // Set the requests
         for i in 0..num_requests {
-            let request = self.create_request(&boards[0], 0);
+            let request = self.create_request(&boards[i], 0);
             unsafe { self.input_h.add(i).write_volatile(request); }
 
         }
@@ -281,6 +323,7 @@ impl MoveGen {
                     &mut self.input_d as *mut CUdeviceptr as *mut c_void,
                     &mut self.final_d as *mut CUdeviceptr as *mut c_void,
                     &mut self.stack_d as *mut CUdeviceptr as *mut c_void,
+                    &mut self.stack_heights_d as *mut CUdeviceptr as *mut c_void
                 ].as_ptr() as *mut *mut c_void,
                 ptr::null_mut(),  // No extra arguments
 
@@ -309,6 +352,7 @@ impl MoveGen {
     /// Frees all allocated GPU memory
     pub fn mem_free(&mut self) {
         device_mem_free(self.stack_d).expect("Failed to free stack buffer");
+        device_mem_free(self.stack_heights_d).expect("Failed to free stack heights buffer");
         
         // Free Host buffers
         unsafe {
@@ -367,6 +411,7 @@ pub fn decode_moves(board: &mut BoardState, gen_result: &GenResult) -> Vec<Move>
 struct StackData {
     banned_bb: u64,
     backtrack_bb: u64,
+    active_line_idx: u8,
     current_pos: u8,
     current_piece: u8,
 
@@ -380,6 +425,7 @@ pub struct GenRequest {
 
 }
 
+#[derive(Debug)]
 #[repr(C)]
 pub struct GenResult {
     end_positions: [u64; 6],
@@ -387,6 +433,31 @@ pub struct GenResult {
     drop_positions: u64,
 
 }
+
+impl GenResult {
+    pub fn new() -> Self {
+        Self {
+            end_positions: [0; 6],
+            pickup_positions: [0; 6],
+            drop_positions: 0
+
+        }
+
+    }
+
+    pub fn print(&self) {
+        for i in 0..6 {
+            println!("End {}: {}", i, BitBoard(self.end_positions[i]));
+            println!("Pickup {}: {}", i, BitBoard(self.pickup_positions[i]));
+
+        }
+
+        println!("Drops: {}", BitBoard(self.drop_positions));
+
+    }
+
+}
+
 
 #[repr(C)]
 struct OnePath {
