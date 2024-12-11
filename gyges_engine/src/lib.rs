@@ -11,3 +11,4 @@
 pub mod search;
 pub mod consts;
 pub mod ugi;
+pub mod new_movegen;

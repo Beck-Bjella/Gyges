@@ -581,23 +581,25 @@ extern "C" __global__ void gen_kernel(
     __shared__ uint64_t end_positions[6];       // End positions
     __shared__ uint64_t pickup_positions[6];    // Pickup positions
     __shared__ uint64_t starting_states[6];     // Starting states
+    __shared__ GenRequest request;              // Generation request 
+    if (thread_id == 0) {
+        request = in_data[block_id];
+        out_data[block_id].drop_positions = (~request.state & 0b111111111111111111111111111111111111ULL);
+    }
+
+    __syncthreads();
+    
     if (thread_id < 6) {
-        if (thread_id == 0) {   // Drop positions
-            out_data[block_id].drop_positions = (~in_data[block_id].state & 0b111111111111111111111111111111111111ULL);
-
-        }
-
         end_positions[thread_id] = 0ULL;
         pickup_positions[thread_id] = 0ULL;
-        starting_states[thread_id] = 0ULL;
 
-        uint64_t active_bb = in_data[block_id].active_bb;
+        uint64_t active_bb = request.active_bb;
         if ((1ULL << thread_id) & active_bb) {
-            uint64_t new_state = remove_piece(in_data[block_id].state, thread_id);
+            uint64_t new_state = remove_piece(request.state, thread_id);
             starting_states[thread_id] = new_state;
 
             // Create init stack data
-            uint8_t piece = piece_at(in_data[block_id].state, thread_id);
+            uint8_t piece = piece_at(request.state, thread_id);
             StackData data = {
                 0ULL,
                 0ULL,
