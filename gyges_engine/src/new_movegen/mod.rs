@@ -18,7 +18,7 @@ use cuda_helpers::*;
 use bitstate::*;
 
 pub struct MoveGen {
-    inner: InnerMoveGen
+    pub inner: InnerMoveGen
     
 }
 
@@ -31,20 +31,27 @@ impl MoveGen {
 
     }
 
-    pub fn batch(&mut self, boards: &Vec<BoardState>, player: Player) -> Vec<GenResult> {
+    pub fn create_request(&self, board: &BoardState, player: Player, flag: u8) -> GenRequest {
+        let bitstate = BitState::from(board);
+
+        let active_lines = board.get_active_lines();
+        let active_bb: BitBoard = board.piece_bb & RANKS[active_lines[player as usize]];
+
+        GenRequest {
+            state: bitstate.0,
+            active_bb: active_bb.0,
+            p1_activeline: active_lines[0] as u8,
+            p2_activeline: active_lines[1] as u8,
+            player: player as u8,
+            flag
+
+        }
+
+    }
+
+    pub fn batch(&mut self, boards: &Vec<BoardState>, player: Player, flag: u8) -> Vec<GenResult> {
         for (i, board) in boards.iter().enumerate() {
-            let bitstate = BitState::from(board);
-
-            let active_lines = board.get_active_lines();
-            let active_bb: BitBoard = board.piece_bb & RANKS[active_lines[0]];
-
-            let request = GenRequest {
-                state: bitstate.0,
-                active_bb: active_bb.0,
-                flag: player as u8
-
-            };
-
+            let request = self.create_request(board, player, flag);
             unsafe { self.inner.store(request, i); }
 
         }
@@ -97,7 +104,7 @@ pub struct InnerMoveGen {
 
 impl InnerMoveGen {
     pub const MAX_REQUESTS: usize = 10000;
-    pub const MAX_STACK_SIZE: usize = 75;
+    pub const MAX_STACK_SIZE: usize = 10000;
 
     pub fn new() -> Result<Self, CUresult> {
         // Initialize CUDA
@@ -225,6 +232,16 @@ impl InnerMoveGen {
         self.input_h.add(idx).write_volatile(request);
 
     }
+    
+    pub unsafe fn store_batch(&mut self, requests: &Vec<GenRequest>) {
+        if requests.len() > InnerMoveGen::MAX_REQUESTS {
+            panic!("Batch size exceeds maximum requests");
+
+        }
+
+        self.input_h.copy_from(requests.as_ptr(), requests.len());
+
+    }
 
     /// Fetches a result from the output buffer
     pub unsafe fn fetch(&mut self, idx: usize) -> GenResult {
@@ -284,6 +301,9 @@ impl InnerMoveGen {
 pub struct GenRequest {
     pub state: u64,
     pub active_bb: u64,
+    pub p1_activeline: u8,
+    pub p2_activeline: u8,
+    pub player: u8,
     pub flag: u8
 
 }
@@ -294,6 +314,7 @@ pub struct GenResult {
     end_positions: [u64; 6],
     pickup_positions: [u64; 6],
     drop_positions: u64,
+    has_threat: u64
 
 }
 
@@ -302,19 +323,23 @@ impl GenResult {
         Self {
             end_positions: [0; 6],
             pickup_positions: [0; 6],
-            drop_positions: 0
+            drop_positions: 0,
+            has_threat: 0
 
         }
 
     }
 
-    pub fn moves(&mut self, board: &BoardState) -> Vec<Move> {
+    pub fn moves(&mut self, board: &BoardState, player: Player) -> Vec<Move> {
         let mut moves: Vec<Move> = Vec::with_capacity(1000);
+    
+        let active_lines = board.get_active_lines();
+        let active_pos = active_lines[player as usize] as u8 * 6;
 
         let drop_positions = BitBoard(self.drop_positions).get_data();
 
         for i in 0..6 {
-            let start_sq = SQ(i as u8);
+            let start_sq = SQ(active_pos + i as u8);
             let start_piece = board.piece_at(start_sq);
             if start_piece == Piece::None {
                 continue;
@@ -344,6 +369,24 @@ impl GenResult {
         }
 
         moves
+
+    }
+
+    pub fn psudo_count(&self) -> usize {
+        let mut count = 0;
+        let drop_count = BitBoard(self.drop_positions).pop_count() + 1;
+        for i in 0..6 {
+            count += BitBoard(self.end_positions[i]).pop_count();
+            count += BitBoard(self.pickup_positions[i]).pop_count() * drop_count;
+
+        }
+
+        count
+
+    }
+
+    pub fn has_threat(&self) -> bool {
+        self.has_threat != 0
 
     }
 

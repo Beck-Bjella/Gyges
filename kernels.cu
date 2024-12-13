@@ -4,7 +4,7 @@
 
 // ==================== CONSTANTS ====================
 
-// Board
+// Masks
 #define BIT_36_MASK (1ULL << 36)
 #define BIT_37_MASK (1ULL << 37)
 #define GOALS_MASK (BIT_36_MASK | BIT_37_MASK)
@@ -86,8 +86,30 @@ __constant__ uint64_t ALL_INTERCEPTS[72] {
 
 };
 
+// Backzones
+__constant__ uint64_t BACK_ZONES[2][6] {
+    {
+        0b000000000000000000000000000000000000ULL,
+        0b000000000000000000000000000000111111ULL,
+        0b000000000000000000000000111111111111ULL,
+        0b000000000000000000111111111111111111ULL,
+        0b000000000000111111111111111111111111ULL,
+        0b000000111111111111111111111111111111ULL 
+    },
+    {
+        0b111111111111111111111111111111000000ULL,
+        0b111111111111111111111111000000000000ULL,
+        0b111111111111111111000000000000000000ULL,
+        0b111111111111000000000000000000000000ULL,
+        0b111111000000000000000000000000000000ULL,
+        0b000000000000000000000000000000000000ULL
+    }
+    
+};
+
+
 // Stack
-const uint32_t MAX_STACK_SIZE = 75;
+const uint32_t MAX_STACK_SIZE = 10000;
 #define STACKIDX(block_id, type) (block_id * MAX_STACK_SIZE * 3) + (type * MAX_STACK_SIZE)
 #define HEIGHTIDX(block_id, type) (block_id * 3) + type
 
@@ -96,6 +118,9 @@ const uint32_t MAX_STACK_SIZE = 75;
 struct GenRequest {
     uint64_t state;
     uint64_t active_bb;
+    uint8_t p1_activeline;
+    uint8_t p2_activeline;
+    uint8_t player;
     uint8_t flag;
 
 };
@@ -104,6 +129,7 @@ struct GenResult {
     uint64_t end_positions[6];
     uint64_t pickup_positions[6];
     uint64_t drop_positions;
+    uint64_t has_threat;
     
 };
 
@@ -369,15 +395,19 @@ __device__ StackData pop(StackData* stack, uint32_t* stack_height, uint32_t bloc
 
 }
 
-__device__ void process_one(
+// ====== VALID MOVES ======
+
+__device__ void valid_moves_one(
     StackData* stack, 
     uint32_t* stack_height, 
     StackData current_data,
     uint64_t starting_state,
     uint64_t end_positions,
+    uint64_t* local_has_threat,
     uint64_t* local_end_positions, 
     uint64_t* local_pickup_positions,
-    uint64_t block_id
+    uint64_t block_id,
+    uint8_t player
 ) {
     uint16_t path_list_idx = one_map[current_data.current_pos];
     uint16_t path_list_len = one_path_lists[(path_list_idx * 5) + 4];
@@ -391,18 +421,21 @@ __device__ void process_one(
 
         uint64_t end_pos_banned = (current_data.banned_bb | end_positions) & end_bit;
         uint64_t backtrack_conflict = current_data.backtrack_bb & path.backtrack_bb; 
-        bool valid_player = !(((end_bit & BIT_36_MASK) && 0 == 0) || ((end_bit & BIT_37_MASK) && 0 == 1));
+        bool invalid_player = ((end_bit & BIT_36_MASK) && (player == 0)) || ((end_bit & BIT_37_MASK) && (player == 1));
 
-        if (backtrack_conflict || end_pos_banned || !valid_player) {
+        if (backtrack_conflict || end_pos_banned || invalid_player) {
             continue;
 
-        }           
-            
+        }
+
         uint64_t end_piece = piece_at(starting_state, end_pos);
         bool is_empty = (end_piece == 0);
 
         if (is_empty) {
             *local_end_positions |= end_bit;
+            if ((end_bit & GOALS_MASK) != 0) {
+                *local_has_threat = 1;
+            }
 
         } else {
             uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
@@ -433,15 +466,17 @@ __device__ void process_one(
 
 }
 
-__device__ void process_two(
+__device__ void valid_moves_two(
     StackData* stack, 
     uint32_t* stack_height,
     StackData current_data, 
     uint64_t starting_state,
     uint64_t end_positions,
+    uint64_t* local_has_threat,
     uint64_t* local_end_positions, 
     uint64_t* local_pickup_positions,
-    uint64_t block_id
+    uint64_t block_id,
+    uint8_t player
 ) {
     uint64_t intercept_bb = get_piece_bb(starting_state) & ALL_INTERCEPTS[current_data.current_pos];
 
@@ -457,18 +492,22 @@ __device__ void process_two(
 
         uint64_t end_pos_banned = (current_data.banned_bb | end_positions) & end_bit;
         uint64_t backtrack_conflict = current_data.backtrack_bb & path.backtrack_bb; 
-        bool valid_player = !(((end_bit & BIT_36_MASK) && 0 == 0) || ((end_bit & BIT_37_MASK) && 0 == 1));
+        bool invalid_player = ((end_bit & BIT_36_MASK) && (player == 0)) || ((end_bit & BIT_37_MASK) && (player == 1));
 
-        if (backtrack_conflict || end_pos_banned || !valid_player) {
+        if (backtrack_conflict || end_pos_banned || invalid_player) {
             continue;
 
-        }           
+        }
+         
             
         uint64_t end_piece = piece_at(starting_state, end_pos);
         bool is_empty = (end_piece == 0);
 
         if (is_empty) {
             *local_end_positions |= end_bit;
+            if ((end_bit & GOALS_MASK) != 0) {
+                *local_has_threat = 1;
+            }
 
         } else {
             uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
@@ -499,15 +538,17 @@ __device__ void process_two(
 
 }
 
-__device__ void process_three(
+__device__ void valid_moves_three(
     StackData* stack, 
     uint32_t* stack_height,
     StackData current_data, 
     uint64_t starting_state,
     uint64_t end_positions,
+    uint64_t* local_has_threat,
     uint64_t* local_end_positions, 
     uint64_t* local_pickup_positions,
-    uint64_t block_id
+    uint64_t block_id,
+    uint8_t player
 ) {
     uint64_t intercept_bb = get_piece_bb(starting_state) & ALL_INTERCEPTS[current_data.current_pos + 36];
 
@@ -523,9 +564,9 @@ __device__ void process_three(
 
         uint64_t end_pos_banned = (current_data.banned_bb | end_positions) & end_bit;
         uint64_t backtrack_conflict = current_data.backtrack_bb & path.backtrack_bb; 
-        bool valid_player = !(((end_bit & BIT_36_MASK) && 0 == 0) || ((end_bit & BIT_37_MASK) && 0 == 1));
+        bool invalid_player = ((end_bit & BIT_36_MASK) && (player == 0)) || ((end_bit & BIT_37_MASK) && (player == 1));
 
-        if (backtrack_conflict || end_pos_banned || !valid_player) {
+        if (backtrack_conflict || end_pos_banned || invalid_player) {
             continue;
 
         }
@@ -535,6 +576,9 @@ __device__ void process_three(
 
         if (is_empty) {
             *local_end_positions |= end_bit;
+            if ((end_bit & GOALS_MASK) != 0) {
+                *local_has_threat = 1;
+            }
 
         } else {
             uint64_t new_banned_bb = current_data.banned_bb ^ end_bit;
@@ -580,31 +624,58 @@ extern "C" __global__ void gen_kernel(
     // Init Shared Memory
     __shared__ uint64_t end_positions[6];       // End positions
     __shared__ uint64_t pickup_positions[6];    // Pickup positions
+    __shared__ uint64_t has_threat;                 // Threat flag
+
     __shared__ uint64_t starting_states[6];     // Starting states
     __shared__ GenRequest request;              // Generation request 
+    __shared__ uint8_t player;                  // Player to move
+    __shared__ uint8_t flag;                    // Generation flag
     if (thread_id == 0) {
         request = in_data[block_id];
-        out_data[block_id].drop_positions = (~request.state & 0b111111111111111111111111111111111111ULL);
+        player = request.player;
+        flag = request.flag;
+
+        has_threat = 0;
+
+        // Get drops
+        uint8_t other_player = player == 0 ? 1 : 0;
+        uint8_t other_activeline = player == 0 ? request.p2_activeline : request.p1_activeline;
+        
+        uint64_t piece_bb = request.state & 0b111111111111111111111111111111111111ULL;
+        uint64_t other_backzone = BACK_ZONES[other_player][other_activeline];
+        uint64_t drop_bb = ~piece_bb & (0b111111111111111111111111111111111111ULL ^ other_backzone);
+
+        out_data[block_id].drop_positions = drop_bb;
+
     }
 
     __syncthreads();
     
+    // Setup
     if (thread_id < 6) {
         end_positions[thread_id] = 0ULL;
         pickup_positions[thread_id] = 0ULL;
 
+        uint8_t current_pos;
+        if (player == 0) {
+            current_pos = request.p1_activeline * 6 + thread_id;
+        } else {
+            current_pos = request.p2_activeline * 6 + thread_id;
+
+        }
+
         uint64_t active_bb = request.active_bb;
-        if ((1ULL << thread_id) & active_bb) {
-            uint64_t new_state = remove_piece(request.state, thread_id);
+        if ((1ULL << current_pos) & active_bb) {
+            uint64_t new_state = remove_piece(request.state, current_pos);
             starting_states[thread_id] = new_state;
 
             // Create init stack data
-            uint8_t piece = piece_at(request.state, thread_id);
+            uint8_t piece = piece_at(request.state, current_pos);
             StackData data = {
                 0ULL,
                 0ULL,
-                (uint8_t)thread_id, // WRONG INDEX -> ONLY WORKS WHEN STARTING LINE IS ON THE FIRST ROW
-                (uint8_t)thread_id, 
+                (uint8_t)thread_id,
+                current_pos, 
                 piece,
             };
 
@@ -622,6 +693,8 @@ extern "C" __global__ void gen_kernel(
 
     }
 
+    __syncthreads();
+
     // MAIN PROCESSING LOOP
     while (true) {
         // Sync threads
@@ -632,32 +705,40 @@ extern "C" __global__ void gen_kernel(
         uint32_t one_stack_height = stack_height[HEIGHTIDX(block_id, 0)];
         uint32_t two_stack_height = stack_height[HEIGHTIDX(block_id, 1)];
         uint32_t three_stack_height = stack_height[HEIGHTIDX(block_id, 2)];
-        if (one_stack_height == 0 && two_stack_height == 0 && three_stack_height == 0) {
+        if ((one_stack_height == 0 && two_stack_height == 0 && three_stack_height == 0)) {
             break;
 
         }
 
         // Process stack
-        switch(warp_id) {
+        switch(warp_id) { 
             case 0: {
                 if (lane_id < one_stack_height) {
                     StackData current_data = pop(stack, stack_height, block_id, 0);
                     uint64_t starting_state = starting_states[current_data.active_line_idx];
 
+                    uint64_t local_has_threat = 0ULL;
                     uint64_t local_end_positions = 0ULL;
                     uint64_t local_pickup_positions = 0ULL;
 
-                    process_one(
+                    valid_moves_one(
                         stack,
                         stack_height,
                         current_data,
                         starting_state,
                         end_positions[current_data.active_line_idx],
+                        &local_has_threat,
                         &local_end_positions,
                         &local_pickup_positions,
-                        block_id
+                        block_id,
+                        player
                     );
 
+                    if (!has_threat && local_has_threat) {
+                        atomicOr(&has_threat, 1);
+
+                    }
+                    
                     atomicOr(&end_positions[current_data.active_line_idx], local_end_positions);
                     atomicOr(&pickup_positions[current_data.active_line_idx], local_pickup_positions);
 
@@ -671,19 +752,27 @@ extern "C" __global__ void gen_kernel(
                     StackData current_data = pop(stack, stack_height, block_id, 1);
                     uint64_t starting_state = starting_states[current_data.active_line_idx];
 
+                    uint64_t local_has_threat = 0ULL;
                     uint64_t local_end_positions = 0ULL;
                     uint64_t local_pickup_positions = 0ULL;
 
-                    process_two(
+                    valid_moves_two(
                         stack,
                         stack_height,
                         current_data,
                         starting_state,
                         end_positions[current_data.active_line_idx],
+                        &local_has_threat,
                         &local_end_positions,
                         &local_pickup_positions,
-                        block_id
+                        block_id,
+                        player
                     );
+
+                    if (!has_threat && local_has_threat) {
+                        atomicOr(&has_threat, 1);
+
+                    }
 
                     atomicOr(&end_positions[current_data.active_line_idx], local_end_positions);
                     atomicOr(&pickup_positions[current_data.active_line_idx], local_pickup_positions);
@@ -698,19 +787,27 @@ extern "C" __global__ void gen_kernel(
                     StackData current_data = pop(stack, stack_height, block_id, 2);
                     uint64_t starting_state = starting_states[current_data.active_line_idx];
 
+                    uint64_t local_has_threat = 0ULL;
                     uint64_t local_end_positions = 0ULL;
                     uint64_t local_pickup_positions = 0ULL;
 
-                    process_three(
+                    valid_moves_three(
                         stack,
                         stack_height,
                         current_data,
                         starting_state,
                         end_positions[current_data.active_line_idx],
+                        &local_has_threat,
                         &local_end_positions,
                         &local_pickup_positions,
-                        block_id
+                        block_id,
+                        player
                     );
+
+                    if (!has_threat && local_has_threat) {
+                        atomicOr(&has_threat, 1);
+
+                    }
 
                     atomicOr(&end_positions[current_data.active_line_idx], local_end_positions);
                     atomicOr(&pickup_positions[current_data.active_line_idx], local_pickup_positions);
@@ -731,6 +828,11 @@ extern "C" __global__ void gen_kernel(
     if (thread_id < 6) {
         out_data[block_id].end_positions[thread_id] = end_positions[thread_id];
         out_data[block_id].pickup_positions[thread_id] = pickup_positions[thread_id];
+
+        if (thread_id == 0) {
+            out_data[block_id].has_threat = has_threat;
+
+        }
 
     }
 

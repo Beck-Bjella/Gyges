@@ -8,6 +8,7 @@ use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
+use gyges::moves;
 use rayon::prelude::*;
 
 use gyges::board::*;
@@ -17,6 +18,8 @@ use gyges::moves::move_list::*;
 use gyges::tools::tt::*;
 use gyges::core::*;
 
+use crate::new_movegen::GenRequest;
+use crate::new_movegen::MoveGen;
 use crate::search::evaluation::*;
 use crate::consts::*;
 use crate::ugi;
@@ -28,6 +31,8 @@ pub const TT_MOVE_SCORE: f64 = 1000000.0;
 
 /// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
 pub struct Searcher {
+    pub mg: MoveGen,
+
     pub current_ply: i8,
 
     pub completed_searchs: Vec<SearchData>,
@@ -45,6 +50,8 @@ impl Searcher {
     /// Creates a new searcher.
     pub fn new(stop_in: Receiver<bool>, options: SearchOptions) -> Searcher {
         Searcher {
+            mg: MoveGen::new(),
+
             current_ply: 0,
             
             completed_searchs: vec![],
@@ -346,8 +353,88 @@ impl Searcher {
 
     }
 
+    pub fn order_moves_gpu(&mut self, moves: Vec<Move>, board: &mut BoardState, player: Player, tt_move: Option<Move>) -> Vec<Move> {
+        let other_player = player.other();
+        for (i, mv) in moves.iter().enumerate() {
+            let new_board = board.make_move(mv);
+
+            let r1 = self.mg.create_request(&new_board, player, 0);
+            let r2 = self.mg.create_request(&new_board, other_player, 0);
+            
+            unsafe {
+                self.mg.inner.store(r1, i * 2);
+                self.mg.inner.store(r2, i * 2 + 1);
+
+            }
+
+        }
+
+        unsafe { 
+            self.mg.inner.gen((moves.len() * 2) as u32);
+            self.mg.inner.sync();
+
+        }
+
+        // For every move calculate a value to sort it by.
+        let mut moves_to_sort: Vec<(Move, f64)> = vec![];
+        for (i, mv) in moves.iter().enumerate() {
+            let mut sort_val: f64 = 0.0;
+            let player = unsafe { self.mg.inner.fetch(i * 2) };
+            let opp_player = unsafe { self.mg.inner.fetch(i * 2 + 1) };
+
+            // If opponent has a threat then remove it as an option because the move would lose.
+            if opp_player.has_threat() {
+                continue;
+
+            }
+
+            // If the move is the TT sort it first.
+            if tt_move.is_some() && *mv == tt_move.unwrap() {
+                moves_to_sort.push((*mv, TT_MOVE_SCORE));
+                continue;
+
+            }
+            
+            // If the move has a threat then increase the sort value.
+            if player.has_threat() {
+                sort_val += 1000.0;
+
+            }
+
+            // Lower the moves sort vlaue based on oppenent move count.
+            sort_val -= opp_player.psudo_count() as f64;
+
+            moves_to_sort.push((*mv, sort_val));
+                
+        }
+
+        // Sort the moves
+        moves_to_sort.sort_by(|a, b| {
+            if a.1 > b.1 {
+                Ordering::Less
+
+            } else if a.1 < b.1 {
+                Ordering::Greater
+
+            } else {
+                Ordering::Equal
+
+            }
+
+        });
+        
+        moves_to_sort.into_iter().map(|(mv, _)| mv).collect()
+
+    }
+
     /// Orders a list of moves.
     pub fn order_moves(&mut self, moves: Vec<Move>, board: &mut BoardState, player: Player, tt_move: Option<Move>) -> Vec<Move> {
+        // GPU threshold
+        if moves.len() > 1 {
+            return self.order_moves_gpu(moves, board, player, tt_move);
+            
+        }
+
         // For every move calculate a value to sort it by.
         let mut moves_to_sort: Vec<(Move, f64)> = moves.into_par_iter().filter_map(|mv| {
             let mut sort_val: f64 = 0.0;
@@ -369,9 +456,13 @@ impl Searcher {
             if unsafe { has_threat(&mut new_board, player) } {
                 sort_val += 1000.0;
             }
-
-            // Lower the moves sort value based on oppenent move count.
-            sort_val -= unsafe { valid_move_count(&mut new_board, player.other()) } as f64;
+            
+            // ORGINAL
+            // Lower the moves sort vlaue based on oppenent move count.
+            // sort_val -= unsafe { valid_move_count(&mut new_board, player.other()) } as f64;
+            
+            // NEW
+            sort_val -= unsafe { valid_moves(&mut new_board, player.other()).moves(board).len() } as f64;
 
             Some((mv, sort_val))
 
@@ -392,7 +483,7 @@ impl Searcher {
 
         });
         
-        moves_to_sort.into_iter().map(|(mv, _)| mv).collect()
+        return moves_to_sort.into_iter().map(|(mv, _)| mv).collect();
     
     }
 
