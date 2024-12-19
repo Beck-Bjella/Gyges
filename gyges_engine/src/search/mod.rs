@@ -211,10 +211,10 @@ impl Searcher {
         }
 
         // Generate the Raw move list for this node.
-        let mut move_list: RawMoveList = unsafe { valid_moves(board, player) };
-
+        let (has_threat, mut move_list) = unsafe { threat_or_moves(board, player) };
+        
         // If there is the threat for the current player return INF, because that move would eventualy be picked as best.
-        if move_list.has_threat(player) {
+        if has_threat {
             return f64::INFINITY;
             
         }
@@ -353,8 +353,10 @@ impl Searcher {
             let mut sort_val: f64 = 0.0;
             let mut new_board = board.make_move(&mv);
 
+            let (opp_has_threat, opp_movecount) = unsafe { threat_or_movecount(&mut new_board, player.other()) };
+
             // If opponent has a threat then remove it as an option because the move would lose.
-            if unsafe { has_threat(&mut new_board, player.other()) } {
+            if opp_has_threat {
                 return None;
 
             }
@@ -371,7 +373,7 @@ impl Searcher {
             }
 
             // Lower the moves sort value based on oppenent move count.
-            sort_val -= unsafe { valid_move_count(&mut new_board, player.other()) } as f64;
+            sort_val -= opp_movecount as f64;
 
             Some((mv, sort_val))
 

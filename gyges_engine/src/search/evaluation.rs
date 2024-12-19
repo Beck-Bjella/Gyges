@@ -4,7 +4,7 @@
 use gyges::board::*;
 use gyges::board::bitboard::*;
 use gyges::core::*;
-use gyges::moves::movegen::{controlled_squares, controlled_pieces, valid_move_count};
+use gyges::moves::movegen::control_and_movecount;
 
 pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [500.0, 100.0, 50.0];
 pub const SHARED_PIECE_CONTROL_SCORES: [f64; 3] = [75.0, 50.0, 25.0];
@@ -14,9 +14,11 @@ pub const SHARED_SQUARE_CONTROL_SCORE: f64 = 5.0;
 
 // BEST EVALUATION FUNCTION
 pub fn get_evalulation(board: &mut BoardState) -> f64 {
-    let move_counts = [unsafe{ valid_move_count(board, Player::One) }, unsafe{ valid_move_count(board, Player::Two) }];
-    let control_squares = [unsafe{ controlled_squares(board, Player::One) }, unsafe{ controlled_squares(board, Player::Two) } ];
-    let control_pieces = [unsafe{ controlled_pieces(board, Player::One) }, unsafe{ controlled_pieces(board, Player::Two) } ];
+    let p1 = unsafe { control_and_movecount(board, Player::One) };
+    let p2 = unsafe { control_and_movecount(board, Player::Two) };
+    let control_squares = [p1.0, p2.0];
+    let control_pieces = [p1.1, p2.1];
+    let move_counts = [p1.2, p2.2];
 
     let mut eval = 0.0;
 
