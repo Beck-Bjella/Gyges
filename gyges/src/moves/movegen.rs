@@ -11,8 +11,6 @@ use crate::core::*;
 use crate::moves::move_list::*;
 use crate::moves::movegen_consts::*;
 
-use super::Move;
-use super::MoveType;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum Action {
@@ -2126,7 +2124,6 @@ pub unsafe fn threat_or_moves(board: &mut BoardState, player: Player) -> (bool, 
 }
 
 
-
 //////////////////////////////////////////////////////////////////////
 ///////////////////////////// SIMD TESTS /////////////////////////////
 //////////////////////////////////////////////////////////////////////
@@ -2511,10 +2508,41 @@ pub unsafe fn threat_or_movecount_simd(board: &mut BoardState, player: Player) -
 ///////////////////////////// OTHER TESTS /////////////////////////////
 ///////////////////////////////////////////////////////////////////////
 
+pub struct NewStackData {
+    pub action: Action,
+    pub backtrack_board: BitBoard,
+    pub banned_positions: BitBoard,
+    pub current_sq: SQ,
+    pub current_piece: Piece,
+    pub starting_sq: SQ,
+    pub starting_piece: Piece,
+    pub active_line_idx: usize,
+    pub player: Player
+}
+
+impl NewStackData {
+    pub fn new(action: Action, backtrack_board: BitBoard, banned_positions: BitBoard, current_sq: SQ, current_piece: Piece, starting_sq: SQ, starting_piece: Piece, active_line_idx: usize, player: Player) -> Self {
+        Self {
+            action,
+            backtrack_board,
+            banned_positions,
+            current_sq,
+            current_piece,
+            starting_sq,
+            starting_piece,
+            active_line_idx,
+            player
+        }
+
+    }
+
+}
+
+
 const NEW_STACK_SIZE: usize = 1000;
 
 thread_local! {
-    static NEW_STACK: RefCell<FixedStack<StackData>> = RefCell::new(FixedStack::new(NEW_STACK_SIZE));
+    static NEW_STACK: RefCell<FixedStack<NewStackData>> = RefCell::new(FixedStack::new(NEW_STACK_SIZE));
 }
 
 
@@ -2589,41 +2617,47 @@ impl<T> Drop for FixedStack<T> {
 }
 
 
+#[inline(always)]
+pub unsafe fn compress_pext(mask: u64, val: u64) -> u16 {
+    core::arch::x86_64::_pext_u64(val, mask) as u16
+
+}
+
+
 /// Returns true if there is a valid threat on the board, else returns the move count.
 /// 
 pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -> (bool, usize) {
     NEW_STACK.with_borrow_mut(|stack| {
         let active_lines: [usize; 2] = board.get_active_lines();
+        let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
 
         let mut count = 0;
-
-        let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
 
         for x in 0..6 {
             let starting_sq = active_line_sq + x;
             if board.piece_at(starting_sq) != Piece::None {
                 let starting_piece = board.piece_at(starting_sq);
 
-                stack.push((Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
-                stack.push((Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
-                stack.push((Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+                stack.push(NewStackData::new(Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+                stack.push(NewStackData::new(Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
+                stack.push(NewStackData::new(Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
 
             }
 
         }
 
-       while !stack.is_empty() {
+        while !stack.is_empty() {
             let data = stack.pop();
 
-            let action = data.0;
-            let backtrack_board = data.1;
-            let banned_positions = data.2;
-            let current_sq = data.3;
-            let current_piece = data.4;
-            let starting_sq = data.5;
-            let starting_piece = data.6;
-            let active_line_idx = data.7;
-            let player: Player = data.8;
+            let action = data.action;
+            let backtrack_board = data.backtrack_board;
+            let banned_positions = data.banned_positions;
+            let current_sq = data.current_sq;
+            let current_piece = data.current_piece;
+            let starting_sq = data.starting_sq;
+            let starting_piece = data.starting_piece;
+            let active_line_idx = data.active_line_idx;
+            let player: Player = data.player;
 
             match action {
                 Action::Start => {
@@ -2636,15 +2670,17 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
                     board.place(starting_piece, starting_sq);
                     board.piece_bb ^= starting_sq.bit();
                     continue;
-                    
+
                 },
                 Action::Gen => {
                     match current_piece {
                         Piece::One => {
-                            let valid_paths_idx = ONE_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(0);
-                            let valid_paths = UNIQUE_ONE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
-                            let path_count = valid_paths[ONE_PATH_COUNT_IDX] as usize;
+                            // let path_list = &NEW_ONE_PATH_LISTS[current_sq.0 as usize];
+                            // for i in 0..(path_list.count as usize) {
+                            //     let path = &path_list.paths[i as usize];
 
+                            let valid_paths = UNIQUE_ONE_PATH_LISTS.get_unchecked(current_sq.0 as usize);
+                            let path_count = valid_paths[ONE_PATH_COUNT_IDX] as usize;
                             for i in 0..path_count {
                                 let path_idx: u16 = valid_paths[i as usize];
                                 let path = &UNIQUE_ONE_PATHS[path_idx as usize];
@@ -2687,7 +2723,7 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
                                         
                                         count += 25;
                                         
-                                        stack.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+                                        stack.push(NewStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
                 
                                     }
                                     
@@ -2700,15 +2736,15 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
 
                         },
                         Piece::Two => {
-                            let intercept_bb = board.piece_bb & ALL_TWO_INTERCEPTS[current_sq.0 as usize];
+                            let intercepts = ALL_TWO_INTERCEPTS[current_sq.0 as usize];
+                            let intercept_bb = board.piece_bb & intercepts;
 
-                            let valid_paths_idx = TWO_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(intercept_bb.0 as usize % 29);
-                            let valid_paths = UNIQUE_TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
-                            let path_count = valid_paths[TWO_PATH_COUNT_IDX] as usize;
+                            let key = unsafe { compress_pext(intercepts, intercept_bb.0 as u64) };            
+                            let valid_paths_idx = NEW_TWO_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
 
-                            for i in 0..path_count {
-                                let path_idx = valid_paths[i as usize];
-                                let path = &UNIQUE_TWO_PATHS[path_idx as usize];
+                            let path_list = NEW_TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
+                            for i in 0..(path_list.count as usize) {
+                                let path = &path_list.paths[i as usize];
 
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
@@ -2748,7 +2784,7 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
                                         
                                         count += 25;
                                         
-                                        stack.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+                                        stack.push(NewStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
                                         
                                     }
                                     
@@ -2761,15 +2797,15 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
 
                         },
                         Piece::Three => {
-                            let intercept_bb = board.piece_bb & ALL_THREE_INTERCEPTS[current_sq.0 as usize];
-
-                            let valid_paths_idx = THREE_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(intercept_bb.0 as usize % 11007);
-                            let valid_paths = UNIQUE_THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
-                            let path_count = valid_paths[THREE_PATH_COUNT_IDX] as usize;
-
-                            for i in 0..path_count {
-                                let path_idx = valid_paths[i as usize];
-                                let path = &UNIQUE_THREE_PATHS[path_idx as usize];
+                            let intercepts = ALL_THREE_INTERCEPTS[current_sq.0 as usize];
+                            let intercept_bb = board.piece_bb & intercepts;
+                            
+                            let key = unsafe { compress_pext(intercepts, intercept_bb.0 as u64) };            
+                            let valid_paths_idx: &u16 = NEW_THREE_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
+        
+                            let path_list = NEW_THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
+                            for i in 0..(path_list.count as usize) {
+                                let path = &path_list.paths[i as usize];
 
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
@@ -2809,7 +2845,7 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
                                         
                                         count += 25;
                                         
-                                        stack.push((Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+                                        stack.push(NewStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
 
                                     }
                                     
