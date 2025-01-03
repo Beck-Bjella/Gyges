@@ -2508,6 +2508,12 @@ pub unsafe fn threat_or_movecount_simd(board: &mut BoardState, player: Player) -
 ///////////////////////////// OTHER TESTS /////////////////////////////
 ///////////////////////////////////////////////////////////////////////
 
+thread_local! {
+    /// Per-thread move generator. Used in specific cases when multiple threads can be used.
+    pub static THREAD_LOCAL_MOVEGEN: RefCell<MoveGen> = RefCell::new(MoveGen::default());
+    
+}
+
 pub struct NewStackData {
     pub action: Action,
     pub backtrack_board: BitBoard,
@@ -2538,15 +2544,7 @@ impl NewStackData {
 
 }
 
-
-const NEW_STACK_SIZE: usize = 1000;
-
-thread_local! {
-    static NEW_STACK: RefCell<FixedStack<NewStackData>> = RefCell::new(FixedStack::new(NEW_STACK_SIZE));
-}
-
-
-/// A fixed-size stack allocated on the heap.
+/// A hyper efficient fixed-size stack allocated on the heap.
 pub struct FixedStack<T> {
     buffer: Box<[T]>,
     top: usize,
@@ -2566,6 +2564,7 @@ impl<T> FixedStack<T> {
     }
 
     /// Pushes a value onto the top of the stack.
+    #[inline(always)]
     pub unsafe fn push(&mut self, value: T) {
         if self.top >= self.buffer.len() {
             panic!("Stack overflow!");
@@ -2577,6 +2576,7 @@ impl<T> FixedStack<T> {
     }
 
     /// Pops a value from the top of the stack.
+    #[inline(always)]
     pub unsafe fn pop(&mut self) -> T {
         if self.top == 0 {
             panic!("Stack underflow!");
@@ -2588,12 +2588,14 @@ impl<T> FixedStack<T> {
     }
 
     /// Returns true if the stack is empty.
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.top == 0
 
     }
 
     /// Clears the stack without modifying memory.
+    #[inline(always)]
     pub fn clear(&mut self) {
         self.top = 0;
 
@@ -2623,31 +2625,45 @@ pub unsafe fn compress_pext(mask: u64, val: u64) -> u16 {
 
 }
 
+pub struct MoveGen {
+    stack: FixedStack<NewStackData>,
 
-/// Returns true if there is a valid threat on the board, else returns the move count.
-/// 
-pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -> (bool, usize) {
-    NEW_STACK.with_borrow_mut(|stack| {
+}
+
+impl MoveGen {
+    /// Forces the generator to reset. 
+    /// This should never be needed, but can be used for the sake of consistency over long runtimes.
+    pub fn force_reset(&mut self) {
+        self.stack.clear();
+
+    }
+
+    /// Returns true if there is a valid threat on the board, else returns the move count.
+    /// 
+    #[inline(always)]
+    pub unsafe fn test_threat_or_movecount(&mut self, board: &mut BoardState, player: Player) -> (bool, usize) {
+        let player_bit = 1 << player as u64;
+
         let active_lines: [usize; 2] = board.get_active_lines();
         let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
 
-        let mut count = 0;
+        let mut count: usize = 0;
 
         for x in 0..6 {
             let starting_sq = active_line_sq + x;
             if board.piece_at(starting_sq) != Piece::None {
                 let starting_piece = board.piece_at(starting_sq);
 
-                stack.push(NewStackData::new(Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
-                stack.push(NewStackData::new(Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
-                stack.push(NewStackData::new(Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+                self.stack.push(NewStackData::new(Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+                self.stack.push(NewStackData::new(Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
+                self.stack.push(NewStackData::new(Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
 
             }
 
         }
 
-        while !stack.is_empty() {
-            let data = stack.pop();
+        while !self.stack.is_empty() {
+            let data = self.stack.pop();
 
             let action = data.action;
             let backtrack_board = data.backtrack_board;
@@ -2675,15 +2691,9 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
                 Action::Gen => {
                     match current_piece {
                         Piece::One => {
-                            // let path_list = &NEW_ONE_PATH_LISTS[current_sq.0 as usize];
-                            // for i in 0..(path_list.count as usize) {
-                            //     let path = &path_list.paths[i as usize];
-
-                            let valid_paths = UNIQUE_ONE_PATH_LISTS.get_unchecked(current_sq.0 as usize);
-                            let path_count = valid_paths[ONE_PATH_COUNT_IDX] as usize;
-                            for i in 0..path_count {
-                                let path_idx: u16 = valid_paths[i as usize];
-                                let path = &UNIQUE_ONE_PATHS[path_idx as usize];
+                            let path_list = NEW_ONE_PATH_LISTS.get_unchecked(current_sq.0 as usize);
+                            for i in 0..(path_list.count as usize) {
+                                let path = &path_list.paths[i as usize];
                 
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
@@ -2692,46 +2702,42 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
                 
                                 let end = SQ(path.0[1]);
                                 let end_bit = end.bit();
-                
-                                if end == SQ::P1_GOAL {
-                                    if player == Player::One {
-                                        continue;
-                                    }
 
-                                    board.place(starting_piece, starting_sq);
-                                    board.piece_bb ^= starting_sq.bit();
-                                    stack.clear();
-                                    return (true, 0);
-                    
-                                } else if end == SQ::P2_GOAL {
-                                    if player == Player::Two {
-                                        continue;
-                                    }
+                                if (banned_positions & end_bit).is_not_empty() {
+                                    continue;
 
-                                    board.place(starting_piece, starting_sq);
-                                    board.piece_bb ^= starting_sq.bit();
-                                    stack.clear();
-                                    return (true, 0);
-                    
                                 }
-                                
-                                let end_piece = board.piece_at(end);
-                                if end_piece != Piece::None {
-                                    if (banned_positions & end_bit).is_empty() {
-                                        let new_banned_positions = banned_positions ^ end_bit;
-                                        let new_backtrack_board = backtrack_board ^ path.1;
-                                        
-                                        count += 25;
-                                        
-                                        stack.push(NewStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-                
-                                    }
+
+                                if (board.piece_bb & end_bit).is_not_empty() {
+                                    count += 25;
+
+                                    let end_piece = board.piece_at(end);
+
+                                    let new_banned_positions = banned_positions ^ end_bit;
+                                    let new_backtrack_board = backtrack_board ^ path.1;
                                     
-                                } else {
-                                    count += 1;
-                    
+                                    self.stack.push(NewStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+                                    
+                                    continue;
+
                                 }
-                    
+
+                                let goal_bit = end_bit >> 35;
+                                if goal_bit != 0 {
+                                    if (goal_bit & player_bit) == 0 {
+                                        continue;
+
+                                    }
+
+                                    board.place(starting_piece, starting_sq);
+                                    board.piece_bb ^= starting_sq.bit();
+                                    self.stack.clear();
+                                    return (true, 0);
+
+                                }
+
+                                count += 1;
+                
                             }
 
                         },
@@ -2754,45 +2760,41 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
                                 let end = SQ(path.0[2]);
                                 let end_bit = end.bit();
 
-                                if end == SQ::P1_GOAL {
-                                    if player == Player::One {
-                                        continue;
-                                    }
+                                if (banned_positions & end_bit).is_not_empty() {
+                                    continue;
+
+                                }
+
+                                if (board.piece_bb & end_bit).is_not_empty() {
+                                    count += 25;
+
+                                    let end_piece = board.piece_at(end);
+
+                                    let new_banned_positions = banned_positions ^ end_bit;
+                                    let new_backtrack_board = backtrack_board ^ path.1;
                                     
-                                    board.place(starting_piece, starting_sq);
-                                    board.piece_bb ^= starting_sq.bit();
-                                    stack.clear();
-                                    return (true, 0);
-                    
-                                } else if end == SQ::P2_GOAL {
-                                    if player == Player::Two {
+                                    self.stack.push(NewStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+                                    
+                                    continue;
+                                
+                                }
+
+                                let goal_bit = end_bit >> 35;
+                                if goal_bit != 0 {
+                                    if (goal_bit & player_bit) == 0 {
                                         continue;
+
                                     }
 
                                     board.place(starting_piece, starting_sq);
                                     board.piece_bb ^= starting_sq.bit();
-                                    stack.clear();
+                                    self.stack.clear();
                                     return (true, 0);
-                    
-                                }
-                                
-                                let end_piece = board.piece_at(end);
-                                if end_piece != Piece::None {
-                                    if (banned_positions & end_bit).is_empty() {
-                                        let new_banned_positions = banned_positions ^ end_bit;
-                                        let new_backtrack_board = backtrack_board ^ path.1;
-                                        
-                                        count += 25;
-                                        
-                                        stack.push(NewStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-                                        
-                                    }
-                                    
-                                } else {
-                                    count += 1;
-                    
-                                }
-                    
+
+                                }                 
+
+                                count += 1;       
+
                             }
 
                         },
@@ -2814,46 +2816,42 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
 
                                 let end = SQ(path.0[3]);
                                 let end_bit = end.bit();
-                
-                                if end == SQ::P1_GOAL {
-                                    if player == Player::One {
-                                        continue;
-                                    }
 
-                                    board.place(starting_piece, starting_sq);
-                                    board.piece_bb ^= starting_sq.bit();
-                                    stack.clear();
-                                    return (true, 0);
-                    
-                                } else if end == SQ::P2_GOAL {
-                                    if player == Player::Two {
-                                        continue;
-                                    }
+                                if (banned_positions & end_bit).is_not_empty() {
+                                    continue;
 
-                                    board.place(starting_piece, starting_sq);
-                                    board.piece_bb ^= starting_sq.bit();
-                                    stack.clear();
-                                    return (true, 0);
-                    
                                 }
-                                
-                                let end_piece = board.piece_at(end);
-                                if end_piece != Piece::None {
-                                    if (banned_positions & end_bit).is_empty() {
-                                        let new_banned_positions = banned_positions ^ end_bit;
-                                        let new_backtrack_board = backtrack_board ^ path.1;
-                                        
-                                        count += 25;
-                                        
-                                        stack.push(NewStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
 
-                                    }
+                                if (board.piece_bb & end_bit).is_not_empty() {
+                                    count += 25;
+
+                                    let end_piece = board.piece_at(end);
+
+                                    let new_banned_positions = banned_positions ^ end_bit;
+                                    let new_backtrack_board = backtrack_board ^ path.1;
                                     
-                                } else {
-                                    count += 1;
-                    
+                                    self.stack.push(NewStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+                                    
+                                    continue;
+
                                 }
-                    
+
+                                let goal_bit = end_bit >> 35;
+                                if goal_bit != 0 {
+                                    if (goal_bit & player_bit) == 0 {
+                                        continue;
+
+                                    }
+
+                                    board.place(starting_piece, starting_sq);
+                                    board.piece_bb ^= starting_sq.bit();
+                                    self.stack.clear();
+                                    return (true, 0);
+
+                                }
+
+                                count += 1;
+
                             }
 
                         },
@@ -2869,6 +2867,18 @@ pub unsafe fn test_threat_or_movecount(board: &mut BoardState, player: Player) -
 
         (false, count)
 
-    })
-    
+        
+    }
+
+}
+
+impl Default for MoveGen {
+    fn default() -> Self {
+        Self {
+            stack: FixedStack::new(1000),
+
+        }
+
+    }
+
 }

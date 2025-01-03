@@ -1,7 +1,8 @@
 extern crate gyges_engine;
 
-use gyges::{board::{self, TEST_BOARD}, moves::{movegen::{test_threat_or_movecount, threat_or_movecount}, movegen_consts::{ALL_TWO_INTERCEPTS, ONE_MAP, ONE_PATH_COUNT_IDX, UNIQUE_ONE_PATHS, UNIQUE_ONE_PATH_LISTS}, Move, MoveType}, BitBoard, BoardState, Piece, Player, BENCH_BOARD, SQ, STARTING_BOARD};
+use gyges::{board::{self, TEST_BOARD}, moves::{movegen::{threat_or_movecount, MoveGen}, movegen_consts::{ALL_TWO_INTERCEPTS, ONE_MAP, ONE_PATH_COUNT_IDX, UNIQUE_ONE_PATHS, UNIQUE_ONE_PATH_LISTS}, Move, MoveType}, BitBoard, BoardState, Piece, Player, BENCH_BOARD, SQ, STARTING_BOARD};
 use gyges::moves::movegen_consts::*;
+use gyges::moves::movegen::THREAD_LOCAL_MOVEGEN;
 
 use itertools::Itertools;
 
@@ -20,21 +21,27 @@ fn main() {
 }
 
 pub unsafe fn benchmark() {
+    let mut mg: MoveGen = MoveGen::default();
+
     let mut board = BoardState::from(TEST_BOARD);
     let player = Player::One;
 
     println!("Initial board state: \n{}", board);
 
     let old = unsafe { threat_or_movecount(&mut board, player) };
-    let new = unsafe { test_threat_or_movecount(&mut board, player) };
+    let new = mg.test_threat_or_movecount(&mut board, player);
+   
+
     println!("Old: {:?}, New: {:?}", old, new);
 
 
     println!("Initial board state: \n{}", board);
 
+    
+
     println!("Valid Move Count: ");
     let iters = 100000;
-    let batchs = 5;
+    let batchs = 3;
     for b in 0..batchs {
         let start = std::time::Instant::now();
         for _ in 0..iters {
@@ -51,12 +58,12 @@ pub unsafe fn benchmark() {
     println!("");
 
     println!("NEW Valid Move Count: ");
-    let iters = 100000;
-    let batchs = 5;
+    let iters = 500000;
+    let batchs = 3;
     for b in 0..batchs {
         let start = std::time::Instant::now();
         for _ in 0..iters {
-            let _mc = unsafe { test_threat_or_movecount(&mut board, player) };
+            let _mc = mg.test_threat_or_movecount(&mut board, player);
 
         }
         let elapsed = start.elapsed();
@@ -67,6 +74,31 @@ pub unsafe fn benchmark() {
 
     }
     println!("");
+
+
+    println!("THREADED NEW Valid Move Count: ");
+    let iters = 500000;
+    let batchs = 3;
+    for b in 0..batchs {
+        let start = std::time::Instant::now();
+        for _ in 0..iters {
+            THREAD_LOCAL_MOVEGEN.with(|mg| {
+                let mut mg = mg.borrow_mut();
+                let _mc = mg.test_threat_or_movecount(&mut board, player);
+                
+            });
+
+        }
+        let elapsed = start.elapsed();
+        let elapsed = elapsed.as_secs_f64();
+        let time_per_iter = elapsed / iters as f64;
+        let iters_per_sec = 1.0 / time_per_iter;
+        println!("  {}: {} g/s", b, iters_per_sec);
+
+    }
+    println!("");
+
+  
 
 }
 

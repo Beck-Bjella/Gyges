@@ -137,6 +137,7 @@ impl SQ {
 
     pub const GOALS: [SQ; 2] = [SQ(36), SQ(37)];
 
+    #[inline(always)]
     pub fn bit(&self) -> u64 {
         1 << self.0
 
