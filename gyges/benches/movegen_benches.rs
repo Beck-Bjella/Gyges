@@ -20,15 +20,7 @@ pub fn movegen_main(c: &mut Criterion) {
     group.bench_function("valid_threat_count", |b| b.iter(|| unsafe {
         valid_threat_count(black_box(&mut board.clone()), black_box(player));
     }));
-
-    group.bench_function("controlled_pieces", |b| b.iter(|| unsafe {
-        controlled_pieces(black_box(&mut board.clone()), black_box(player));
-    }));
-
-    group.bench_function("controlled_squares", |b| b.iter(|| unsafe {
-        controlled_squares(black_box(&mut board.clone()), black_box(player));
-    }));
-
+    
     group.bench_function("has_threat", |b| b.iter(|| unsafe {
         has_threat(black_box(&mut board.clone()), black_box(player));
     }));
