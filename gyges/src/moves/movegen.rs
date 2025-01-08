@@ -955,6 +955,8 @@ pub unsafe fn control_and_movecount(board: &mut BoardState, player: Player) -> (
             if board.piece_at(starting_sq) != Piece::None {
                 let starting_piece = board.piece_at(starting_sq);
 
+                controlled_pieces |= starting_sq.bit();
+
                 stack_buffer.push((Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
                 stack_buffer.push((Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
                 stack_buffer.push((Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
@@ -1170,6 +1172,8 @@ pub unsafe fn control_and_movecount(board: &mut BoardState, player: Player) -> (
             
 
         }
+
+        controlled_squares &= !board.piece_bb;
 
         (controlled_squares, controlled_pieces, count)
 

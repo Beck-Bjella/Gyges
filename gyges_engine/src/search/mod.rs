@@ -8,6 +8,13 @@ use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
+use new_movegen::GenControlMoveCount;
+use new_movegen::GenMoveCount;
+use new_movegen::GenMoves;
+use new_movegen::GenResult;
+use new_movegen::MoveGen;
+use new_movegen::NoQuit;
+use new_movegen::QuitOnThreat;
 use rayon::prelude::*;
 
 use gyges::board::*;
@@ -37,7 +44,9 @@ pub struct Searcher {
 
     pub options: SearchOptions,
     pub stop_in: Receiver<bool>,
-    pub stop: bool
+    pub stop: bool,
+
+    pub mg: MoveGen
 
 }
 
@@ -54,7 +63,9 @@ impl Searcher {
 
             options, 
             stop_in,
-            stop: false
+            stop: false,
+
+            mg: MoveGen::default()
 
         }
 
@@ -211,8 +222,10 @@ impl Searcher {
         }
 
         // Generate the Raw move list for this node.
-        let (has_threat, mut move_list) = unsafe { threat_or_moves(board, player) };
-        
+        // let (has_threat, mut move_list) = unsafe { threat_or_moves(board, player) };
+        let data: GenResult = unsafe { self.mg.gen::<GenMoves, QuitOnThreat>(board, player) };
+        let (has_threat, mut move_list) = (data.threat, data.move_list);
+    
         // If there is the threat for the current player return INF, because that move would eventualy be picked as best.
         if has_threat {
             return f64::INFINITY;
@@ -223,7 +236,7 @@ impl Searcher {
 
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
-            let eval = get_evalulation(board) * player.eval_multiplier();
+            let eval = get_evalulation(board, &mut self.mg) * player.eval_multiplier();
             return eval;
 
         }

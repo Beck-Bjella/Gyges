@@ -2,6 +2,8 @@ extern crate gyges_engine;
 
 use gyges::moves::movegen::*;
 use gyges::moves::new_movegen::*;
+use gyges::BENCH_BOARD;
+use gyges::SQ;
 use gyges::{
     board::TEST_BOARD,
     moves::movegen::threat_or_movecount,
@@ -12,23 +14,46 @@ use gyges::{
 use gyges_engine::ugi::*;
 
 fn main() {
-    // let mut ugi = Ugi::new();
-    // ugi.start();
+    let mut ugi = Ugi::new();
+    ugi.start();
 
-    unsafe {
-        benchmark();
-    }
+    // unsafe {
+    //     benchmark();
+    // }
 
 }
 
 pub unsafe fn benchmark() {
     let mut mg: MoveGen = MoveGen::default();
 
-    let mut board = BoardState::from(TEST_BOARD);
-    let player = Player::One;
+    let mut board = BoardState::from([0,0,2,0,0,0,1,0,3,3,0,0,0,2,1,1,0,0,0,3,2,0,0,0,0,0,0,3,2,0,0,0,0,1,0,0,0,0]);
+    // let mut board = BoardState::from(BENCH_BOARD);
+    
+    let player = Player::Two;
 
-    println!("{}", valid_move_count(&mut board, player));
-    println!("{}", mg.gen::<GenMoveCount, NoQuit>(&mut board, player).move_count);
+    // println!("{}", valid_move_count(&mut board, player));
+    // println!("{}", mg.gen::<GenMoveCount, NoQuit>(&mut board, player).move_count);
+
+    let test = control_and_movecount(&mut board, player);
+    let new = mg.gen::<GenControlMoveCount, NoQuit>(&mut board, player);
+
+    println!("Controlled Squares: ");
+    println!("Old: {}", test.0);
+    println!("New: {}", new.controlled_squares);
+
+    println!("Controlled Pieces: ");
+    println!("Old: {}", test.1);
+    println!("New: {}", new.controlled_pieces);
+
+    println!("Move Count: ");
+    println!("Old: {:?}", test.2);
+    println!("New: {:?}", new.move_count);
+
+
+
+
+
+
 
     println!("Initial board state: \n{}", board);
     println!("Valid Move Count: ");

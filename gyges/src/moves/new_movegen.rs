@@ -1,6 +1,7 @@
 //! This module contains all of the components needed for generating moves. 
 //!
 
+use crate::board;
 use crate::core::*;
 use crate::board::*;
 use crate::board::bitboard::*;
@@ -98,12 +99,12 @@ impl MoveGen {
                                 let end = SQ(path.0[1]);
                                 let end_bit = end.bit();
 
-                                if (banned_positions & end_bit).is_not_empty() {
-                                    continue;
-
-                                }
-
                                 if (board.piece_bb & end_bit).is_not_empty() {
+                                    if (banned_positions & end_bit).is_not_empty() {
+                                        continue;
+    
+                                    }
+                                    
                                     G::store_bounce(&mut result, active_line_idx, end_bit);
 
                                     let end_piece = board.piece_at(end);
@@ -116,9 +117,9 @@ impl MoveGen {
 
                                 }
 
-                                let goal_bit = end_bit >> 35;
+                                let goal_bit = end_bit >> 36;
                                 if goal_bit != 0 {
-                                    if (goal_bit & player_bit) == 0 {
+                                    if (goal_bit & player_bit) != 0 {
                                         continue;
 
                                     }
@@ -163,12 +164,12 @@ impl MoveGen {
                                 let end = SQ(path.0[2]);
                                 let end_bit = end.bit();
 
-                                if (banned_positions & end_bit).is_not_empty() {
-                                    continue;
-
-                                }
-
                                 if (board.piece_bb & end_bit).is_not_empty() {
+                                    if (banned_positions & end_bit).is_not_empty() {
+                                        continue;
+    
+                                    }
+
                                     G::store_bounce(&mut result, active_line_idx, end_bit);
 
                                     let end_piece = board.piece_at(end);
@@ -181,9 +182,9 @@ impl MoveGen {
                                 
                                 }
 
-                                let goal_bit = end_bit >> 35;
+                                let goal_bit = end_bit >> 36;
                                 if goal_bit != 0 {
-                                    if (goal_bit & player_bit) == 0 {
+                                    if (goal_bit & player_bit) != 0 {
                                         continue;
 
                                     }
@@ -228,12 +229,12 @@ impl MoveGen {
                                 let end = SQ(path.0[3]);
                                 let end_bit = end.bit();
 
-                                if (banned_positions & end_bit).is_not_empty() {
-                                    continue;
-
-                                }
-
                                 if (board.piece_bb & end_bit).is_not_empty() {
+                                    if (banned_positions & end_bit).is_not_empty() {
+                                        continue;
+    
+                                    }
+
                                     G::store_bounce(&mut result, active_line_idx, end_bit);
 
                                     let end_piece = board.piece_at(end);
@@ -246,9 +247,9 @@ impl MoveGen {
 
                                 }
 
-                                let goal_bit = end_bit >> 35;
+                                let goal_bit = end_bit >> 36;
                                 if goal_bit != 0 {
-                                    if (goal_bit & player_bit) == 0 {
+                                    if (goal_bit & player_bit) != 0 {
                                         continue;
 
                                     }
@@ -284,6 +285,8 @@ impl MoveGen {
 
         }
 
+        G::exit(&mut result, board);
+
         result
 
     }
@@ -311,6 +314,7 @@ pub trait GenType {
     fn store_bounce(result: &mut GenResult, active_line_idx: usize, end_bit: u64); // Stores relevant data for bounce
     fn store_end(result: &mut GenResult, active_line_idx: usize, end_bit: u64);    // Stores relevant data for the end of a path
     fn store_goal(result: &mut GenResult, active_line_idx: usize, end_bit: u64);   // Stores relevant data for a goal
+    fn exit(result: &mut GenResult, board: &mut BoardState); // Exits the generation
 
 }
 
@@ -329,6 +333,7 @@ impl GenType for GenMoves {
     fn store_goal(result: &mut GenResult, active_line_idx: usize, end_bit: u64) {
         result.move_list.set_end_position(active_line_idx, end_bit);
     }
+    fn exit(_: &mut GenResult, _: &mut BoardState) {}
 
 }
 
@@ -345,13 +350,17 @@ impl GenType for GenMoveCount {
     fn store_goal(result: &mut GenResult, _: usize, _: u64) {
         result.move_count += 1;
     }
+    fn exit(_: &mut GenResult, _: &mut BoardState) {}
 
 }
 
 /// Generate the controlled squares, controlled pieces, and the move count.
 pub struct GenControlMoveCount;
 impl GenType for GenControlMoveCount {
-    fn init(_: &mut GenResult, _: usize, _: SQ, _: Piece) {}
+    fn init(result: &mut GenResult, _: usize, starting_sq: SQ, _: Piece) {
+        result.controlled_pieces |= starting_sq.bit();
+
+    }
     fn store_bounce(result: &mut GenResult, _: usize, end_bit: u64) {
         result.move_count += 25;
         result.controlled_pieces |= end_bit;
@@ -360,9 +369,11 @@ impl GenType for GenControlMoveCount {
         result.move_count += 1;
         result.controlled_squares |= end_bit;
     }
-    fn store_goal(result: &mut GenResult, _: usize, end_bit: u64) {
+    fn store_goal(result: &mut GenResult, _: usize, _: u64) {
         result.move_count += 1;
-        result.controlled_squares |= end_bit;
+    }
+    fn exit(result: &mut GenResult, board: &mut BoardState) {
+        result.controlled_squares &= !board.piece_bb;
     }
 
 }
@@ -374,6 +385,7 @@ impl GenType for GenNone {
     fn store_bounce(_: &mut GenResult, _: usize, _: u64) {}
     fn store_end(_: &mut GenResult, _: usize, _: u64) {}
     fn store_goal(_: &mut GenResult, _: usize, _: u64) {}
+    fn exit(_: &mut GenResult, _: &mut BoardState) {}
 
 }
 
