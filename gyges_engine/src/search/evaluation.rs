@@ -4,7 +4,6 @@
 use gyges::board::*;
 use gyges::board::bitboard::*;
 use gyges::core::*;
-use gyges::moves::movegen::*;
 use gyges::moves::new_movegen::{GenControlMoveCount, MoveGen, NoQuit};
 
 pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [500.0, 100.0, 50.0];
@@ -20,12 +19,6 @@ pub fn get_evalulation(board: &mut BoardState, mg: &mut MoveGen) -> f64 {
     let control_squares = [p1.controlled_squares, p2.controlled_squares];
     let control_pieces = [p1.controlled_pieces, p2.controlled_pieces];
     let move_counts = [p1.move_count, p2.move_count];
-
-    // let p1 = unsafe { control_and_movecount(board, Player::One) }; // 855887 ply 9
-    // let p2 = unsafe { control_and_movecount(board, Player::Two) };
-    // let control_squares = [p1.0, p2.0];
-    // let control_pieces = [p1.1, p2.1];
-    // let move_counts = [p1.2, p2.2];
 
     let mut eval = 0.0;
 

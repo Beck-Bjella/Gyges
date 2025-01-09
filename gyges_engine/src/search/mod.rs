@@ -8,12 +8,11 @@ use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
-use new_movegen::GenControlMoveCount;
 use new_movegen::GenMoveCount;
 use new_movegen::GenMoves;
+use new_movegen::GenNone;
 use new_movegen::GenResult;
 use new_movegen::MoveGen;
-use new_movegen::NoQuit;
 use new_movegen::QuitOnThreat;
 use rayon::prelude::*;
 
@@ -27,7 +26,6 @@ use gyges::core::*;
 use crate::search::evaluation::*;
 use crate::consts::*;
 use crate::ugi;
-
 
 // Constants for move ordering.
 pub const LOSE_MOVE_SCORE: f64 = -1000000.0;
@@ -199,7 +197,7 @@ impl Searcher {
             }
 
         }
-        
+
         let best_search_data = self.completed_searchs.last().unwrap().clone();
         ugi::info_output(best_search_data.clone(), self.search_stats.clone());
         ugi::best_move_output(best_search_data);
@@ -222,7 +220,6 @@ impl Searcher {
         }
 
         // Generate the Raw move list for this node.
-        // let (has_threat, mut move_list) = unsafe { threat_or_moves(board, player) };
         let data: GenResult = unsafe { self.mg.gen::<GenMoves, QuitOnThreat>(board, player) };
         let (has_threat, mut move_list) = (data.threat, data.move_list);
     
@@ -366,29 +363,34 @@ impl Searcher {
             let mut sort_val: f64 = 0.0;
             let mut new_board = board.make_move(&mv);
 
-            let (opp_has_threat, opp_movecount) = unsafe { threat_or_movecount(&mut new_board, player.other()) };
+            THREAD_LOCAL_MOVEGEN.with(|movegen| {
+                let mut movegen = movegen.borrow_mut();
 
-            // If opponent has a threat then remove it as an option because the move would lose.
-            if opp_has_threat {
-                return None;
+                let data = unsafe { movegen.gen::<GenMoveCount, QuitOnThreat>(&mut new_board, player.other()) };
+                if data.threat {
+                    return None;
 
-            }
+                }
+                let opp_movecount = data.move_count;
 
-            // If the move is the TT sort it first.
-            if tt_move.is_some() && mv == tt_move.unwrap() {
-                return Some((mv, TT_MOVE_SCORE));
+                // If the move is the TT sort it first.
+                if tt_move.is_some() && mv == tt_move.unwrap() {
+                    return Some((mv, TT_MOVE_SCORE));
 
-            }
+                }
 
-            // If the move has a threat then increase the sort value.
-            if unsafe { has_threat(&mut new_board, player) } {
-                sort_val += 1000.0;
-            }
+                // If the move has a threat then increase the sort value.
+                let data = unsafe { movegen.gen::<GenNone, QuitOnThreat>(&mut new_board, player) };
+                if data.threat {
+                    sort_val += 1000.0;
 
-            // Lower the moves sort value based on oppenent move count.
-            sort_val -= opp_movecount as f64;
+                }
+                
+                sort_val -= opp_movecount as f64;
 
-            Some((mv, sort_val))
+                Some((mv, sort_val))
+
+            })
 
         }).collect();
 
@@ -407,8 +409,8 @@ impl Searcher {
 
         });
         
-        moves_to_sort.into_iter().map(|(mv, _)| mv).collect()
-    
+        return moves_to_sort.into_iter().map(|(mv, _)| mv).collect();
+
     }
 
     /// Setups up the RootMoveList from a [BoardState].

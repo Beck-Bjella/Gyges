@@ -1,16 +1,10 @@
 extern crate gyges_engine;
 
-use gyges::moves::movegen::*;
 use gyges::moves::new_movegen::*;
-use gyges::BENCH_BOARD;
-use gyges::SQ;
-use gyges::{
-    board::TEST_BOARD,
-    moves::movegen::threat_or_movecount,
-    BoardState, 
-    Player,
-};
+use gyges::moves::movegen::*;
+use gyges::*;
 
+use gyges_engine::consts::*;
 use gyges_engine::ugi::*;
 
 fn main() {
@@ -26,38 +20,14 @@ fn main() {
 pub unsafe fn benchmark() {
     let mut mg: MoveGen = MoveGen::default();
 
-    let mut board = BoardState::from([0,0,2,0,0,0,1,0,3,3,0,0,0,2,1,1,0,0,0,3,2,0,0,0,0,0,0,3,2,0,0,0,0,1,0,0,0,0]);
-    // let mut board = BoardState::from(BENCH_BOARD);
+    // let mut board = BoardState::from([0,0,2,0,0,0,1,0,3,3,0,0,0,2,1,1,0,0,0,3,2,0,0,0,0,0,0,3,2,0,0,0,0,1,0,0,0,0]);
     
-    let player = Player::Two;
-
-    // println!("{}", valid_move_count(&mut board, player));
-    // println!("{}", mg.gen::<GenMoveCount, NoQuit>(&mut board, player).move_count);
-
-    let test = control_and_movecount(&mut board, player);
-    let new = mg.gen::<GenControlMoveCount, NoQuit>(&mut board, player);
-
-    println!("Controlled Squares: ");
-    println!("Old: {}", test.0);
-    println!("New: {}", new.controlled_squares);
-
-    println!("Controlled Pieces: ");
-    println!("Old: {}", test.1);
-    println!("New: {}", new.controlled_pieces);
-
-    println!("Move Count: ");
-    println!("Old: {:?}", test.2);
-    println!("New: {:?}", new.move_count);
-
-
-
-
-
-
+    let mut board = BoardState::from(STARTING_BOARD);
+    let player = Player::One;
 
     println!("Initial board state: \n{}", board);
     println!("Valid Move Count: ");
-    let iters = 100000;
+    let iters = 1000000;
     let batchs = 3;
     for b in 0..batchs {
         let start = std::time::Instant::now();
@@ -73,7 +43,7 @@ pub unsafe fn benchmark() {
     println!("");
 
     println!("NEW TEST: ");
-    let iters = 100000;
+    let iters = 1000000;
     let batchs = 3;
     for b in 0..batchs {
         let start = std::time::Instant::now();
@@ -87,6 +57,27 @@ pub unsafe fn benchmark() {
         println!("  {}: {} g/s", b, iters_per_sec);
     }
     println!("");
+
+    println!("THREADED NEW TEST: ");
+    THREAD_LOCAL_MOVEGEN.with(|movegen| {
+        let mut movegen = movegen.borrow_mut();
+
+        let iters = 1000000;
+        let batchs = 3;
+        for b in 0..batchs {
+            let start = std::time::Instant::now();
+            for _ in 0..iters {
+                let _mc = movegen.gen::<GenMoveCount, QuitOnThreat>(&mut board, player);
+            }
+            let elapsed = start.elapsed();
+            let elapsed = elapsed.as_secs_f64();
+            let time_per_iter = elapsed / iters as f64;
+            let iters_per_sec = 1.0 / time_per_iter;
+            println!("  {}: {} g/s", b, iters_per_sec);
+        }
+
+    });
+    
 
 }
 

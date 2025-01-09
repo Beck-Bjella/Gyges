@@ -2,10 +2,18 @@
 //! 
 
 use gyges::tools::tt::*;
+use gyges::moves::new_movegen::MoveGen;
 
 use std::mem;
 use std::ptr;
 use std::ptr::addr_of_mut;
+use std::cell::RefCell;
+
+thread_local! {
+    /// A thread local move generator. 
+    pub static THREAD_LOCAL_MOVEGEN: RefCell<MoveGen> = RefCell::new(MoveGen::default());
+
+}
 
 // TT (Transposition Table)
 const TT_ALLOC_SIZE: usize = mem::size_of::<TranspositionTable>();
