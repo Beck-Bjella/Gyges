@@ -2,7 +2,7 @@
 //! 
 
 use gyges::tools::tt::*;
-use gyges::moves::new_movegen::MoveGen;
+use gyges::moves::movegen::MoveGen;
 
 use std::mem;
 use std::ptr;

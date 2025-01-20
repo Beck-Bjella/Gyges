@@ -7,7 +7,6 @@ pub mod move_list;
 
 pub mod movegen;
 pub mod movegen_consts;
-pub mod new_movegen;
 
 use std::fmt::Display;
 

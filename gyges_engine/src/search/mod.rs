@@ -8,17 +8,18 @@ use std::cmp::Ordering;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
-use new_movegen::GenMoveCount;
-use new_movegen::GenMoves;
-use new_movegen::GenNone;
-use new_movegen::GenResult;
-use new_movegen::MoveGen;
-use new_movegen::QuitOnThreat;
+use movegen::GenMoveCount;
+use movegen::GenMoves;
+use movegen::GenNone;
+use movegen::GenResult;
+use movegen::GenThreatCount;
+use movegen::MoveGen;
+use movegen::NoQuit;
+use movegen::QuitOnThreat;
 use rayon::prelude::*;
 
 use gyges::board::*;
 use gyges::moves::*;
-use gyges::moves::movegen::*;
 use gyges::moves::move_list::*;
 use gyges::tools::tt::*;
 use gyges::core::*;
@@ -96,7 +97,7 @@ impl Searcher {
         
         // Results
         self.search_data.pv = get_pv(&mut self.options.board.clone());
-        self.search_data.best_move = self.search_data.pv.get(0).unwrap().clone();
+        self.search_data.best_move = self.search_data.pv.get(0).unwrap_or(&RootMove::new_null()).clone();
 
         if self.search_data.best_move.score == f64::INFINITY {
             self.search_data.game_over = true;
@@ -122,7 +123,7 @@ impl Searcher {
 
         let board = &mut self.options.board.clone();
 
-        for mv in unsafe { valid_moves(board, Player::One) }.moves(board) {
+        for mv in unsafe { self.mg.gen::<GenMoves, NoQuit>(board, Player::One).move_list.moves(board) } {
             if mv.is_win() {
                 self.search_data.best_move = RootMove::new(mv, f64::INFINITY, 1, 0);
                 self.completed_searchs.push(self.search_data.clone());
@@ -418,12 +419,12 @@ impl Searcher {
     /// Generates all moves, sorts them, and calculates the number of threats that they each have.
     /// 
     pub fn setup_rootmoves(&mut self, board: &mut BoardState) {
-        let moves = unsafe { valid_moves(board, Player::One) }.moves(board);
+        let moves = unsafe { self.mg.gen::<GenMoves, NoQuit>(board, Player::One).move_list.moves(board) };
         let ordered: Vec<Move> = self.order_moves(moves, board, Player::One, None);
         
         let root_moves: Vec<RootMove> = ordered.iter().map( |mv| {
             let mut new_board = board.make_move(mv);
-            let threats: usize = unsafe { valid_threat_count(&mut new_board, Player::One) };
+            let threats: usize = unsafe { self.mg.gen::<GenThreatCount, NoQuit>(&mut new_board, Player::One).threat_count };
 
             RootMove::new(*mv, 0.0, 0, threats)
 

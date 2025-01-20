@@ -4,7 +4,7 @@
 use gyges::board::*;
 use gyges::board::bitboard::*;
 use gyges::core::*;
-use gyges::moves::new_movegen::{GenControlMoveCount, MoveGen, NoQuit};
+use gyges::moves::movegen::{GenControlMoveCount, MoveGen, NoQuit};
 
 pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [500.0, 100.0, 50.0];
 pub const SHARED_PIECE_CONTROL_SCORES: [f64; 3] = [75.0, 50.0, 25.0];
