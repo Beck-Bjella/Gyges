@@ -1,28 +1,22 @@
 use criterion::{black_box, criterion_group, Criterion};
 
+use gyges::board::TEST_BOARD;
 use gyges::moves::movegen::*;
-use gyges::{BoardState, Player, BENCH_BOARD};
+use gyges::{BoardState, Player};
 
 pub fn movegen_main(c: &mut Criterion) {
-    let board = BoardState::from(BENCH_BOARD);
+    let mut mg = MoveGen::default();
+    let board = &mut BoardState::from(TEST_BOARD);
     let player = Player::One;
 
     let mut group = c.benchmark_group("movegen benchmarks");
 
-    group.bench_function("valid_moves", |b| b.iter(|| unsafe {
-        valid_moves(black_box(&mut board.clone()), black_box(player));
+    group.bench_function("move_count", |b| b.iter(|| unsafe {
+        mg.gen::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
     }));
 
-    group.bench_function("valid_move_count", |b| b.iter(|| unsafe {
-        valid_move_count(black_box(&mut board.clone()), black_box(player));
-    }));
-
-    group.bench_function("valid_threat_count", |b| b.iter(|| unsafe {
-        valid_threat_count(black_box(&mut board.clone()), black_box(player));
-    }));
-    
-    group.bench_function("has_threat", |b| b.iter(|| unsafe {
-        has_threat(black_box(&mut board.clone()), black_box(player));
+    group.bench_function("moves", |b| b.iter(|| unsafe {
+        mg.gen::<GenMoves, NoQuit>(black_box(board), black_box(player));
     }));
 
     group.finish();
@@ -32,7 +26,7 @@ pub fn movegen_main(c: &mut Criterion) {
 criterion_group!(
     name = movegen_benches;
     config = Criterion::default()
-        .sample_size(100)
+        .sample_size(300)
         .warm_up_time(std::time::Duration::from_secs(1));
     targets = movegen_main
 

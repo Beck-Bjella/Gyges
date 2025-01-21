@@ -12,7 +12,7 @@ pub fn board_main(c: &mut Criterion) {
         black_box(board.clone().make_move(&mv));
 
     }));
-
+    
     group.finish();
 
 }
