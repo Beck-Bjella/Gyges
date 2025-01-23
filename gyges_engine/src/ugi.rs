@@ -1,8 +1,6 @@
 //! Ugi implimentation.
 //! 
 
-
-
 use std::io;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;

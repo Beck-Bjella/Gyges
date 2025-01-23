@@ -1,117 +1,213 @@
-# Description of the Universal Gyges Interface (UGI) [Jan 2024]
+# Universal Gyges Interface (UGI) Documentation [Jan 2025]
 
-## Move Format:
+This document describes the Universal Gyges Interface (UGI) for interacting with the Gyges engine. The interface is designed for communication over the command line and facilitates board state management, settings, and engine execution.
 
-Moves are formated by numbers seperated with a `|`. Every number represents a position on the board. You can find the board layout in the `BoardState` documentation.
-The format is as follows:
- - The first number is the position of the piece you start with.
- - The second number is the position of the piece you want to replace.
- - The third number is the position you want to drop the replaced piece.
+---
 
-```
-<start>|<end>|<drop>
----------------------
-   1   |  2  |  9
-```
-	- Grab the piece at position 1 on the board.
-	- Replace the piece at position 2 on the board with it.
-	- Drop the replaced piece at position 9.
+## Move Format
 
+### Overview:
 
-If a move doesnt require a drop, the format is as follows:
-``` 
-<start>|<end>
--------------
-   1   |  2
-```
-	- Grab the piece at position 1 on the board.
-	- Move it to position 2 on the board.
+Moves are specified using numbers separated by a `|`. Each number represents a position on the board, as defined in the `BoardState` documentation.
 
+### Formats:
 
+1. **Standard Move with Drop**:
 
-## Communation Protocol:
-All communication takes place over the command line.
+   ```
+   <start>|<end>|<drop>
+   ```
 
-### Communation to Engine:
-* `ugi`
-	Initiates communication with the engine.
+   - : Position of the piece to move.
+   - : Position to move the piece to.
+   - : Position to drop the replaced piece.
 
-* `isready`
-	Synchronizes the engine with the GUI, indicating readiness.
+   **Example**:
 
-* `setoption <name> <value>`
-	Used to modify internal parameters.
-	* `MaxPly`: int > 0 
-	* `MaxTime`: int > 0 (time in seconds)
+   ```
+   1|2|9
+   ```
 
-* `setpos <layout>`
-	Sets the board layout; no response is sent.
-	* `bench`
-	* `start`
-	* `data <_>` followed by the board layout
+   - Move the piece at position 1.
+   - Replace the piece at position 2.
+   - Drop the replaced piece at position 9.
 
-* `go`
-	Initiates the engine to start searching.
-	Subsequently sends "info <_>" commands during the search.
-	Responds with "bestmove <_>" when the search is complete.
+2. **Standard Move without Drop**:
 
-* `stop`
-	Instructs the engine to stop calculations as soon as possible.
-	Response: "bestmove <_>"
+   ```
+   <start>|<end>
+   ```
 
-* `quit`
-	Terminates the program.
+   - : Position of the piece to move.
+   - : Position to move the piece to.
 
+   **Example**:
 
-### Communation from Engine:
-* `ugiok` 
-	Sent after processing the `ugi` command to acknowledge UGI mode.
+   ```
+   1|2
+   ```
 
-* `id <_>` 
-	Information about the engine after the `ugi` command.
-	* `name` (engine name)
-	* `author` (author name)
+   - Move the piece at position 1 to position 2.
 
-* `option <_>`
-	Informs the GUI about parameters that can be changed in the engine sent after the `ugi` command.
-	* `maxPly`
-	* `maxTime` 
-	* `ttEnabled`
+---
 
-* `readyok`
-	Responds with when ready to accept new commands after the `isready` command.
- 
-* `info <_>` 
-	The engine sends information to the GUI during a search.
-    * `ply` (depth of search)
-	* `bestmove` (best move found)
-	* `score` (evaluation of best move)
-	* `nodes` (number of nodes searched)
-	* `nps` (nodes per second)
-	* `abf` (average branching factor)
-	* `time` (time taken to search)
+## Communication Protocol
 
-* `bestmove <_>`
-	Sent after a completed search to indicate the best move found.
-	* `move` (best move found)
+### Communication to Engine
 
-## Example:
-Communication session between GUI and the engine.
+This section describes the commands sent to the engine via the command line, how they work, and their corresponding responses returned by the engine.
 
-'*' indicates the engine's communication.
+#### `ugi`
+
+- **Purpose**: Initiates communication with the engine.
+- **Engine Response**: 
+  ```
+  id name <_>
+  id author <_>
+  option <_>
+  ugiok
+  ```
+
+#### `isready`
+
+- **Purpose**: Verifies that the engine is ready for new commands.
+- **Engine Response**:
+  ```
+  readyok
+  ```
+
+#### `setoption <name> <value>`
+
+- **Purpose**: Adjusts engine settings.
+- **Parameters**:
+  - `MaxPly <_>`: Integer > 0 (maximum search depth).
+  - `MaxTime <_>`: Integer > 0 (maximum search time in seconds).
+- **Engine Response**: None.
+
+#### `setpos <layout>`
+
+- **Purpose**: Updates the board layout.
+- **Parameters**:
+  - `start`: Standard starting layout.
+  - `bench`: Benchmark testing layout.
+  - `test`: Testing layout.
+  - `data <_>`: Custom board layout.
+- **Engine Response**: None.
+
+#### `go`
+
+- **Purpose**: Begins the engine's move search.
+- **Example Engine Response**:
+  ```
+  info ply <depth> bestmove <move> score <score> nodes <count> nps <rate> time <elapsed-time> pv <principal-variation>
+  bestmove <move>
+  ```
+
+#### `stop`
+
+- **Purpose**: Stops the engine's search.
+- **Engine Response**:
+  ```
+  bestmove <move>
+  ```
+
+#### `quit`
+
+- **Purpose**: Exits the program.
+- **Engine Response**: None.
+
+---
+
+### Communication from Engine
+
+This section details the messages the engine sends back via the command line, explaining the information provided in each response.
+
+#### `ugiok`
+
+- **Purpose**: Confirms the engine is in UGI mode.
+- **Example**:
+  ```
+  ugiok
+  ```
+
+#### `id <_>`
+
+- **Purpose**: Provides information about the engine.
+- **Details**:
+  - `name`: Engine name.
+  - `author`: Author name.
+- **Example**:
+  ```
+  id name Helios
+  id author Beck-Bjella
+  ```
+
+#### `option <_>`
+
+- **Purpose**: Describes configurable options for the engine.
+- **Details**:
+  - `maxPly`
+  - `maxTime`
+- **Example**:
+  ```
+  option maxPly
+  option maxTime
+  ```
+
+#### `readyok`
+
+- **Purpose**: Indicates the engine is ready for the next command.
+- **Example**:
+  ```
+  readyok
+  ```
+
+#### `info <_>`
+
+- **Purpose**: Provides information during a search.
+- **Details**:
+  - `ply`: Search depth.
+  - `bestmove`: Best move found.
+  - `score`: Evaluation of the best move.
+  - `nodes`: Number of nodes searched.
+  - `nps`: Nodes per second.
+  - `time`: Time taken to search.
+  - `pv`: The principal variation.
+
+- **Example**:
+  ```
+  info ply 1 bestmove 0|1|9 score 1061 nodes 225 nps 234619 time 0.000959 pv 0|1|9
+  ```
+
+#### `bestmove <_>`
+
+- **Purpose**: Sends the best move after a completed search.
+- **Details**:
+  - `move`: The best move found.
+- **Example**:
+  ```
+  bestmove 0|1|14
+  ```
+
+---
+
+## Example Communication Session
+
+### Scenario:
+
+A GUI initializes the engine, sets a custom board layout, and requests a move. A '*' indicates the engine's response.
 
 ```bash
-* Gyges UGI Engine v1.0.0
+* Gyges UGI Engine v1.1.0
 
 ugi
 * id name Helios
-* id author beck-bjella
-* option maxply
-* option maxtime
-* option tt_enabled
+* id author Beck-Bjella
+* option maxPly
+* option maxTime
 * ugiok
 
-setpos data 321123/000000/000000/000000/000000/321123 
+setpos data 321123/000000/000000/000000/000000/321123
 
 setoption maxPly 7
 
@@ -119,13 +215,14 @@ isready
 * readyok
 
 go
-* info ply 1 bestmove 0|1|9 score 1061 nodes 225 nps 234619 abf 225 time 0.000959
-* info ply 3 bestmove 0|1|14 score 3493 nodes 68861 nps 72432 abf 40.988 time 0.950
+* info ply 1 bestmove 0|1|9 score 1061 nodes 225 nps 234619 time 0.000959 pv 0|1|9
+* info ply 3 bestmove 0|1|14 score 3493 nodes 68861 nps 72432 time 0.950 pv 0|1|14 5|12|9
+* bestmove 0|1|14
 
 stop
-* info ply 3 bestmove 0|1|14 score 3493 nodes 68861 nps 72432 abf 40.988 time 0.950
-*bestmove 0|1|14
+* bestmove 0|1|14
 
 quit
 ```
 
+---
