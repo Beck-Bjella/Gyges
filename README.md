@@ -16,8 +16,8 @@ The Gyges-engine crate is a fully functional engine for playing the game.
 
 Both of these crates are written in Rust and are found in the `gyges` and `gyges_engine` directories, respectively. The respective READMEs provide more information about each crate and its usage.
 
-# Standalone Usage
-To use the standalone engine, check out the [Gyges-engine](https://github.com/Beck-Bjella/Gyges/tree/main/gyges_engine) crate README for more information.
+# Engine Usage
+For the easiest and most intuitive experience, start with the [GygesUI](https://github.com/Beck-Bjella/GygesUI), which provides a graphical interface for running the engine. If you prefer to use the engine directly, check out the [Gyges-engine](https://github.com/Beck-Bjella/Gyges/tree/main/gyges_engine) crate README for more information.
 
 # Basic Library Usage
 To add this crate to your project, include the following in your `Cargo.toml` file:

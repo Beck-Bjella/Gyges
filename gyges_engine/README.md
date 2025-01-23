@@ -1,4 +1,5 @@
 # Overview
+
 A powerful Gygès engine.
 
 The Gygès engine is a program designed to play the game of Gygès. Like a chess engine, it utilizes advanced algorithms and strategies to make intelligent moves. The engine communicates using the UGI Protocol, which was specifically developed for this engine. This protocol closely relates to the UCI Protocol used in chess engines, incorporating similar concepts and ideas. Check out the [UGI Protocol](https://github.com/Beck-Bjella/Gyges/blob/main/gyges_engine/UGI-Protocol-Specification.md) for more information.
@@ -8,29 +9,50 @@ Please note that the Gygès engine is a standalone application and not intended 
 [Documentation](https://docs.rs/gyges_engine) and the [Crates.io](https://crates.io/crates/gyges_engine) page.
 
 # Features
- - Iterative Deepening Search
-    - Alpha-Beta Pruning
- - Move Ordering
- - Transposition Table with Zobrist Hashing
- - Complex Evaluation Heuristics
 
-# Installation
-To get started with the Gygès engine, you have two options for installation:
+- Iterative Deepening Search
+  - Alpha-Beta Pruning
+- Move Ordering
+- Transposition Table with Zobrist Hashing
+- Complex Evaluation Heuristics
 
-- **Executable:** The latest release of the Gygès engine includes a precompiled executable file (.exe) that you can download directly. This is the easiest way to get the engine running quickly.
+# Installation & Usage
 
-- **Build from Source:** If you prefer to build the engine from source, you can find the source code in this repository. This option gives you more flexibility and control over the build process, mainly if you use a different architecture than x86-64.
+The easiest and recommended way to experience the Gygès engine is through the [GygesUI](https://github.com/Beck-Bjella/GygesUI), which provides an intuitive graphical interface. For setup instructions, visit the GygesUI repository.
 
-# Usage
-There are multiple ways to interact with the Gygès engine:
+For advanced users who want to run the engine directly, follow one of the options below:
 
-- **Command Line Interface:** You can communicate with the engine directly through the command line using the UGI Protocol. However, this method is not recommended for most users, as it requires manual input and lacks a user-friendly interface.
+- **Executable:**
 
-- **GygesUI:** For a more convenient, user-friendly experience, I recommend using the [GygesUI](https://github.com/Beck-Bjella/GygesUI) 
-user interface. GygesUI provides a graphical interface for interacting with the Gygès engine, making it easier to use the engine and explore its features.
+  - Download the latest precompiled executable file (.exe) from the [releases page](https://github.com/Beck-Bjella/Gyges/releases). This is the quickest way to get the engine running without building it yourself.
+
+- **Build from Source:**
+
+  - Clone this repository and build the engine manually. This option is ideal for users who want more control over the build process or need compatibility with non-standard architectures.
+
+  ```bash
+  git clone https://github.com/Beck-Bjella/Gyges.git
+  cd gyges_engine
+  cargo build --release
+  ```
+
+Once installed, you can interact with the engine in the following ways:
+
+- **Command Line Interface:**
+
+  - Start the engine directly:
+
+  ```bash
+  gyges_engine.exe
+  ```
+
+  - Communicate with the engine using the UGI Protocol. See the [UGI Protocol Specification](https://github.com/Beck-Bjella/Gyges/blob/main/gyges_engine/UGI-Protocol-Specification.md) for detailed instructions.
 
 # Contributions
+
 Contributions to the Gygès engine are highly welcome! If you would like to contribute to the project, please open a pull request with your changes. I appreciate any feedback, bug reports, or suggestions for improvements.
 
 # License
+
 The Gygès engine is released under the [GNU General Public License v3.0](https://github.com/Beck-Bjella/Gyges/blob/main/LICENSE). Please review and comply with the license terms when using or distributing the engine.
+
