@@ -10,7 +10,6 @@ use crate::board::bitboard::*;
 use crate::core::*;
 use crate::moves::*;
 
-
 /// An Encoded list of moves.
 /// 
 /// A RawMoveList stores the starting, pickup, and end postions of moves in BitBoards. 

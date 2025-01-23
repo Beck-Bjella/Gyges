@@ -37,7 +37,7 @@ impl Ugi {
     pub fn start(&mut self) {
         self.init();
 
-        println!("Gyges UGI Engine v1.0.2");
+        println!("Gyges UGI Engine v1.1.0");
 
         let stdin = io::stdin();
         loop {
@@ -55,10 +55,9 @@ impl Ugi {
             match raw_commands.first() {
                 Some(&"ugi") => {
                     println!("id name Helios");
-                    println!("id author beck-bjella");                
-                    println!("option maxply");
-                    println!("option maxtime");
-                    println!("option tt_enabled");
+                    println!("id author Beck-Bjella");                
+                    println!("option maxPly");
+                    println!("option maxTime");
                     println!("ugiok");
 
                 },

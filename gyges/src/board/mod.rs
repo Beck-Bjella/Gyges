@@ -29,7 +29,7 @@ use crate::tools::zobrist::*;
 /// 
 /// Each of the positions on the board can be mapped to a number from 0 to 37. This is done as follows:
 /// 
-/// ```
+/// ```txt
 ///
 ///              (Player 2)       
 /// 

@@ -6,58 +6,118 @@
 //! If a piece lands on another piece, it can move the number of spaces equal to that piece's number of rings. 
 //! It can also displace that piece to any open space. 
 //! 
-//! # Usage 
+//! # Platforms
+//! This library will only run on an x86_64 architecture. It is not currently compatible with other architectures.
+//! 
+//! # Basic Library Usage
+//! 
 //! This crate is available on [crates.io](https://crates.io/crates/gyges) and can be used by adding `gyges` to your `Cargo.toml` file. 
 //! For more examples check out the [github page](https://github.com/Beck-Bjella/Gyges) for the project.
 //! 
-//! # Platforms
-//! This project has only been tested on a x86_64 architecture, and no guarantees are made for other platforms.
+//! ### Setting up a Starting Board Position
 //! 
-//! ## Examples
+//! The library provides predefined starting board positions. Use the following code to load the default board:
 //! 
-//! ### Setting up a starting board position
-//! 
-//! This is one specific starting position built into the library. Other constant board positions can be loaded as well.
-//! ```rust 
-//! use gyges::board::*;
-//! 
-//! // Load Board
-//! let board = BoardState::from(STARTING_BOARD);
-//! 
-//! ```
-//! 
-//! ### Loading a specific Board
-//! 
-//! Boards can be created using this notation, as shown below. Each set of 6 numbers represents a row on the board, starting from your side of the board and going left to right. The orientation of the board is subjective and is based on how the board is inputted.
 //! ```rust
 //! use gyges::board::*;
 //! 
-//! // Load Board
-//! let board = BoardState::from("321123/000000/000000/000000/000000/321123");
-//! 
+//! // Load the starting board position
+//! let board: BoardState = BoardState::from(STARTING_BOARD);
 //! ```
 //! 
-//! ### Applying and generating moves
+//! ### Loading a Specific Board Configuration
 //! 
-//! Move generation is done in a two-step process. You must generate a `RawMoveList` and then extract the moves from that list into a `Vec<Move>`. This is done to improve efficiency and reduce unnecessary processing. When making a move, the `make_move` function will return a copy of the board with the move applied.
+//! To load a custom board configuration, provide a string where each row is represented by a series of numbers. Rows are inputted from your side of the board to the opponent's, and pieces are numbered based on their ring count:
+//! 
 //! ```rust
 //! use gyges::board::*;
-//! use gyges::moves::*;
 //! 
-//! // Load Board
-//! let mut board = BoardState::from(STARTING_BOARD);
+//! // Load a custom board configuration
+//! let board: BoardState = BoardState::from("321123/000000/000000/000000/000000/321123");
+//! ```
 //! 
-//! // Define a player
-//! let player = Player::One;
+//! ### Generating Moves
+//! 
+//! The `MoveGen` structure is the core for generating moves in Gygès. It provides a flexible interface for generating and calculating move-related data tailored to specific needs using generic parameters.
+//! 
+//! #### How It Works
+//! 
+//! `MoveGen` uses two key generic parameters:
+//! 
+//! - **`GenType`**: Specifies the type of data to generate:
+//!   - `GenMoves`: Generates all possible legal moves.
+//!   - `GenMoveCount`: Counts the total number of possible moves.
+//!   - `GenThreatCount`: Counts the number of threats on the board.
+//!   - `GenControlMoveCount`: Combines control analysis and move counting.
+//! - **`QuitType`**: Controls when generation stops:
+//!   - `NoQuit`: Completes the full generation process.
+//!   - `QuitOnThreat`: Stops generation immediately if a threat is found. This is particularly useful for saving computation in scenarios where you need both the data and the guarantee that no threats exist. If a threat is found, you can handle it separately.
+//! 
+//! #### Examples
+//! 
+//! ##### 1. Generate All Moves
+//! 
+//! ```rust
+//! use gyges::board::*;
+//! use gyges::moves::movegen::*;
+//! 
+//! // Setup
+//! let mut board: BoardState = BoardState::from(STARTING_BOARD);
+//! let player: Player = Player::One;
+//! let mut move_gen: MoveGen = MoveGen::default();
+//! 
+//! // Generate
+//! let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, player) };
+//! let moves: Vec<Move> = movelist.moves(&mut board);
+//! println!("Generated moves: {:?}", moves);
+//! ```
+//! 
+//! ##### 2. Generate Move Count, Stopping if a Threat is Found
+//! 
+//! ```rust
+//! use gyges::board::*;
+//! use gyges::moves::movegen::*;
+//! 
+//! // Setup
+//! let mut board: BoardState = BoardState::from(STARTING_BOARD);
+//! let player: Player = Player::One;
+//! let mut move_gen: MoveGen = MoveGen::default();
+//! 
+//! // Generate
+//! let data: GenResult = move_gen.gen::<GenMoveCount, QuitOnThreat>(&mut board, player);
+//! let move_count: usize = data.move_count;
+//! println!("Move count: {}", move_count);
+//! ```
+//! 
+//! ### Making a Move
+//! 
+//! Use the `make_move` method on the `BoardState` struct to make a move. This method takes a `Move` struct as an argument and returns a new `BoardState` with the move applied:
+//! 
+//! ```rust
+//! use gyges::board::*;
+//! use gyges::moves::movegen::*;
+//! 
+//! // Setup
+//! let mut board: BoardState = BoardState::from(STARTING_BOARD);
+//! let player: Player = Player::One;
+//! 
+//! let mut move_gen: MoveGen = MoveGen::default();
 //! 
 //! // Generate moves
-//! let mut movelist = unsafe{ valid_moves(&mut board, player) }; // Create a MoveList
-//! let moves = movelist.moves(&mut board); // Extract the moves
+//! let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, player) };
+//! let movelist: RawMoveList = data.move_list;
+//! 
+//! let moves: Vec<Move> = movelist.moves(&mut board);
 //! 
 //! // Make a move
-//! board.make_move(&moves[0]);
+//! println!("Original board: {}", board);
+//! println!("Move: {:?}", moves[0]);
 //! 
+//! let mut new_board: BoardState = board.make_move(&first_move);
+//! 
+//! println!("New board: {}", board);
 //! ```
+//! 
 //! 
 //! # Acknowledgements
 //! This project and its formating was inspired by the incridible rust chess program [Pleco](https://github.com/pleco-rs/Pleco).
