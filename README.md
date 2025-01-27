@@ -63,8 +63,8 @@ The `MoveGen` structure is the core for generating moves in Gygès. It provides 
   - `GenThreatCount`: Counts the number of threats on the board.
   - `GenControlMoveCount`: Combines control analysis and move counting.
 - **`QuitType`**: Controls when generation stops:
-  - **`NoQuit`**: Completes the full generation process.
-  - **`QuitOnThreat`**: Stops generation immediately if a threat is found. This is particularly useful for saving computation in scenarios where you need both the data and the guarantee that no threats exist. If a threat is found, you can handle it separately.
+  - `NoQuit`: Completes the full generation process.
+  - `QuitOnThreat`: Stops generation immediately if a threat is found. This is particularly useful for saving computation in scenarios where you need both the data and the guarantee that no threats exist. If a threat is found, you can handle it separately.
 
 #### Examples
 
