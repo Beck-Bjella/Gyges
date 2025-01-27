@@ -16,15 +16,6 @@ const MAX_STACK_SIZE: usize = 1000;
 
 /// Contains all of the core logic needed for generating moves.
 /// 
-/// Generation options:
-///  - Moves
-///  - Move count
-///  - Threat count
-///  - Control & Move count
-///
-/// Other:
-/// - Quit on threat detection
-/// 
 pub struct MoveGen {
     stack: FixedStack<StackData>,
 

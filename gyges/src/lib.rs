@@ -19,7 +19,7 @@
 //! The library provides predefined starting board positions. Use the following code to load the default board:
 //! 
 //! ```rust
-//! use gyges::board::*;
+//! use gyges::*;
 //! 
 //! // Load the starting board position
 //! let board: BoardState = BoardState::from(STARTING_BOARD);
@@ -30,7 +30,7 @@
 //! To load a custom board configuration, provide a string where each row is represented by a series of numbers. Rows are inputted from your side of the board to the opponent's, and pieces are numbered based on their ring count:
 //! 
 //! ```rust
-//! use gyges::board::*;
+//! use gyges::*;
 //! 
 //! // Load a custom board configuration
 //! let board: BoardState = BoardState::from("321123/000000/000000/000000/000000/321123");
@@ -58,8 +58,7 @@
 //! ##### 1. Generate All Moves
 //! 
 //! ```rust
-//! use gyges::board::*;
-//! use gyges::moves::movegen::*;
+//! use gyges::*;
 //! 
 //! // Setup
 //! let mut board: BoardState = BoardState::from(STARTING_BOARD);
@@ -68,6 +67,8 @@
 //! 
 //! // Generate
 //! let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, player) };
+//! let mut movelist: RawMoveList = data.move_list;
+//! 
 //! let moves: Vec<Move> = movelist.moves(&mut board);
 //! println!("Generated moves: {:?}", moves);
 //! ```
@@ -75,8 +76,7 @@
 //! ##### 2. Generate Move Count, Stopping if a Threat is Found
 //! 
 //! ```rust
-//! use gyges::board::*;
-//! use gyges::moves::movegen::*;
+//! use gyges::*;
 //! 
 //! // Setup
 //! let mut board: BoardState = BoardState::from(STARTING_BOARD);
@@ -84,7 +84,7 @@
 //! let mut move_gen: MoveGen = MoveGen::default();
 //! 
 //! // Generate
-//! let data: GenResult = move_gen.gen::<GenMoveCount, QuitOnThreat>(&mut board, player);
+//! let data: GenResult = unsafe { move_gen.gen::<GenMoveCount, QuitOnThreat>(&mut board, player) };
 //! let move_count: usize = data.move_count;
 //! println!("Move count: {}", move_count);
 //! ```
@@ -94,9 +94,8 @@
 //! Use the `make_move` method on the `BoardState` struct to make a move. This method takes a `Move` struct as an argument and returns a new `BoardState` with the move applied:
 //! 
 //! ```rust
-//! use gyges::board::*;
-//! use gyges::moves::movegen::*;
-//! 
+//! use gyges::*;
+//!  
 //! // Setup
 //! let mut board: BoardState = BoardState::from(STARTING_BOARD);
 //! let player: Player = Player::One;
@@ -105,7 +104,7 @@
 //! 
 //! // Generate moves
 //! let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, player) };
-//! let movelist: RawMoveList = data.move_list;
+//! let mut movelist: RawMoveList = data.move_list;
 //! 
 //! let moves: Vec<Move> = movelist.moves(&mut board);
 //! 
@@ -113,7 +112,7 @@
 //! println!("Original board: {}", board);
 //! println!("Move: {:?}", moves[0]);
 //! 
-//! let mut new_board: BoardState = board.make_move(&first_move);
+//! let mut new_board: BoardState = board.make_move(&moves[0]);
 //! 
 //! println!("New board: {}", board);
 //! ```
@@ -133,3 +132,4 @@ pub mod tools;
 pub use board::{BoardState, STARTING_BOARD, BENCH_BOARD};
 pub use board::bitboard::BitBoard;
 pub use core::{Piece, Player, SQ};
+pub use moves::{Move, movegen::*, move_list::RawMoveList};
