@@ -290,22 +290,14 @@ impl Searcher {
         for (i, mv) in current_player_moves.iter().enumerate() {
             let mut new_board = board.make_move(mv);
 
-            // Late Move Reduction
-            // let reduction = if i > (1 * (current_player_moves.len() / 4)) && ply > 5 {
-            //     2
-            // } else {
-            //     0
-            // };
-            let mut reduction = 0;
-
             // Principal Variation Search
             let score: f64 = if i < 5 {
-                -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1 - reduction) // Full search
+                -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1) // Full search
 
             } else {
-                let mut score = -self.search(&mut new_board, -alpha - 1.0, -alpha, player.other(), ply - 1 - reduction); // Null window search
+                let mut score = -self.search(&mut new_board, -alpha - 1.0, -alpha, player.other(), ply - 1); // Null window search
                 if score > alpha && score < beta { 
-                    score = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1 - reduction);
+                    score = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1);
 
                 }
 

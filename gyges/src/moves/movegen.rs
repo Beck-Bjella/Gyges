@@ -89,7 +89,7 @@ impl MoveGen {
                         Piece::One => {
                             let path_list = ONE_PATH_LISTS.get_unchecked(current_sq.0 as usize);
                             for i in 0..(path_list.count as usize) {
-                                let path = &path_list.paths[i as usize];
+                                let path = &path_list.paths[i];
                 
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
@@ -149,12 +149,12 @@ impl MoveGen {
                             let intercepts = ALL_TWO_INTERCEPTS[current_sq.0 as usize];
                             let intercept_bb = board.piece_bb & intercepts;
 
-                            let key = unsafe { compress_pext(intercepts, intercept_bb.0 as u64) };            
+                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };            
                             let valid_paths_idx = TWO_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
 
                             let path_list = TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
                             for i in 0..(path_list.count as usize) {
-                                let path = &path_list.paths[i as usize];
+                                let path = &path_list.paths[i];
 
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
@@ -214,12 +214,12 @@ impl MoveGen {
                             let intercepts = ALL_THREE_INTERCEPTS[current_sq.0 as usize];
                             let intercept_bb = board.piece_bb & intercepts;
                             
-                            let key = unsafe { compress_pext(intercepts, intercept_bb.0 as u64) };            
+                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };            
                             let valid_paths_idx: &u16 = THREE_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
         
                             let path_list = THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
                             for i in 0..(path_list.count as usize) {
-                                let path = &path_list.paths[i as usize];
+                                let path = &path_list.paths[i];
 
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
@@ -415,7 +415,7 @@ pub trait QuitType {
 pub struct QuitOnThreat;
 impl QuitType for QuitOnThreat {
     fn check_quit() -> bool {
-        return true;
+        true
     }
 
 }
@@ -424,7 +424,7 @@ impl QuitType for QuitOnThreat {
 pub struct NoQuit;
 impl QuitType for NoQuit {
     fn check_quit() -> bool {
-        return false;
+        false
     }
 
 }
