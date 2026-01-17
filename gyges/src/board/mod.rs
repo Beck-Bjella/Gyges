@@ -74,7 +74,7 @@ pub struct BoardState {
 
 impl BoardState {
     /// Makes a move on the board and returns the new board. Updates the hash and bitboards accordingly.
-    pub fn make_move(self, mv: &Move) -> BoardState {
+    pub fn make_move_clone(self, mv: &Move) -> BoardState {
         let mut new_state = self;
         new_state.player = new_state.player.other();
 
@@ -112,6 +112,89 @@ impl BoardState {
         
         new_state
 
+    }
+    
+    /// Makes a move on the board. Updates the hash and bitboards accordingly.
+    pub fn make_move(&mut self, mv: &Move) {
+        self.player = self.player.other();
+
+        let step1 = mv.data[0];
+        let step2 = mv.data[1];
+        let step3 = mv.data[2];
+
+        let curr_piece_step1 = self.piece_at(step1.1);
+        let curr_piece_step2 = self.piece_at(step2.1);
+
+        if mv.flag == MoveType::Drop {
+            self.hash ^= ZOBRIST_HASH_DATA[step1.1.0 as usize][curr_piece_step1 as usize];
+
+            self.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][curr_piece_step2 as usize];
+            self.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][step2.0 as usize];
+
+            self.hash ^= ZOBRIST_HASH_DATA[step3.1.0 as usize][step3.0 as usize];
+
+            self.place(step1.0, step1.1);
+            self.place(step2.0, step2.1);
+            self.place(step3.0, step3.1);
+
+            self.piece_bb.clear_bit(step1.1.0 as usize);
+            self.piece_bb.set_bit(step3.1.0 as usize);
+
+        } else if mv.flag == MoveType::Bounce {
+            self.hash ^= ZOBRIST_HASH_DATA[step1.1.0 as usize][curr_piece_step1 as usize];
+
+            self.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][step2.0 as usize];
+
+            self.place(step1.0, step1.1);
+            self.place(step2.0, step2.1);
+
+            self.piece_bb.clear_bit(step1.1.0 as usize);
+            self.piece_bb.set_bit(step2.1.0 as usize);
+
+        }
+        
+    }
+
+    /// Unmakes a move on the board. Updates the hash and bitboards accordingly.
+    pub fn unmake_move(&mut self, mv: &Move) {  
+        self.player = self.player.other();
+
+        let step1 = mv.data[0];
+        let step2 = mv.data[1];
+        let step3 = mv.data[2];
+
+        let curr_piece_step1: Piece = self.piece_at(step1.1);
+        let curr_piece_step2 = self.piece_at(step2.1);
+
+        if mv.flag == MoveType::Drop {
+            let curr_piece_step3 = self.piece_at(step3.1);
+
+            self.hash ^= ZOBRIST_HASH_DATA[step3.1.0 as usize][curr_piece_step3 as usize];
+
+            self.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][curr_piece_step2 as usize];
+            self.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][curr_piece_step3 as usize];
+            
+            self.hash ^= ZOBRIST_HASH_DATA[step1.1.0 as usize][curr_piece_step2 as usize];
+
+            self.place(Piece::None, step3.1);
+            self.place(curr_piece_step3, step2.1);
+            self.place(curr_piece_step2, step1.1);
+
+            self.piece_bb.clear_bit(step3.1.0 as usize);
+            self.piece_bb.set_bit(step1.1.0 as usize);
+            
+        } else if mv.flag == MoveType::Bounce {
+            self.hash ^= ZOBRIST_HASH_DATA[step2.1.0 as usize][curr_piece_step2 as usize];
+            self.hash ^= ZOBRIST_HASH_DATA[step1.1.0 as usize][curr_piece_step2 as usize];
+
+            self.place(curr_piece_step2, step1.1);
+            self.place(curr_piece_step1, step2.1);
+
+            self.piece_bb.clear_bit(step2.1.0 as usize);
+            self.piece_bb.set_bit(step1.1.0 as usize);
+            
+        }
+        
     }
     
     /// Places a piece on the board.

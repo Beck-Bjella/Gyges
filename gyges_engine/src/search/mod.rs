@@ -5,6 +5,7 @@ pub mod evaluation;
 
 use core::f64;
 use std::cmp::Ordering;
+use std::ops::Add;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
@@ -45,7 +46,9 @@ pub struct Searcher {
     pub stop_in: Receiver<bool>,
     pub stop: bool,
 
-    pub mg: MoveGen
+    pub mg: MoveGen,
+
+    pub history: HistoryTable
 
 }
 
@@ -64,7 +67,9 @@ impl Searcher {
             stop_in,
             stop: false,
 
-            mg: MoveGen::default()
+            mg: MoveGen::default(),
+
+            history: HistoryTable::default()
 
         }
 
@@ -147,6 +152,10 @@ impl Searcher {
         'iterative_deepening: while !self.search_data.game_over {
             self.search_data = SearchData::new(self.current_ply);
 
+            // History table decay
+            self.history.decay();
+
+            // Aspiration windows
             let (mut alpha, mut beta) = if self.completed_searchs.len() > 0 {
                 let prev_score = self.completed_searchs.last().unwrap().clone().best_move.score;
                 (prev_score - 1000.0, prev_score + 1000.0)
@@ -176,7 +185,7 @@ impl Searcher {
                 }
 
             }
-                
+
             if self.stop {
                 break 'iterative_deepening;
     
@@ -202,7 +211,7 @@ impl Searcher {
         let best_search_data = self.completed_searchs.last().unwrap().clone();
         ugi::info_output(best_search_data.clone(), self.search_stats.clone());
         ugi::best_move_output(best_search_data);
-
+    
     }
 
     /// Main search function.
@@ -240,11 +249,8 @@ impl Searcher {
         }
 
         // Handle Transposition Table
-        let mut tt_move: Option<Move> = None;
         let (valid, entry) = unsafe { tt().probe(board_hash) };
         if valid && entry.depth >= ply {
-            tt_move = Some(entry.bestmove);
-
             match entry.bound {
                 NodeBound::ExactValue => {
                     return entry.score
@@ -274,7 +280,7 @@ impl Searcher {
             
         } else {
             let moves = move_list.moves(board);
-            self.order_moves(moves, board, player, tt_move)
+            self.order_moves(moves, board, player)
 
         };
 
@@ -288,22 +294,24 @@ impl Searcher {
         let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
         for (i, mv) in current_player_moves.iter().enumerate() {
-            let mut new_board = board.make_move(mv);
+            board.make_move(mv);
 
             // Principal Variation Search
             let score: f64 = if i < 5 {
-                -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1) // Full search
+                -self.search(board, -beta, -alpha, player.other(), ply - 1) // Full search
 
             } else {
-                let mut score = -self.search(&mut new_board, -alpha - 1.0, -alpha, player.other(), ply - 1); // Null window search
+                let mut score = -self.search(board, -alpha - 1.0, -alpha, player.other(), ply - 1); // Null window search
                 if score > alpha && score < beta { 
-                    score = -self.search(&mut new_board, -beta, -alpha, player.other(), ply - 1);
+                    score = -self.search(board, -beta, -alpha, player.other(), ply - 1);
 
                 }
 
                 score
 
             };
+
+            board.unmake_move(mv);
 
             // Update the score of the rootnode.
             if is_root {
@@ -317,11 +325,13 @@ impl Searcher {
 
             }
             if best_score > alpha {
+                // self.history.log_alpha_increase(mv, ply);
                 alpha = best_score;
 
             }
 
             if alpha >= beta {
+                self.history.log_beta_cutoff(mv, ply);
                 break;
 
             }
@@ -350,27 +360,44 @@ impl Searcher {
     }
 
     /// Orders a list of moves.
-    pub fn order_moves(&mut self, moves: Vec<Move>, board: &mut BoardState, player: Player, tt_move: Option<Move>) -> Vec<Move> {
-        // For every move calculate a value to sort it by.
-        let mut moves_to_sort: Vec<(Move, f64)> = moves.into_par_iter().filter_map(|mv| {
+    pub fn order_moves(&mut self, mut moves: Vec<Move>, board: &mut BoardState, player: Player) -> Vec<Move> {
+        let mut out: Vec<Move> = Vec::with_capacity(moves.len());
+
+        // Gather Transposition Table move
+        let mut tt_move: Option<Move> = None;
+        let (valid, entry) = unsafe { tt().probe(board.hash()) };
+        if valid && entry.bestmove != Move::new_null() {
+            tt_move = Some(entry.bestmove);
+
+        }
+
+        // Store TT move first
+        if let Some(tt) = tt_move {
+            if let Some(idx) = moves.iter().position(|&m| m == tt) {
+                out.push(moves.swap_remove(idx));
+
+            }
+
+        }
+
+        let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_par_iter().filter_map(|mv| {
             let mut sort_val: f64 = 0.0;
-            let mut new_board = board.make_move(&mv);
+            let mut new_board = board.make_move_clone(&mv);
 
             THREAD_LOCAL_MOVEGEN.with(|movegen| {
                 let mut movegen = movegen.borrow_mut();
 
+            // let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_iter().filter_map(|mv| {
+            //     let mut sort_val: f64 = 0.0;
+            //     board.make_move(&mv);
+                                                                            
                 let data = unsafe { movegen.gen::<GenMoveCount, QuitOnThreat>(&mut new_board, player.other()) };
                 if data.threat {
+                    // board.unmake_move(&mv);
                     return None;
 
                 }
                 let opp_movecount = data.move_count;
-
-                // If the move is the TT sort it first.
-                if tt_move.is_some() && mv == tt_move.unwrap() {
-                    return Some((mv, TT_MOVE_SCORE));
-
-                }
 
                 // If the move has a threat then increase the sort value.
                 let data = unsafe { movegen.gen::<GenNone, QuitOnThreat>(&mut new_board, player) };
@@ -378,31 +405,56 @@ impl Searcher {
                     sort_val += 1000.0;
 
                 }
-                
+                    
                 sort_val -= opp_movecount as f64;
 
-                Some((mv, sort_val))
+                // board.unmake_move(&mv);
+
+                return Some((mv, sort_val, self.history.fetch(&mv)));
 
             })
 
         }).collect();
 
-        // Sort the moves
         moves_to_sort.sort_by(|a, b| {
-            if a.1 > b.1 {
-                Ordering::Less
+            let a_score = a.1;
+            let b_score = b.1;
 
-            } else if a.1 < b.1 {
-                Ordering::Greater
+            let a_hist = a.2;
+            let b_hist = b.2;
+            
+            // If more than 10 % difference use that to sort
+            if (a_score - b_score).abs() > (0.03 * a_score.abs().max(b_score.abs())) {
+                if a_score > b_score {
+                    Ordering::Less
 
-            } else {
-                Ordering::Equal
+                } else if a_score < b_score {
+                    Ordering::Greater
+
+                } else {
+                    Ordering::Equal
+                    
+                }
+
+            } else { // Otherwise use history to sort
+                if a_hist > b_hist {
+                    Ordering::Less
+
+                } else if a_hist < b_hist {
+                    Ordering::Greater
+
+                } else {
+                    Ordering::Equal
+
+                }
 
             }
 
         });
-        
-        return moves_to_sort.into_iter().map(|(mv, _)| mv).collect();
+
+        out.extend(moves_to_sort.into_iter().map(|(mv, _, _)| mv));
+
+        return out;
 
     }
 
@@ -412,10 +464,10 @@ impl Searcher {
     /// 
     pub fn setup_rootmoves(&mut self, board: &mut BoardState) {
         let moves = unsafe { self.mg.gen::<GenMoves, NoQuit>(board, Player::One).move_list.moves(board) };
-        let ordered: Vec<Move> = self.order_moves(moves, board, Player::One, None);
+        let ordered: Vec<Move> = self.order_moves(moves, board, Player::One);
         
         let root_moves: Vec<RootMove> = ordered.iter().map( |mv| {
-            let mut new_board = board.make_move(mv);
+            let mut new_board = board.make_move_clone(mv);
             let threats: usize = unsafe { self.mg.gen::<GenThreatCount, NoQuit>(&mut new_board, Player::One).threat_count };
 
             RootMove::new(*mv, 0.0, 0, threats)
@@ -431,6 +483,127 @@ impl Searcher {
 
 }
 
+/// History table for move ordering.
+#[derive(Clone)]
+pub struct HistoryTable {
+    h_bounce: [[f64; 38]; 38],
+    h_drop: [[[f64; 38]; 38]; 38],
+
+}
+
+impl Default for HistoryTable {
+    fn default() -> Self {
+        Self {
+            h_bounce: [[0.0; 38]; 38],
+            h_drop: [[[0.0; 38]; 38]; 38],
+
+        }
+
+    }
+
+}
+
+impl HistoryTable {
+    #[inline(always)]
+    pub fn clear(&mut self) {
+        *self = Self::default();
+
+    }
+
+    #[inline]
+    pub fn decay(&mut self) {
+        for i in 0..38 {
+            for j in 0..38 {
+                self.h_bounce[i][j] *= 0.5;
+
+                for k in 0..38 {
+                    self.h_drop[i][j][k] *= 0.5;
+
+                }
+
+            }
+
+        }
+
+    }
+
+    /// Fetches the history score for a move.
+    #[inline(always)]
+    pub fn fetch(&self, mv: &Move) -> f64 {
+        let step1 = mv.data[0];
+        let step2 = mv.data[1];
+        let step3 = mv.data[2];
+
+        if mv.flag != MoveType::Drop {
+            let s = step1.1.0 as usize;
+            let e = step2.1.0 as usize;
+            self.h_bounce[s][e]
+
+        } else {
+            let s = step1.1.0 as usize;
+            let p = step2.1.0 as usize;
+            let d = step3.1.0 as usize;
+            self.h_drop[s][p][d]
+
+        }
+
+    }
+
+    /// Update history on a beta cutoff / fail-high.
+    #[inline(always)]
+    pub fn log_beta_cutoff(&mut self, mv: &Move, depth: i8) {
+        let step1 = mv.data[0];
+        let step2 = mv.data[1];
+        let step3 = mv.data[2];
+
+        // Standard depth weighting: deeper cutoffs matter more
+        let bonus = depth as f64 * depth as f64;
+
+        if mv.flag != MoveType::Drop {
+            let s = step1.1.0 as usize;
+            let e = step2.1.0 as usize;
+
+            self.h_bounce[s][e] = self.h_bounce[s][e].add(bonus);
+
+        } else {
+            let s = step1.1.0 as usize;
+            let p = step2.1.0 as usize;
+            let d = step3.1.0 as usize;
+
+            self.h_drop[s][p][d] = self.h_drop[s][p][d].add(bonus);
+
+        }
+
+    }
+    
+    /// Update history on a alpha increase
+    #[inline(always)]
+    pub fn log_alpha_increase(&mut self, mv: &Move, depth: i8) {
+        let step1 = mv.data[0];
+        let step2 = mv.data[1];
+        let step3 = mv.data[2];
+
+        // Standard depth weighting: deeper cutoffs matter more
+        let bonus = depth as f64 * 0.5;
+
+        if mv.flag != MoveType::Drop {
+            let s = step1.1.0 as usize;
+            let e = step2.1.0 as usize;
+
+            self.h_bounce[s][e] = self.h_bounce[s][e].add(bonus);
+
+        } else {
+            let s = step1.1.0 as usize;
+            let p = step2.1.0 as usize;
+            let d = step3.1.0 as usize;
+
+            self.h_drop[s][p][d] = self.h_drop[s][p][d].add(bonus);
+
+        }
+
+    }
+
+}
 
 /// Gets the principle variation from the transposition table.
 pub fn get_pv(board: &mut BoardState) -> Vec<RootMove> {
@@ -441,7 +614,7 @@ pub fn get_pv(board: &mut BoardState) -> Vec<RootMove> {
         let (valid, entry) = unsafe { tt().probe(current_board.hash()) };
         if valid {
             let current_move = entry.bestmove;
-            current_board = current_board.make_move(&current_move);
+            current_board = current_board.make_move_clone(&current_move);
 
             pv.push(RootMove::new(current_move, entry.score, 0, 0));
 
