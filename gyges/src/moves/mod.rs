@@ -8,6 +8,8 @@ pub mod move_list;
 pub mod movegen;
 pub mod movegen_consts;
 
+pub mod new_movegen_consts;
+
 use std::fmt::Display;
 
 use crate::core::*;

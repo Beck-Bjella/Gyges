@@ -119,7 +119,6 @@ impl Searcher {
         self.root_moves.moves = self.root_moves.moves.iter().filter(|mv| mv.score != f64::NEG_INFINITY).cloned().collect();
 
     } 
-
     
     /// Iterative deepening search.
     pub fn iterative_deepening_search(&mut self) {
@@ -380,39 +379,39 @@ impl Searcher {
 
         }
 
-        let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_par_iter().filter_map(|mv| {
+        // let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_par_iter().filter_map(|mv| {
+        //     let mut sort_val: f64 = 0.0;
+        //     let mut new_board = board.make_move_clone(&mv);
+
+        //     THREAD_LOCAL_MOVEGEN.with(|movegen| {
+        //         let mut movegen = movegen.borrow_mut();
+
+        let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_iter().filter_map(|mv| {
             let mut sort_val: f64 = 0.0;
-            let mut new_board = board.make_move_clone(&mv);
+            board.make_move(&mv);
+                                                                         
+            let data = unsafe {self.mg.gen::<GenMoveCount, QuitOnThreat>(board, player.other()) };
+            if data.threat {
+                board.unmake_move(&mv);
+                return None;
 
-            THREAD_LOCAL_MOVEGEN.with(|movegen| {
-                let mut movegen = movegen.borrow_mut();
+            }
+            let opp_movecount = data.move_count;
 
-            // let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_iter().filter_map(|mv| {
-            //     let mut sort_val: f64 = 0.0;
-            //     board.make_move(&mv);
-                                                                            
-                let data = unsafe { movegen.gen::<GenMoveCount, QuitOnThreat>(&mut new_board, player.other()) };
-                if data.threat {
-                    // board.unmake_move(&mv);
-                    return None;
+            // If the move has a threat then increase the sort value.
+            let data = unsafe { self.mg.gen::<GenNone, QuitOnThreat>(board, player) };
+            if data.threat {
+                sort_val += 1000.0;
 
-                }
-                let opp_movecount = data.move_count;
+            }
+                
+            sort_val -= opp_movecount as f64;
 
-                // If the move has a threat then increase the sort value.
-                let data = unsafe { movegen.gen::<GenNone, QuitOnThreat>(&mut new_board, player) };
-                if data.threat {
-                    sort_val += 1000.0;
+            board.unmake_move(&mv);
 
-                }
-                    
-                sort_val -= opp_movecount as f64;
+            return Some((mv, sort_val, self.history.fetch(&mv)));
 
-                // board.unmake_move(&mv);
-
-                return Some((mv, sort_val, self.history.fetch(&mv)));
-
-            })
+            // })
 
         }).collect();
 

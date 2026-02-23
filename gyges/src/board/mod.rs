@@ -199,6 +199,7 @@ impl BoardState {
     
     /// Places a piece on the board.
     /// Performs no checks and does not update bitboards or hash.
+    #[inline(always)]
     pub fn place(&mut self, piece: Piece, square: SQ) {
         self.data[square.0 as usize] = piece;
 
@@ -206,12 +207,14 @@ impl BoardState {
 
     /// Removes a piece from the board.
     /// Performs no checks and does not update bitboards or hash.
+    #[inline(always)]
     pub fn remove(&mut self, square: SQ) {
         self.data[square.0 as usize] = Piece::None;
 
     }
 
     /// Returns the piece at a given square.
+    #[inline(always)]
     pub fn piece_at(&self, square: SQ) -> Piece {
         self.data[square.0 as usize]
 
