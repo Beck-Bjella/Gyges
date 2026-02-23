@@ -8,22 +8,6 @@ use crate::moves::move_list::*;
 use crate::moves::movegen_consts::*;
 use crate::moves::new_movegen_consts::*;
 
-// use crate::moves::new_consts::ONE_BLOB;
-// use crate::moves::new_consts::ONE_META;
-// use crate::moves::new_consts::PackedPath;
-// use crate::moves::new_consts::Meta;
-// use crate::moves::new_consts::TWO_BLOB;
-// use crate::moves::new_consts::TWO_META;
-// use crate::moves::threes_compact::THREE_META;
-// use crate::moves::threes_compact::THREE_BLOB;
-// use crate::moves::new_consts::ALL_INTERCEPTS;
-// use crate::moves::new_consts::COMBINED_MAP;
-// use crate::moves::new_consts::COMBINED_META;
-// use crate::moves::new_consts::COMBINED_BLOB;
-// use crate::moves::new_consts::MAP_BASE;
-// use crate::moves::new_consts::MAP_STRIDE;
-
-
 /// The maximum size of the stack.
 const MAX_STACK_SIZE: usize = 1000;
 
@@ -784,72 +768,138 @@ impl MoveGen {
     }
 
 
-    // #[inline(always)]
-    // unsafe fn process_paths<P: PieceLookup, G: GenType, Q: QuitType>(
-    //     board:            &mut BoardState,
-    //     result:           &mut GenResult,
-    //     stack:            &mut Stack2,
-    //     current_sq:       SQ,
-    //     backtrack_board:  BitBoard,
-    //     banned_positions: BitBoard,
-    //     active_line_idx:  usize,
-    //     player_bit:       u64,
-    //     // starting_piece and starting_sq gone
-    // ) -> bool {
-    //     let data      = P::get_path_list(current_sq, board.piece_bb);
-    //     let path_list = &*data.list;
+    // REALLY GOOD + new consts + process_paths
+    #[inline(always)]
+    pub unsafe fn gen6<G: GenType, Q: QuitType>(&mut self, board: &mut BoardState, player: Player) -> GenResult {
+        self.stack2.clear();
+        let player_bit = 1 << player as u64;
 
-    //     for i in 0..(path_list.count as usize) {
-    //         let path    = path_list.paths.get_unchecked(i);
-    //         let end     = SQ(path.0[P::END_IDX]);
-    //         let end_bit = end.bit();
+        let active_lines: [usize; 2] = board.get_active_lines();
+        let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
+        let drop_bb = board.get_drops(active_lines, player);
 
-    //         if (board.piece_bb & end_bit).is_not_empty() {
-    //             if (banned_positions & end_bit).is_not_empty()
-    //                 || (backtrack_board & path.1).is_not_empty()
-    //             {
-    //                 continue;
-    //             }
+        let mut result = GenResult::new(drop_bb);
 
-    //             G::store_bounce(result, active_line_idx, end_bit);
+        for active_line_idx in 0..6 {
+            let starting_sq = active_line_sq + active_line_idx;
+            let starting_piece = board.piece_at(starting_sq);
+            if starting_piece != Piece::None {
+                G::init(&mut result, active_line_idx, starting_sq, starting_piece);
 
-    //             stack.push(StackData2::new(
-    //                 Action2::from_piece(board.piece_at(end)),
-    //                 backtrack_board ^ path.1,
-    //                 banned_positions ^ end_bit,
-    //                 end,
-    //             ));
+                board.remove(starting_sq);
+                board.piece_bb ^= starting_sq.bit();
 
-    //             continue;
-    //         }
+                self.stack2.push(StackData2::new(Action2::from_piece(starting_piece), BitBoard::EMPTY, BitBoard::EMPTY, starting_sq));
+                
+                let mut quit = false;
+                while !self.stack2.is_empty() {
+                    let data = self.stack2.pop();
 
-    //         let goal_bit = end_bit >> 36;
-    //         if goal_bit != 0 {
-    //             if (goal_bit & player_bit) != 0
-    //                 || (backtrack_board & path.1).is_not_empty()
-    //             {
-    //                 continue;
-    //             }
+                    let action = data.action;
+                    let backtrack_board = data.backtrack_board;
+                    let banned_positions = data.banned_positions;
+                    let current_sq = data.current_sq;
 
-    //             G::store_goal(result, active_line_idx, end_bit);
+                    quit = match action {
+                        Action2::Gen1 => MoveGen::process_paths::<OneBounce, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, banned_positions, active_line_idx, player_bit),
+                        Action2::Gen2 => MoveGen::process_paths::<TwoBounce, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, banned_positions, active_line_idx, player_bit),
+                        Action2::Gen3 => MoveGen::process_paths::<ThreeBounce, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, banned_positions, active_line_idx, player_bit),
+                    };
 
-    //             if Q::QUIT {
-    //                 return true;  // just signal, let gen4 handle cleanup
-    //             }
+                    if quit {
+                        break;
+                    }
 
-    //             continue;
-    //         }
+                }
 
-    //         G::store_end(result, active_line_idx, end_bit);
+                board.place(starting_piece, starting_sq);
+                board.piece_bb ^= starting_sq.bit();
 
-    //     }
+                if quit {
+                    result.threat = true;
+                    return result;
 
-    //     false
-        
-    // }
+                }
+
+            }
+
+        }
+
+        G::exit(&mut result, board);
+
+        result
+
+    }
+
+    #[inline(always)]
+    unsafe fn process_paths<P: PieceLookup, G: GenType, Q: QuitType>(
+        board:            &mut BoardState,
+        result:           &mut GenResult,
+        stack:            &mut FixedStack<StackData2>,
+        current_sq:       SQ,
+        backtrack_board:  BitBoard,
+        banned_positions: BitBoard,
+        active_line_idx:  usize,
+        player_bit:       u64,
+    ) -> bool {
+        let (count, ends, backs) = P::get_path_data(current_sq, board.piece_bb);
+
+        for i in 0..(count as usize) {
+            let end = SQ(*ends.add(i));
+            let end_bit = end.bit();
+            let back = BitBoard(*backs.add(i));
+
+            if (board.piece_bb & end_bit).is_not_empty() {
+                if (banned_positions & end_bit).is_not_empty() || (backtrack_board & back).is_not_empty() {
+                    continue;
+
+                }
+
+                G::store_bounce(result, active_line_idx, end_bit);
+
+                stack.push(StackData2::new(
+                    Action2::from_piece(board.piece_at(end)),
+                    backtrack_board ^ back,
+                    banned_positions ^ end_bit,
+                    end
+                ));
+
+                continue;
+
+            }
+
+            let goal_bit = BitBoard(end_bit >> 36);
+            if goal_bit.is_not_empty() {
+                if (goal_bit & player_bit).is_not_empty() || (backtrack_board & back).is_not_empty() {
+                    continue;
+
+                }
+
+                G::store_goal(result, active_line_idx, end_bit);
+
+                if Q::QUIT {
+                    return true;
+                    
+                }
+
+                continue;
+
+            }
+
+            if (backtrack_board & back).is_not_empty() {
+                continue;
+
+            }
+
+            G::store_end(result, active_line_idx, end_bit);
+
+        }
+
+        false
+
+    }
 
 }
-
 
 impl Default for MoveGen {
     fn default() -> Self {
@@ -863,56 +913,65 @@ impl Default for MoveGen {
 
 }
 
-
 //////////////////////////////////////////////////////////
 ////////////////////// LOOKUP TYPES //////////////////////
 //////////////////////////////////////////////////////////
 
-// pub trait PieceLookup {
-//     unsafe fn get_path_list(sq: SQ, piece_bb: BitBoard) -> PathData;
-// }
+pub trait PieceLookup {
+    unsafe fn get_path_data(sq: SQ, piece_bb: BitBoard) -> (u8, *const u8, *const u64);
+}
 
-// pub struct OneBounce;
-// impl PieceLookup for OneBounce {
-//     #[inline(always)]
-//     unsafe fn get_path_list(sq: SQ, _piece_bb: BitBoard) -> PathData {
-//         PathData {
-//             list: ONE_PATH_LISTS.get_unchecked(sq.0 as usize),
-//         }
-//     }
-// }
+pub struct OneBounce;
+impl PieceLookup for OneBounce {
+    #[inline(always)]
+    unsafe fn get_path_data(sq: SQ, _piece_bb: BitBoard) -> (u8, *const u8, *const u64) {
+        (
+            *ONE_COUNTS.get_unchecked(sq.0 as usize),
+            ONE_ENDS.get_unchecked(sq.0 as usize).as_ptr(),
+            ONE_BACKS.get_unchecked(sq.0 as usize).as_ptr(),
+        )
 
-// pub struct TwoBounce;
-// impl PieceLookup for TwoBounce {
-//     #[inline(always)]
-//     unsafe fn get_path_list(sq: SQ, piece_bb: BitBoard) -> PathData {
-//         let intercepts = ALL_TWO_INTERCEPTS[sq.0 as usize];
-//         let intercept_bb = piece_bb & intercepts;
-//         let key = compress_pext(intercepts, intercept_bb.0);
-//         let idx = TWO_MAP
-//             .get_unchecked(sq.0 as usize)
-//             .get_unchecked(key as usize);
-//         PathData {
-//             list: TWO_PATH_LISTS.get_unchecked(*idx as usize),
-//         }
-//     }
-// }
+    }
 
-// pub struct ThreeBounce;
-// impl PieceLookup for ThreeBounce {
-//     #[inline(always)]
-//     unsafe fn get_path_list(sq: SQ, piece_bb: BitBoard) -> PathData {
-//         let intercepts = ALL_THREE_INTERCEPTS[sq.0 as usize];
-//         let intercept_bb = piece_bb & intercepts;
-//         let key = compress_pext(intercepts, intercept_bb.0);
-//         let idx = THREE_MAP
-//             .get_unchecked(sq.0 as usize)
-//             .get_unchecked(key as usize);
-//         PathData {
-//             list: THREE_PATH_LISTS.get_unchecked(*idx as usize),
-//         }
-//     }
-// }
+}
+
+pub struct TwoBounce;
+impl PieceLookup for TwoBounce {
+    #[inline(always)]
+    unsafe fn get_path_data(sq: SQ, piece_bb: BitBoard) -> (u8, *const u8, *const u64) {
+        let intercepts = ALL_TWO_INTERCEPTS[sq.0 as usize];
+        let intercept_bb = piece_bb & intercepts;
+        let key = compress_pext(intercepts, intercept_bb.0);
+        let idx = *TWO_MAP.get_unchecked(sq.0 as usize).get_unchecked(key as usize) as usize;
+
+        (
+            *TWO_COUNTS.get_unchecked(idx),
+            TWO_ENDS.get_unchecked(idx).as_ptr(),
+            TWO_BACKS.get_unchecked(idx).as_ptr(),
+        )
+
+    }
+
+}
+
+pub struct ThreeBounce;
+impl PieceLookup for ThreeBounce {
+    #[inline(always)]
+    unsafe fn get_path_data(sq: SQ, piece_bb: BitBoard) -> (u8, *const u8, *const u64) {
+        let intercepts   = ALL_THREE_INTERCEPTS[sq.0 as usize];
+        let intercept_bb = piece_bb & intercepts;
+        let key = compress_pext(intercepts, intercept_bb.0);
+        let idx = *THREE_MAP.get_unchecked(sq.0 as usize).get_unchecked(key as usize) as usize;
+
+        (
+            *THREE_COUNTS.get_unchecked(idx),
+            THREE_ENDS.get_unchecked(idx).as_ptr(),
+            THREE_BACKS.get_unchecked(idx).as_ptr(),
+        )
+
+    }
+
+}
 
 //////////////////////////////////////////////////////////
 //////////////////// GENERATION TYPES ////////////////////

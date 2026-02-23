@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use criterion::{black_box, criterion_group, Criterion};
 
+use gyges::{BoardState, Player};
 use gyges::board::TEST_BOARD;
 use gyges::moves::movegen::*;
 
@@ -23,6 +24,11 @@ pub fn movegen_main(c: &mut Criterion) {
     group.bench_function("move_count 5", |b| b.iter(|| unsafe {
         mg.gen5::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
     }));
+
+    group.bench_function("move_count 6", |b| b.iter(|| unsafe {
+        mg.gen6::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
+    }));
+
 
     group.finish();
     
