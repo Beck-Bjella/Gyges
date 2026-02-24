@@ -14,19 +14,11 @@ pub fn movegen_main(c: &mut Criterion) {
     let mut group = c.benchmark_group("movegen benchmarks");
 
     group.bench_function("move_count OLD", |b| b.iter(|| unsafe {
-        mg.gen::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
-    }));
-
-    group.bench_function("move_count 4", |b| b.iter(|| unsafe {
-        mg.gen4::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
-    }));
-
-    group.bench_function("move_count 5", |b| b.iter(|| unsafe {
-        mg.gen5::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
+        mg.gen_old::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
     }));
 
     group.bench_function("move_count 6", |b| b.iter(|| unsafe {
-        mg.gen6::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
+        mg.gen::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
     }));
 
 

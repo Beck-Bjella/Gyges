@@ -1,6 +1,8 @@
 //! This module contains all of the components needed for generating moves. 
 //!
 //! 
+use std::arch::x86_64::*;
+
 use crate::core::*;
 use crate::board::*;
 use crate::board::bitboard::*;
@@ -10,6 +12,45 @@ use crate::moves::new_movegen_consts::*;
 
 /// The maximum size of the stack.
 const MAX_STACK_SIZE: usize = 1000;
+
+pub static POSITION_INTERCEPTIONS: [u64; 36] = [
+    0x0000000000000021, // sq0  (2 intercepts)
+    0x0000000000000043, // sq1  (3 intercepts)
+    0x0000000000000086, // sq2  (3 intercepts)
+    0x000000000000010C, // sq3  (3 intercepts)
+    0x0000000000000218, // sq4  (3 intercepts)
+    0x0000000000000410, // sq5  (2 intercepts)
+    0x0000000000010820, // sq6  (3 intercepts)
+    0x0000000000021840, // sq7  (4 intercepts)
+    0x0000000000043080, // sq8  (4 intercepts)
+    0x0000000000086100, // sq9  (4 intercepts)
+    0x000000000010C200, // sq10 (4 intercepts)
+    0x0000000000208400, // sq11 (3 intercepts)
+    0x0000000008410000, // sq12 (3 intercepts)
+    0x0000000010C20000, // sq13 (4 intercepts)
+    0x0000000021840000, // sq14 (4 intercepts)
+    0x0000000043080000, // sq15 (4 intercepts)
+    0x0000000086100000, // sq16 (4 intercepts)
+    0x0000000104200000, // sq17 (3 intercepts)
+    0x0000004208000000, // sq18 (3 intercepts)
+    0x0000008610000000, // sq19 (4 intercepts)
+    0x0000010C20000000, // sq20 (4 intercepts)
+    0x0000021840000000, // sq21 (4 intercepts)
+    0x0000043080000000, // sq22 (4 intercepts)
+    0x0000082100000000, // sq23 (3 intercepts)
+    0x0002104000000000, // sq24 (3 intercepts)
+    0x0004308000000000, // sq25 (4 intercepts)
+    0x0008610000000000, // sq26 (4 intercepts)
+    0x0010C20000000000, // sq27 (4 intercepts)
+    0x0021840000000000, // sq28 (4 intercepts)
+    0x0041080000000000, // sq29 (3 intercepts)
+    0x0082000000000000, // sq30 (2 intercepts)
+    0x0184000000000000, // sq31 (3 intercepts)
+    0x0308000000000000, // sq32 (3 intercepts)
+    0x0610000000000000, // sq33 (3 intercepts)
+    0x0C20000000000000, // sq34 (3 intercepts)
+    0x0840000000000000, // sq35 (2 intercepts)
+];
 
 //////////////////////////////////////////////
 //////////////////// CORE ////////////////////
@@ -26,7 +67,7 @@ pub struct MoveGen {
 impl MoveGen {
     /// Generate the specified data. - V1 (OLD CONSTS)
     #[inline(always)]
-    pub unsafe fn gen<G: GenType, Q: QuitType>(&mut self, board: &mut BoardState, player: Player) -> GenResult {
+    pub unsafe fn gen_old<G: GenType, Q: QuitType>(&mut self, board: &mut BoardState, player: Player) -> GenResult {
         self.stack.clear();
         let player_bit = 1 << player as u64;
 
@@ -283,9 +324,8 @@ impl MoveGen {
 
     }
 
-    // REALLY GOOD 
     #[inline(always)]
-    pub unsafe fn gen4<G: GenType, Q: QuitType>(&mut self, board: &mut BoardState, player: Player) -> GenResult {
+    pub unsafe fn gen<G: GenType, Q: QuitType>(&mut self, board: &mut BoardState, player: Player) -> GenResult {
         self.stack2.clear();
         let player_bit = 1 << player as u64;
 
@@ -304,507 +344,27 @@ impl MoveGen {
                 board.remove(starting_sq);
                 board.piece_bb ^= starting_sq.bit();
 
-                self.stack2.push(StackData2::new(Action2::from_piece(starting_piece), BitBoard::EMPTY, BitBoard::EMPTY, starting_sq));
-                
-                while !self.stack2.is_empty() {
-                    let data = self.stack2.pop();
-
-                    let action = data.action;
-                    let backtrack_board = data.backtrack_board;
-                    let banned_positions = data.banned_positions;
-                    let current_sq = data.current_sq;
-
-                    match action {
-                        Action2::Gen1 => {
-                            let path_list = ONE_PATH_LISTS.get_unchecked(current_sq.0 as usize);
-
-                            for i in 0..(path_list.count as usize) {
-                                let path = &path_list.paths[i];
-                                let end = SQ(path.0[1]);
-                                let end_bit = end.bit();
-
-                                if (board.piece_bb & end_bit).is_not_empty() {
-                                    if (banned_positions & end_bit).is_not_empty() || (backtrack_board & path.1).is_not_empty() {
-                                        continue;
-
-                                    }
-                                    
-                                    G::store_bounce(&mut result, active_line_idx, end_bit);
-
-                                    let end_piece = board.piece_at(end);
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-                                    
-                                    self.stack2.push(StackData2::new(Action2::from_piece(end_piece), new_backtrack_board, new_banned_positions, end));
-
-                                    continue;
-
-                                }
-
-                                let goal_bit = end_bit >> 36;
-                                if goal_bit != 0 {
-                                    if (goal_bit & player_bit) != 0 || (backtrack_board & path.1).is_not_empty() {
-                                        continue;
-
-                                    }
-
-                                    G::store_goal(&mut result, active_line_idx, end_bit);
-
-                                    if Q::QUIT {
-                                        board.place(starting_piece, starting_sq);
-                                        board.piece_bb ^= starting_sq.bit();
-                                        
-                                        result.threat = true;
-
-                                        return result;
-
-                                    }
-
-                                    continue;
-
-                                }
-
-                                if (backtrack_board & path.1).is_not_empty() {
-                                    continue;
-                    
-                                }
-
-                                G::store_end(&mut result, active_line_idx, end_bit);
-
-                            }
-                    
-                        }
-                        Action2::Gen2 => {
-                            let intercepts = ALL_TWO_INTERCEPTS[current_sq.0 as usize];
-                            let intercept_bb = board.piece_bb & intercepts;
-
-                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };            
-                            let valid_paths_idx = TWO_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
-
-                            let path_list = TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
-
-                            for i in 0..(path_list.count as usize) {
-                                let path = &path_list.paths[i];
-                                let end = SQ(path.0[2]);
-                                let end_bit = end.bit();
-
-                                if (board.piece_bb & end_bit).is_not_empty() {
-                                    if (banned_positions & end_bit).is_not_empty() || (backtrack_board & path.1).is_not_empty() {
-                                        continue;
-
-                                    }
-
-                                    G::store_bounce(&mut result, active_line_idx, end_bit);
-
-                                    let end_piece = board.piece_at(end);
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-                                    
-                                    self.stack2.push(StackData2::new(Action2::from_piece(end_piece), new_backtrack_board, new_banned_positions, end));
-
-                                    continue;
-                                
-                                }
-
-                                let goal_bit = end_bit >> 36;
-                                if goal_bit != 0 {
-                                    if (goal_bit & player_bit) != 0 || (backtrack_board & path.1).is_not_empty() {
-                                        continue;
-
-                                    }
-
-                                    G::store_goal(&mut result, active_line_idx, end_bit);
-
-                                    if Q::QUIT {
-                                        board.place(starting_piece, starting_sq);
-                                        board.piece_bb ^= starting_sq.bit();
-
-                                        result.threat = true;
-
-                                        return result;
-
-                                    }
-
-                                    continue;
-
-                                }
-
-                                if (backtrack_board & path.1).is_not_empty() {
-                                    continue;
-                    
-                                }
-
-                                G::store_end(&mut result, active_line_idx, end_bit);        
-
-                            }
-
-                        },
-                        Action2::Gen3 => {
-                            let intercepts = ALL_THREE_INTERCEPTS[current_sq.0 as usize];
-                            let intercept_bb = board.piece_bb & intercepts;
-                            
-                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };            
-                            let valid_paths_idx: &u16 = THREE_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
-
-                            let path_list = THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
-
-                            for i in 0..(path_list.count as usize) {
-                                let path = &path_list.paths[i];
-                                let end = SQ(path.0[3]);
-                                let end_bit = end.bit();
-
-                                if (board.piece_bb & end_bit).is_not_empty() {
-                                    if (banned_positions & end_bit).is_not_empty() || (backtrack_board & path.1).is_not_empty() {
-                                        continue;
-
-                                    }
-
-                                    G::store_bounce(&mut result, active_line_idx, end_bit);
-
-                                    let end_piece = board.piece_at(end);
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ path.1;
-                                    
-                                    self.stack2.push(StackData2::new(Action2::from_piece(end_piece), new_backtrack_board, new_banned_positions, end));
-    
-                                    continue;
-                                
-                                }
-
-                                let goal_bit = end_bit >> 36;
-                                if goal_bit != 0 {
-                                    if (goal_bit & player_bit) != 0 || (backtrack_board & path.1).is_not_empty() {
-                                        continue;
-
-                                    }
-
-                                    G::store_goal(&mut result, active_line_idx, end_bit);
-
-                                    if Q::QUIT {
-                                        board.place(starting_piece, starting_sq);
-                                        board.piece_bb ^= starting_sq.bit();
-
-                                        result.threat = true;
-
-                                        return result;
-
-                                    }
-
-                                    continue;
-
-                                }
-
-                                if (backtrack_board & path.1).is_not_empty() {
-                                    continue;
-                    
-                                }
-
-                                G::store_end(&mut result, active_line_idx, end_bit);
-
-                            }
-
-                        }
-
-                    }
-
-                }
-                
-                board.place(starting_piece, starting_sq);
-                board.piece_bb ^= starting_sq.bit();
-
-            }
-
-        }
-
-        G::exit(&mut result, board);
-
-        result
-
-    }
-
-    // REALLY GOOD + new consts
-    #[inline(always)]
-    pub unsafe fn gen5<G: GenType, Q: QuitType>(&mut self, board: &mut BoardState, player: Player) -> GenResult {
-        self.stack2.clear();
-        let player_bit = 1 << player as u64;
-
-        let active_lines: [usize; 2] = board.get_active_lines();
-        let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
-        let drop_bb = board.get_drops(active_lines, player);
-
-        let mut result = GenResult::new(drop_bb);
-
-        for active_line_idx in 0..6 {
-            let starting_sq = active_line_sq + active_line_idx;
-            let starting_piece = board.piece_at(starting_sq);
-            if starting_piece != Piece::None {
-                G::init(&mut result, active_line_idx, starting_sq, starting_piece);
-
-                board.remove(starting_sq);
-                board.piece_bb ^= starting_sq.bit();
-
-                self.stack2.push(StackData2::new(Action2::from_piece(starting_piece), BitBoard::EMPTY, BitBoard::EMPTY, starting_sq));
-                
-                while !self.stack2.is_empty() {
-                    let data = self.stack2.pop();
-
-                    let action = data.action;
-                    let backtrack_board = data.backtrack_board;
-                    let banned_positions = data.banned_positions;
-                    let current_sq = data.current_sq;
-
-                    match action {
-                        Action2::Gen1 => {
-                            let count = *ONE_COUNTS.get_unchecked(current_sq.0 as usize) as usize;
-                            let ends = ONE_ENDS.get_unchecked(current_sq.0 as usize);
-                            let backs = ONE_BACKS.get_unchecked(current_sq.0 as usize);
-
-                            for i in 0..count {
-                                let end = SQ(*ends.get_unchecked(i));
-                                let end_bit = end.bit();
-                                let back = *backs.get_unchecked(i);
-
-                                if (board.piece_bb & end_bit).is_not_empty() {
-                                    if (banned_positions & end_bit).is_not_empty() || (backtrack_board & back).is_not_empty() {
-                                        continue;
-
-                                    }
-                                    
-                                    G::store_bounce(&mut result, active_line_idx, end_bit);
-
-                                    let end_piece = board.piece_at(end);
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ back;
-                                    
-                                    self.stack2.push(StackData2::new(Action2::from_piece(end_piece), new_backtrack_board, new_banned_positions, end));
-
-                                    continue;
-
-                                }
-
-                                let goal_bit = end_bit >> 36;
-                                if goal_bit != 0 {
-                                    if (goal_bit & player_bit) != 0 || (backtrack_board & back).is_not_empty() {
-                                        continue;
-
-                                    }
-
-                                    G::store_goal(&mut result, active_line_idx, end_bit);
-
-                                    if Q::QUIT {
-                                        board.place(starting_piece, starting_sq);
-                                        board.piece_bb ^= starting_sq.bit();
-                                        
-                                        result.threat = true;
-
-                                        return result;
-
-                                    }
-
-                                    continue;
-
-                                }
-
-                                if (backtrack_board & back).is_not_empty() {
-                                    continue;
-                    
-                                }
-
-                                G::store_end(&mut result, active_line_idx, end_bit);
-
-                            }
-                    
-                        }
-                        Action2::Gen2 => {
-                            let intercepts = ALL_TWO_INTERCEPTS[current_sq.0 as usize];
-                            let intercept_bb = board.piece_bb & intercepts;
-
-                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };            
-                            let idx = TWO_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
-
-                            let count = *TWO_COUNTS.get_unchecked(*idx as usize) as usize;
-                            let ends = TWO_ENDS.get_unchecked(*idx as usize);
-                            let backs = TWO_BACKS.get_unchecked(*idx as usize);
-
-                            for i in 0..count {
-                                let end = SQ(*ends.get_unchecked(i));
-                                let end_bit = end.bit();
-                                let back = *backs.get_unchecked(i);
-
-                                if (board.piece_bb & end_bit).is_not_empty() {
-                                    if (banned_positions & end_bit).is_not_empty() || (backtrack_board & back).is_not_empty() {
-                                        continue;
-
-                                    }
-
-                                    G::store_bounce(&mut result, active_line_idx, end_bit);
-
-                                    let end_piece = board.piece_at(end);
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ back;
-                                    
-                                    self.stack2.push(StackData2::new(Action2::from_piece(end_piece), new_backtrack_board, new_banned_positions, end));
-
-                                    continue;
-                                
-                                }
-
-                                let goal_bit = end_bit >> 36;
-                                if goal_bit != 0 {
-                                    if (goal_bit & player_bit) != 0 || (backtrack_board & back).is_not_empty() {
-                                        continue;
-
-                                    }
-
-                                    G::store_goal(&mut result, active_line_idx, end_bit);
-
-                                    if Q::QUIT {
-                                        board.place(starting_piece, starting_sq);
-                                        board.piece_bb ^= starting_sq.bit();
-
-                                        result.threat = true;
-
-                                        return result;
-
-                                    }
-
-                                    continue;
-
-                                }
-
-                                if (backtrack_board & back).is_not_empty() {
-                                    continue;
-                    
-                                }
-
-                                G::store_end(&mut result, active_line_idx, end_bit);        
-
-                            }
-
-                        },
-                        Action2::Gen3 => {
-                            let intercepts = ALL_THREE_INTERCEPTS[current_sq.0 as usize];
-                            let intercept_bb = board.piece_bb & intercepts;
-                            
-                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };            
-                            let idx: &u16 = THREE_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
-
-                            let count = *THREE_COUNTS.get_unchecked(*idx as usize) as usize;
-                            let ends = THREE_ENDS.get_unchecked(*idx as usize);
-                            let backs = THREE_BACKS.get_unchecked(*idx as usize);
-
-                            for i in 0..count {
-                                let end = SQ(*ends.get_unchecked(i));
-                                let end_bit = end.bit();
-                                let back = *backs.get_unchecked(i);
-
-                                if (board.piece_bb & end_bit).is_not_empty() {
-                                    if (banned_positions & end_bit).is_not_empty() || (backtrack_board & back).is_not_empty() {
-                                        continue;
-
-                                    }
-
-                                    G::store_bounce(&mut result, active_line_idx, end_bit);
-
-                                    let end_piece = board.piece_at(end);
-                                    let new_banned_positions = banned_positions ^ end_bit;
-                                    let new_backtrack_board = backtrack_board ^ back;
-                                    
-                                    self.stack2.push(StackData2::new(Action2::from_piece(end_piece), new_backtrack_board, new_banned_positions, end));
-    
-                                    continue;
-                                
-                                }
-
-                                let goal_bit = end_bit >> 36;
-                                if goal_bit != 0 {
-                                    if (goal_bit & player_bit) != 0 || (backtrack_board & back).is_not_empty() {
-                                        continue;
-
-                                    }
-
-                                    G::store_goal(&mut result, active_line_idx, end_bit);
-
-                                    if Q::QUIT {
-                                        board.place(starting_piece, starting_sq);
-                                        board.piece_bb ^= starting_sq.bit();
-
-                                        result.threat = true;
-
-                                        return result;
-
-                                    }
-
-                                    continue;
-
-                                }
-
-                                if (backtrack_board & back).is_not_empty() {
-                                    continue;
-                    
-                                }
-
-                                G::store_end(&mut result, active_line_idx, end_bit);
-
-                            }
-
-                        }
-
-                    }
-
-                }
-                
-                board.place(starting_piece, starting_sq);
-                board.piece_bb ^= starting_sq.bit();
-
-            }
-
-        }
-
-        G::exit(&mut result, board);
-
-        result
-
-    }
-
-
-    // REALLY GOOD + new consts + process_paths
-    #[inline(always)]
-    pub unsafe fn gen6<G: GenType, Q: QuitType>(&mut self, board: &mut BoardState, player: Player) -> GenResult {
-        self.stack2.clear();
-        let player_bit = 1 << player as u64;
-
-        let active_lines: [usize; 2] = board.get_active_lines();
-        let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
-        let drop_bb = board.get_drops(active_lines, player);
-
-        let mut result = GenResult::new(drop_bb);
-
-        for active_line_idx in 0..6 {
-            let starting_sq = active_line_sq + active_line_idx;
-            let starting_piece = board.piece_at(starting_sq);
-            if starting_piece != Piece::None {
-                G::init(&mut result, active_line_idx, starting_sq, starting_piece);
-
-                board.remove(starting_sq);
-                board.piece_bb ^= starting_sq.bit();
-
-                self.stack2.push(StackData2::new(Action2::from_piece(starting_piece), BitBoard::EMPTY, BitBoard::EMPTY, starting_sq));
+                self.stack2.push(StackData2::new(Action2::from_piece(starting_piece), BitBoard::EMPTY, starting_sq));
                 
                 let mut quit = false;
+                let mut start = true;
                 while !self.stack2.is_empty() {
-                    let data = self.stack2.pop();
+                    let data: StackData2 = self.stack2.pop();
 
                     let action = data.action;
                     let backtrack_board = data.backtrack_board;
-                    let banned_positions = data.banned_positions;
                     let current_sq = data.current_sq;
 
                     quit = match action {
-                        Action2::Gen1 => MoveGen::process_paths::<OneBounce, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, banned_positions, active_line_idx, player_bit),
-                        Action2::Gen2 => MoveGen::process_paths::<TwoBounce, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, banned_positions, active_line_idx, player_bit),
-                        Action2::Gen3 => MoveGen::process_paths::<ThreeBounce, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, banned_positions, active_line_idx, player_bit),
+                        Action2::Gen1 => MoveGen::process_paths::<OneBounce, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, active_line_idx, player_bit, start),
+                        Action2::Gen2 => MoveGen::process_paths::<TwoBounce, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, active_line_idx, player_bit, start),
+                        Action2::Gen3 => MoveGen::process_paths::<ThreeBounce, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, active_line_idx, player_bit, start),
                     };
+
+                    if start {
+                        start = false;
+
+                    }
 
                     if quit {
                         break;
@@ -838,39 +398,46 @@ impl MoveGen {
         stack:            &mut FixedStack<StackData2>,
         current_sq:       SQ,
         backtrack_board:  BitBoard,
-        banned_positions: BitBoard,
         active_line_idx:  usize,
         player_bit:       u64,
+        start: bool
     ) -> bool {
         let (count, ends, backs) = P::get_path_data(current_sq, board.piece_bb);
+
+        let position_intercepts_mask = if !start {
+            POSITION_INTERCEPTIONS[current_sq.0 as usize]
+
+        } else {
+            0
+
+        };
 
         for i in 0..(count as usize) {
             let end = SQ(*ends.add(i));
             let end_bit = end.bit();
-            let back = BitBoard(*backs.add(i));
+            let back: u64 = *backs.add(i);
+
+            if (backtrack_board & back).is_not_empty() {
+                continue;
+
+            }
 
             if (board.piece_bb & end_bit).is_not_empty() {
-                if (banned_positions & end_bit).is_not_empty() || (backtrack_board & back).is_not_empty() {
-                    continue;
-
-                }
-
                 G::store_bounce(result, active_line_idx, end_bit);
 
                 stack.push(StackData2::new(
                     Action2::from_piece(board.piece_at(end)),
-                    backtrack_board ^ back,
-                    banned_positions ^ end_bit,
+                    backtrack_board | back | position_intercepts_mask,
                     end
                 ));
 
-                continue;
+                continue; 
 
             }
 
             let goal_bit = BitBoard(end_bit >> 36);
             if goal_bit.is_not_empty() {
-                if (goal_bit & player_bit).is_not_empty() || (backtrack_board & back).is_not_empty() {
+                if (goal_bit & player_bit).is_not_empty() {
                     continue;
 
                 }
@@ -882,11 +449,6 @@ impl MoveGen {
                     
                 }
 
-                continue;
-
-            }
-
-            if (backtrack_board & back).is_not_empty() {
                 continue;
 
             }
@@ -1163,17 +725,15 @@ impl StackData {
 
 struct StackData2 {
     pub backtrack_board: BitBoard,
-    pub banned_positions: BitBoard,
     pub current_sq: SQ,
     pub action: Action2
 
 }
 
 impl StackData2 {
-    pub fn new(action: Action2, backtrack_board: BitBoard, banned_positions: BitBoard, current_sq: SQ) -> Self {
+    pub fn new(action: Action2, backtrack_board: BitBoard, current_sq: SQ) -> Self {
         Self {
             backtrack_board,
-            banned_positions,
             current_sq,
             action
             
