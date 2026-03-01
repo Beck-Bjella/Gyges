@@ -17,8 +17,12 @@ pub fn movegen_main(c: &mut Criterion) {
         mg.gen_old::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
     }));
 
-    group.bench_function("move_count 6", |b| b.iter(|| unsafe {
+    group.bench_function("move_count", |b| b.iter(|| unsafe {
         mg.gen::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
+    }));
+
+    group.bench_function("move_count NEW", |b| b.iter(|| unsafe {
+        mg.gen_new::<GenMoveCount, NoQuit>(black_box(board), black_box(player));
     }));
 
 

@@ -10,6 +10,12 @@ pub mod movegen_consts;
 
 pub mod new_movegen_consts;
 
+pub mod three_dir_tables;
+pub mod two_dir_tables;
+pub mod one_dir_tables;
+
+pub mod path_data;
+
 use std::fmt::Display;
 
 use crate::core::*;

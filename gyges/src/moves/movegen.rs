@@ -1,7 +1,6 @@
 //! This module contains all of the components needed for generating moves. 
 //!
 //! 
-use std::arch::x86_64::*;
 
 use crate::core::*;
 use crate::board::*;
@@ -10,47 +9,13 @@ use crate::moves::move_list::*;
 use crate::moves::movegen_consts::*;
 use crate::moves::new_movegen_consts::*;
 
+use crate::moves::path_data::*;
+use crate::moves::three_dir_tables::*;
+use crate::moves::two_dir_tables::*;
+use crate::moves::one_dir_tables::*;
+
 /// The maximum size of the stack.
 const MAX_STACK_SIZE: usize = 1000;
-
-pub static POSITION_INTERCEPTIONS: [u64; 36] = [
-    0x0000000000000021, // sq0  (2 intercepts)
-    0x0000000000000043, // sq1  (3 intercepts)
-    0x0000000000000086, // sq2  (3 intercepts)
-    0x000000000000010C, // sq3  (3 intercepts)
-    0x0000000000000218, // sq4  (3 intercepts)
-    0x0000000000000410, // sq5  (2 intercepts)
-    0x0000000000010820, // sq6  (3 intercepts)
-    0x0000000000021840, // sq7  (4 intercepts)
-    0x0000000000043080, // sq8  (4 intercepts)
-    0x0000000000086100, // sq9  (4 intercepts)
-    0x000000000010C200, // sq10 (4 intercepts)
-    0x0000000000208400, // sq11 (3 intercepts)
-    0x0000000008410000, // sq12 (3 intercepts)
-    0x0000000010C20000, // sq13 (4 intercepts)
-    0x0000000021840000, // sq14 (4 intercepts)
-    0x0000000043080000, // sq15 (4 intercepts)
-    0x0000000086100000, // sq16 (4 intercepts)
-    0x0000000104200000, // sq17 (3 intercepts)
-    0x0000004208000000, // sq18 (3 intercepts)
-    0x0000008610000000, // sq19 (4 intercepts)
-    0x0000010C20000000, // sq20 (4 intercepts)
-    0x0000021840000000, // sq21 (4 intercepts)
-    0x0000043080000000, // sq22 (4 intercepts)
-    0x0000082100000000, // sq23 (3 intercepts)
-    0x0002104000000000, // sq24 (3 intercepts)
-    0x0004308000000000, // sq25 (4 intercepts)
-    0x0008610000000000, // sq26 (4 intercepts)
-    0x0010C20000000000, // sq27 (4 intercepts)
-    0x0021840000000000, // sq28 (4 intercepts)
-    0x0041080000000000, // sq29 (3 intercepts)
-    0x0082000000000000, // sq30 (2 intercepts)
-    0x0184000000000000, // sq31 (3 intercepts)
-    0x0308000000000000, // sq32 (3 intercepts)
-    0x0610000000000000, // sq33 (3 intercepts)
-    0x0C20000000000000, // sq34 (3 intercepts)
-    0x0840000000000000, // sq35 (2 intercepts)
-];
 
 //////////////////////////////////////////////
 //////////////////// CORE ////////////////////
@@ -362,6 +327,7 @@ impl MoveGen {
                     };
 
                     if start {
+
                         start = false;
 
                     }
@@ -386,6 +352,79 @@ impl MoveGen {
         }
 
         G::exit(&mut result, board);
+
+      
+
+        result
+
+    }
+
+    
+    #[inline(always)]
+    pub unsafe fn gen_new<G: GenType, Q: QuitType>(&mut self, board: &mut BoardState, player: Player) -> GenResult {
+        self.stack2.clear();
+        let player_bit = 1 << player as u64;
+
+        let active_lines: [usize; 2] = board.get_active_lines();
+        let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
+        let drop_bb = board.get_drops(active_lines, player);
+
+        let mut result = GenResult::new(drop_bb);
+
+        for active_line_idx in 0..6 {
+            let starting_sq = active_line_sq + active_line_idx;
+            let starting_piece = board.piece_at(starting_sq);
+            if starting_piece != Piece::None {
+                G::init(&mut result, active_line_idx, starting_sq, starting_piece);
+
+                board.remove(starting_sq);
+                board.piece_bb ^= starting_sq.bit();
+
+                self.stack2.push(StackData2::new(Action2::from_piece(starting_piece), BitBoard::EMPTY, starting_sq));
+                
+                let mut quit = false;
+                let mut start = true;
+                while !self.stack2.is_empty() {
+                    let data: StackData2 = self.stack2.pop();
+
+                    let action = data.action;
+                    let backtrack_board = data.backtrack_board;
+                    let current_sq = data.current_sq;
+
+                    quit = match action {
+                        Action2::Gen1 => MoveGen::process_paths2::<One, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, active_line_idx, player_bit, start),
+                        Action2::Gen2 => MoveGen::process_paths2::<Two, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, active_line_idx, player_bit, start),
+                        Action2::Gen3 => MoveGen::process_paths2::<Three, G, Q>(board, &mut result, &mut self.stack2, current_sq, backtrack_board, active_line_idx, player_bit, start),
+                    };
+
+                    if start {
+
+                        start = false;
+
+                    }
+
+                    if quit {
+                        break;
+                    }
+
+                }
+
+                board.place(starting_piece, starting_sq);
+                board.piece_bb ^= starting_sq.bit();
+
+                if quit {
+                    result.threat = true;
+                    return result;
+
+                }
+
+            }
+
+        }
+
+        G::exit(&mut result, board);
+
+      
 
         result
 
@@ -461,6 +500,66 @@ impl MoveGen {
 
     }
 
+    #[inline(always)]
+    unsafe fn process_paths2<P: PieceTables, G: GenType, Q: QuitType>(
+        board:           &mut BoardState,
+        result:          &mut GenResult,
+        stack:           &mut FixedStack<StackData2>,
+        current_sq:      SQ,
+        backtrack_board: BitBoard,
+        active_line_idx: usize,
+        player_bit:      u64,
+        start:           bool,
+    ) -> bool {
+        let sq  = current_sq.0 as usize;
+        let pbb = board.piece_bb.0;
+
+        
+        let blocked = P::piece_blocked(sq, pbb) | backtrack_board.0;
+        let (n, s, e, w) = P::dir_indices(sq, blocked);
+
+        let n = P::path_data(n);
+        let s = P::path_data(s);
+        let e = P::path_data(e);
+        let w = P::path_data(w);
+
+        // bulk ends and goals
+        let ends  = (n.end_bits | s.end_bits | e.end_bits | w.end_bits) & !pbb;
+        let goals = (n.goal_bits | s.goal_bits | e.goal_bits | w.goal_bits) & !player_bit;
+
+        G::store_end(result,  active_line_idx, ends);
+
+        let valid_goals = (goals >> 36) & !player_bit;
+        if valid_goals != 0{
+            G::store_goal(result, active_line_idx, goals);
+
+            if Q::QUIT {
+                return true;
+            }
+
+        }
+
+        // bounces
+        let position_intercepts_mask = if !start { POSITION_INTERCEPTIONS[sq] } else { 0 };
+        for d in [n, s, e, w] {
+            for p in 0..d.count {
+                let end = SQ(*d.ends.add(p));
+                let end_bit = 1u64 << end.0;
+
+                if (pbb & end_bit) != 0 {
+                    G::store_bounce(result, active_line_idx, end_bit);
+                    stack.push(StackData2::new(
+                        Action2::from_piece(board.piece_at(end)),
+                        backtrack_board | *d.backs.add(p) | position_intercepts_mask,
+                        end,
+                    ));
+                }
+            }
+        }
+
+        false
+    }
+
 }
 
 impl Default for MoveGen {
@@ -478,6 +577,181 @@ impl Default for MoveGen {
 //////////////////////////////////////////////////////////
 ////////////////////// LOOKUP TYPES //////////////////////
 //////////////////////////////////////////////////////////
+/// 
+
+
+#[derive(Copy, Clone)]
+pub struct PathEntry {
+    pub end_bits:  u64,
+    pub goal_bits: u64,
+    pub count:     usize,
+    pub ends:      *const u8,
+    pub backs:     *const u64,
+}
+
+unsafe impl Send for PathEntry {}
+unsafe impl Sync for PathEntry {}
+
+pub trait PieceTables {
+    fn north_mask(sq: usize) -> u64;
+    fn south_mask(sq: usize) -> u64;
+    fn east_mask(sq:  usize) -> u64;
+    fn west_mask(sq:  usize) -> u64;
+
+    fn north_idx(sq: usize, key: usize) -> usize;
+    fn south_idx(sq: usize, key: usize) -> usize;
+    fn east_idx(sq:  usize, key: usize) -> usize;
+    fn west_idx(sq:  usize, key: usize) -> usize;
+
+    // individual accessors — kept for other uses outside process_paths
+    fn path_count(idx: usize)          -> usize;
+    fn path_end(idx: usize, p: usize)  -> u8;
+    fn path_back(idx: usize, p: usize) -> u64;
+    fn end_bits(idx: usize)            -> u64;
+    fn goal_bits(idx: usize)           -> u64;
+
+    // single fetch — all data needed for one path list, named fields
+    fn path_data(idx: usize) -> PathEntry;
+
+    fn piece_blocked(sq: usize, piece_bb: u64) -> u64;
+
+    #[inline(always)]
+    fn dir_indices(sq: usize, blocked: u64) -> (usize, usize, usize, usize) {
+        (
+            Self::north_idx(sq, unsafe { compress_pext(Self::north_mask(sq), blocked) as usize }),
+            Self::south_idx(sq, unsafe { compress_pext(Self::south_mask(sq), blocked) as usize }),
+            Self::east_idx(sq,  unsafe { compress_pext(Self::east_mask(sq),  blocked) as usize }),
+            Self::west_idx(sq,  unsafe { compress_pext(Self::west_mask(sq),  blocked) as usize }),
+        )
+    }
+
+    #[inline(always)]
+    fn lookup(sq: usize, piece_bb: u64, backtrack: u64) -> (usize, usize, usize, usize, u64, u64) {
+        let blocked = Self::piece_blocked(sq, piece_bb) | backtrack;
+        let (n, s, e, w) = Self::dir_indices(sq, blocked);
+        (
+            n, s, e, w,
+            Self::end_bits(n)  | Self::end_bits(s)  | Self::end_bits(e)  | Self::end_bits(w),
+            Self::goal_bits(n) | Self::goal_bits(s) | Self::goal_bits(e) | Self::goal_bits(w),
+        )
+    }
+}
+
+// ── ONE ───────────────────────────────────────────────────────────────────────
+pub struct One;
+impl PieceTables for One {
+    #[inline(always)] fn north_mask(sq: usize) -> u64 { unsafe { *ONE_NORTH_MASK.get_unchecked(sq) } }
+    #[inline(always)] fn south_mask(sq: usize) -> u64 { unsafe { *ONE_SOUTH_MASK.get_unchecked(sq) } }
+    #[inline(always)] fn east_mask(sq:  usize) -> u64 { unsafe { *ONE_EAST_MASK.get_unchecked(sq)  } }
+    #[inline(always)] fn west_mask(sq:  usize) -> u64 { unsafe { *ONE_WEST_MASK.get_unchecked(sq)  } }
+
+    #[inline(always)] fn north_idx(sq: usize, key: usize) -> usize { unsafe { *ONE_NORTH_TABLE.get_unchecked(sq).get_unchecked(key) as usize } }
+    #[inline(always)] fn south_idx(sq: usize, key: usize) -> usize { unsafe { *ONE_SOUTH_TABLE.get_unchecked(sq).get_unchecked(key) as usize } }
+    #[inline(always)] fn east_idx(sq:  usize, key: usize) -> usize { unsafe { *ONE_EAST_TABLE.get_unchecked(sq).get_unchecked(key)  as usize } }
+    #[inline(always)] fn west_idx(sq:  usize, key: usize) -> usize { unsafe { *ONE_WEST_TABLE.get_unchecked(sq).get_unchecked(key)  as usize } }
+
+    #[inline(always)] fn path_count(idx: usize)          -> usize { unsafe { *ONE_PATH_COUNT.get_unchecked(idx) as usize } }
+    #[inline(always)] fn path_end(idx: usize, p: usize)  -> u8    { unsafe { *ONE_PATH_ENDS.get_unchecked(idx).get_unchecked(p) } }
+    #[inline(always)] fn path_back(idx: usize, p: usize) -> u64   { unsafe { *ONE_PATH_BACKS.get_unchecked(idx).get_unchecked(p) } }
+    #[inline(always)] fn end_bits(idx: usize)            -> u64   { unsafe { *ONE_PATH_END_BITS.get_unchecked(idx) } }
+    #[inline(always)] fn goal_bits(idx: usize)           -> u64   { unsafe { *ONE_PATH_GOAL_BITS.get_unchecked(idx) } }
+
+    #[inline(always)]
+    fn path_data(idx: usize) -> PathEntry {
+        unsafe {
+            let d = ONE_PATH_DATA.get_unchecked(idx);
+            PathEntry { end_bits: d.end_bits, goal_bits: d.goal_bits, count: d.count as usize, ends: d.ends.as_ptr(), backs: d.backs.as_ptr() }
+        }
+    }
+
+    #[inline(always)] fn piece_blocked(_sq: usize, _piece_bb: u64) -> u64 { 0 }
+}
+
+// ── TWO ───────────────────────────────────────────────────────────────────────
+pub struct Two;
+impl PieceTables for Two {
+    #[inline(always)] fn north_mask(sq: usize) -> u64 { unsafe { *TWO_NORTH_MASK.get_unchecked(sq) } }
+    #[inline(always)] fn south_mask(sq: usize) -> u64 { unsafe { *TWO_SOUTH_MASK.get_unchecked(sq) } }
+    #[inline(always)] fn east_mask(sq:  usize) -> u64 { unsafe { *TWO_EAST_MASK.get_unchecked(sq)  } }
+    #[inline(always)] fn west_mask(sq:  usize) -> u64 { unsafe { *TWO_WEST_MASK.get_unchecked(sq)  } }
+
+    #[inline(always)] fn north_idx(sq: usize, key: usize) -> usize { unsafe { *TWO_NORTH_TABLE.get_unchecked(sq).get_unchecked(key) as usize } }
+    #[inline(always)] fn south_idx(sq: usize, key: usize) -> usize { unsafe { *TWO_SOUTH_TABLE.get_unchecked(sq).get_unchecked(key) as usize } }
+    #[inline(always)] fn east_idx(sq:  usize, key: usize) -> usize { unsafe { *TWO_EAST_TABLE.get_unchecked(sq).get_unchecked(key)  as usize } }
+    #[inline(always)] fn west_idx(sq:  usize, key: usize) -> usize { unsafe { *TWO_WEST_TABLE.get_unchecked(sq).get_unchecked(key)  as usize } }
+
+    #[inline(always)] fn path_count(idx: usize)          -> usize { unsafe { *TWO_PATH_COUNT.get_unchecked(idx) as usize } }
+    #[inline(always)] fn path_end(idx: usize, p: usize)  -> u8    { unsafe { *TWO_PATH_ENDS.get_unchecked(idx).get_unchecked(p) } }
+    #[inline(always)] fn path_back(idx: usize, p: usize) -> u64   { unsafe { *TWO_PATH_BACKS.get_unchecked(idx).get_unchecked(p) } }
+    #[inline(always)] fn end_bits(idx: usize)            -> u64   { unsafe { *TWO_PATH_END_BITS.get_unchecked(idx) } }
+    #[inline(always)] fn goal_bits(idx: usize)           -> u64   { unsafe { *TWO_PATH_GOAL_BITS.get_unchecked(idx) } }
+
+    #[inline(always)]
+    fn path_data(idx: usize) -> PathEntry {
+        unsafe {
+            let d = TWO_PATH_DATA.get_unchecked(idx);
+            PathEntry { end_bits: d.end_bits, goal_bits: d.goal_bits, count: d.count as usize, ends: d.ends.as_ptr(), backs: d.backs.as_ptr() }
+        }
+    }
+
+    #[inline(always)]
+    fn piece_blocked(sq: usize, piece_bb: u64) -> u64 {
+        let mut extra = 0u64;
+        let mut bb = unsafe { piece_bb & *ALL_TWO_INTERCEPTS.get_unchecked(sq) };
+        while bb != 0 {
+            let s = bb.trailing_zeros() as usize;
+            extra |= unsafe { *TWO_PIECE_INTERCEPTS.get_unchecked(sq).get_unchecked(s) };
+            bb &= bb - 1;
+        }
+        extra
+    }
+}
+
+// ── THREE ─────────────────────────────────────────────────────────────────────
+pub struct Three;
+impl PieceTables for Three {
+    #[inline(always)] fn north_mask(sq: usize) -> u64 { unsafe { *THREE_NORTH_MASK.get_unchecked(sq) } }
+    #[inline(always)] fn south_mask(sq: usize) -> u64 { unsafe { *THREE_SOUTH_MASK.get_unchecked(sq) } }
+    #[inline(always)] fn east_mask(sq:  usize) -> u64 { unsafe { *THREE_EAST_MASK.get_unchecked(sq)  } }
+    #[inline(always)] fn west_mask(sq:  usize) -> u64 { unsafe { *THREE_WEST_MASK.get_unchecked(sq)  } }
+
+    #[inline(always)] fn north_idx(sq: usize, key: usize) -> usize { unsafe { *THREE_NORTH_TABLE.get_unchecked(sq).get_unchecked(key) as usize } }
+    #[inline(always)] fn south_idx(sq: usize, key: usize) -> usize { unsafe { *THREE_SOUTH_TABLE.get_unchecked(sq).get_unchecked(key) as usize } }
+    #[inline(always)] fn east_idx(sq:  usize, key: usize) -> usize { unsafe { *THREE_EAST_TABLE.get_unchecked(sq).get_unchecked(key)  as usize } }
+    #[inline(always)] fn west_idx(sq:  usize, key: usize) -> usize { unsafe { *THREE_WEST_TABLE.get_unchecked(sq).get_unchecked(key)  as usize } }
+
+    #[inline(always)] fn path_count(idx: usize)          -> usize { unsafe { *THREE_PATH_COUNT.get_unchecked(idx) as usize } }
+    #[inline(always)] fn path_end(idx: usize, p: usize)  -> u8    { unsafe { *THREE_PATH_ENDS.get_unchecked(idx).get_unchecked(p) } }
+    #[inline(always)] fn path_back(idx: usize, p: usize) -> u64   { unsafe { *THREE_PATH_BACKS.get_unchecked(idx).get_unchecked(p) } }
+    #[inline(always)] fn end_bits(idx: usize)            -> u64   { unsafe { *THREE_PATH_END_BITS.get_unchecked(idx) } }
+    #[inline(always)] fn goal_bits(idx: usize)           -> u64   { unsafe { *THREE_PATH_GOAL_BITS.get_unchecked(idx) } }
+
+    #[inline(always)]
+    fn path_data(idx: usize) -> PathEntry {
+        unsafe {
+            let d = THREE_PATH_DATA.get_unchecked(idx);
+            PathEntry { end_bits: d.end_bits, goal_bits: d.goal_bits, count: d.count as usize, ends: d.ends.as_ptr(), backs: d.backs.as_ptr() }
+        }
+    }
+
+    #[inline(always)]
+    fn piece_blocked(sq: usize, piece_bb: u64) -> u64 {
+        let mut extra = 0u64;
+        let mut bb = unsafe { piece_bb & *ALL_THREE_INTERCEPTS.get_unchecked(sq) };
+        while bb != 0 {
+            let s = bb.trailing_zeros() as usize;
+            extra |= unsafe { *THREE_PIECE_INTERCEPTS.get_unchecked(sq).get_unchecked(s) };
+            bb &= bb - 1;
+        }
+        extra
+    }
+}
+
+
+
+
+
+
 
 pub trait PieceLookup {
     unsafe fn get_path_data(sq: SQ, piece_bb: BitBoard) -> (u8, *const u8, *const u64);

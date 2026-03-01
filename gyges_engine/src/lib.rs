@@ -11,3 +11,9 @@
 pub mod search;
 pub mod consts;
 pub mod ugi;
+
+pub mod generate_three_tables;
+pub mod generate_two_tables;
+pub mod generate_one_tables;
+
+pub mod path_data_gen;
