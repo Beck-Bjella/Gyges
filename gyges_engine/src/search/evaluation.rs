@@ -33,12 +33,13 @@ pub fn unique_controlled_pieces_score(board: &mut BoardState, player: Player, co
     let pieces = control_pieces[player as usize];
     let opp_pieces = control_pieces[player.other() as usize];
     
-    let mut unique_controlled_pieces = pieces & !opp_pieces;
-
-    let positions = unique_controlled_pieces.get_data();
+    let mut unique_controlled_pieces = (pieces & !opp_pieces).0;
 
     let mut score = 0.0;
-    for pos in positions {
+    while unique_controlled_pieces != 0 {
+        let pos = unique_controlled_pieces.trailing_zeros() as usize;
+        unique_controlled_pieces &= unique_controlled_pieces - 1;
+
         let piece = board.data[pos];
         score += UNIQUE_PIECE_CONTROL_SCORES[piece as usize];
 
@@ -49,15 +50,16 @@ pub fn unique_controlled_pieces_score(board: &mut BoardState, player: Player, co
 }
 
 pub fn shared_controlled_pieces_score(board: &mut BoardState, player: Player, control_pieces: [BitBoard; 2]) -> f64 {
-    let mut pieces = control_pieces[player as usize];
-
-    let positions = pieces.get_data();
+    let mut pieces = control_pieces[player as usize].0;
 
     let mut score = 0.0;
-    for pos in positions {
+    while pieces != 0 {
+        let pos = pieces.trailing_zeros() as usize;
+        pieces &= pieces - 1;
+
         let piece = board.data[pos];
         score += SHARED_PIECE_CONTROL_SCORES[piece as usize];
-
+        
     }
 
     score
@@ -91,6 +93,8 @@ pub fn mobility_eval(player: Player, move_counts: [usize; 2]) -> f64 {
 
 pub fn control_eval(board: &mut BoardState, player: Player, control_pieces: [BitBoard; 2], control_squares: [BitBoard; 2]) -> f64 {
     let mut eval = 0.0;
+
+    
     
     eval +=  unique_controlled_pieces_score(board, player, control_pieces);
     eval +=  unique_controlled_squares_score(player, control_squares);
