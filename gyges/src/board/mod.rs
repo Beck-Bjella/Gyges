@@ -255,6 +255,8 @@ impl BoardState {
 
 impl Display for BoardState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "")?;
+
         if self.data[37] == Piece::None {
             writeln!(f, "                .")?;
 

@@ -105,8 +105,9 @@ impl BitBoard {
 
 impl Display for BitBoard {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "")?;
+
         let data = self.clone().get_data();
-        
         if data.contains(&(SQ::P2_GOAL.0 as usize)) {
             writeln!(f, "          1")?;
 
