@@ -35,7 +35,7 @@ impl Ugi {
     pub fn start(&mut self) {
         self.init();
 
-        println!("Gyges UGI Engine v1.1.0");
+        println!("Gyges UGI Engine v1.2.0");
 
         let stdin = io::stdin();
         loop {
@@ -215,14 +215,14 @@ impl Default for Ugi {
 
 }
 
-pub fn info_output(search_data: SearchData, search_stats: SearchStats) {
+pub fn info_output(search_data: SearchData) {
     print!("info ");
     print!("ply {} ", search_data.ply);
     print!("bestmove {} ", search_data.best_move);
-    print!("score {} ", search_data.best_move.score);
-    print!("nodes {} ", search_stats.nodes);
-    print!("nps {} ", search_stats.nps);
-    print!("time {} ", search_stats.search_time);
+    print!("score {:.3} ", search_data.best_move.score);
+    print!("nodes {} ", search_data.nodes);
+    print!("nps {:.3} ", search_data.nps);
+    print!("time {:.3} ", search_data.elapsed_time);
     print!("pv ");
     for mv in search_data.pv.iter() {
         print!("{} ", mv);
@@ -233,6 +233,6 @@ pub fn info_output(search_data: SearchData, search_stats: SearchStats) {
 }
 
 pub fn best_move_output(search_data: SearchData) {
-    println!("bestmove {}", search_data.best_move);
+    println!("bestmove {} score {:.3} time {:.3}", search_data.best_move, search_data.best_move.score, search_data.elapsed_time);
 
 }

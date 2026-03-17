@@ -2,6 +2,7 @@
 //! 
 
 pub mod evaluation;
+pub mod eval_display;
 
 use core::f64;
 use std::cmp::Ordering;
@@ -35,16 +36,13 @@ pub const TT_MOVE_SCORE: f64 = 1000000.0;
 
 /// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
 pub struct Searcher {
-    pub current_ply: i8,
-
-    pub completed_searchs: Vec<SearchData>,
-    pub search_data: SearchData,
-    pub search_stats: SearchStats,
-    pub root_moves: RootMoveList,
-
     pub options: SearchOptions,
     pub stop_in: Receiver<bool>,
     pub stop: bool,
+
+    pub completed_plys: Vec<SearchData>,
+    pub search_stats: SearchStats,
+    pub root_moves: RootMoveList,
 
     pub mg: MoveGen,
 
@@ -56,16 +54,13 @@ impl Searcher {
     /// Creates a new searcher.
     pub fn new(stop_in: Receiver<bool>, options: SearchOptions) -> Searcher {
         Searcher {
-            current_ply: 0,
-            
-            completed_searchs: vec![],
-            search_data: SearchData::new(1),
-            search_stats: SearchStats::new(),
-            root_moves: RootMoveList::new(),
-
             options, 
             stop_in,
             stop: false,
+            
+            completed_plys: vec![],
+            search_stats: SearchStats::new(),
+            root_moves: RootMoveList::new(),
 
             mg: MoveGen::default(),
 
@@ -94,70 +89,120 @@ impl Searcher {
 
     }
 
-    /// Updates the search data based on the collected data.
-    pub fn update_search_data(&mut self) {
-        // Stats
-        self.search_stats.search_time = self.search_stats.start_time.elapsed().as_secs_f64();
-        self.search_stats.nps = (self.search_stats.nodes as f64 / self.search_stats.search_time) as usize;
+    /// Update search data based on the current search stats and results.
+    pub fn update_search_data(&mut self, ply_data: &mut SearchData) {
+        // Gather current search stats
+        ply_data.elapsed_time = self.search_stats.start_time.elapsed().as_secs_f64();
+        ply_data.nodes = self.search_stats.nodes;
+        ply_data.nps = (ply_data.nodes as f64 / ply_data.elapsed_time) as usize;
         
         // Results
-        self.search_data.pv = get_pv(&mut self.options.board.clone());
-        self.search_data.best_move = self.search_data.pv.get(0).unwrap_or(&RootMove::new_null()).clone();
+        ply_data.pv = get_pv(&mut self.options.board.clone());
+        ply_data.best_move = ply_data.pv.get(0).unwrap_or(&RootMove::new_null()).clone();
 
-        if self.search_data.best_move.score == f64::INFINITY {
-            self.search_data.game_over = true;
-            self.search_data.winner = 1;
+        if ply_data.best_move.score == f64::INFINITY {
+            ply_data.game_over = true;
+            ply_data.winner = 1;
 
-        } else if self.search_data.best_move.score == f64::NEG_INFINITY {
-            self.search_data.game_over = true;
-            self.search_data.winner = 2;
+        } else if ply_data.best_move.score == f64::NEG_INFINITY {
+            ply_data.game_over = true;
+            ply_data.winner = 2;
+
+            // Handle best move when their are no valid moves (best losing move)
+            if self.completed_plys.len() > 0 {
+                let mut prev_ply_mv = self.completed_plys.last().unwrap().best_move.clone();
+                prev_ply_mv.score = f64::NEG_INFINITY;
+
+                ply_data.best_move = prev_ply_mv;
+       
+            } else { 
+                ply_data.best_move = self.root_moves.moves.first().unwrap().clone();
+
+            }
 
         }
 
-        // Prune the root moves list.
-        self.root_moves.sort();
-        self.root_moves.moves = self.root_moves.moves.iter().filter(|mv| mv.score != f64::NEG_INFINITY).cloned().collect();
-
     } 
 
-    
+    /// Displays the final output of the search.
+    pub fn final_output(&self) {
+        let mut best_search_data = self.completed_plys.last().unwrap().clone();
+
+        // Update final time
+        best_search_data.elapsed_time = self.search_stats.start_time.elapsed().as_secs_f64();
+
+        ugi::best_move_output(best_search_data);
+
+    }
+
     /// Iterative deepening search.
     pub fn iterative_deepening_search(&mut self) {
         // Setup search
         self.stop = false;
-
+        let mut current_ply = 3;
         let board = &mut self.options.board.clone();
 
-        for mv in unsafe { self.mg.gen::<GenMoves, NoQuit>(board, Player::One).move_list.moves(board) } {
-            if mv.is_win() {
-                self.search_data.best_move = RootMove::new(mv, f64::INFINITY, 1, 0);
-                self.completed_searchs.push(self.search_data.clone());
+        self.search_stats = SearchStats::new();
+        self.search_stats.start_time = Instant::now();
 
-                let best_search_data = self.completed_searchs.last().unwrap().clone();
-                ugi::info_output(best_search_data.clone(), self.search_stats.clone());
-                ugi::best_move_output(best_search_data);
+        // Validate Board
+        if board.piece_bb.pop_count() != 12 {
+            panic!("SEARCH ERROR: INVALID BOARD. Board must have exactly 12 pieces to start a search.");
+
+        }
+
+        // No move check (draw - but cannot search if game is over)
+        let mut move_list: GenResult = unsafe { self.mg.gen::<GenMoves, NoQuit>(board, Player::One) };
+        let moves = move_list.move_list.moves(board);
+
+        if moves.len() == 0 {
+            panic!("SEARCH ERROR: NO LEGAL MOVES. Cannot start the search if the game is already over.");
+
+        }
+
+        // Immediate win check
+        for mv in moves.iter() {
+            if mv.is_win() {
+                let mut ply_data = SearchData::new(current_ply);
+                ply_data.best_move = RootMove::new(*mv, f64::INFINITY, 1, 0);
+                self.completed_plys.push(ply_data.clone());
+
+                self.final_output();
                 return;
 
             }
 
         }
 
+        // Setup root moves
         self.root_moves = RootMoveList::new();
         self.setup_rootmoves(board);
+        
+        // Iterative deepening
+        'iterative_deepening: loop {
+            let mut ply_data: SearchData = SearchData::new(current_ply);
 
-        self.search_stats.start_time = Instant::now();
+            // Game over check
+            if self.completed_plys.len() > 0 && self.completed_plys.last().unwrap().game_over {
+                break 'iterative_deepening;
 
-        // Start iterative deepening
-        self.current_ply = 3;
-        'iterative_deepening: while !self.search_data.game_over {
-            self.search_data = SearchData::new(self.current_ply);
+            }
+
+            // Maxply check
+            if let Some(maxply) = self.options.maxply {
+                if current_ply > maxply {
+                    break 'iterative_deepening;
+    
+                }
+    
+            }
 
             // History table decay
             self.history.decay();
 
             // Aspiration windows
-            let (mut alpha, mut beta) = if self.completed_searchs.len() > 0 {
-                let prev_score = self.completed_searchs.last().unwrap().clone().best_move.score;
+            let (mut alpha, mut beta) = if self.completed_plys.len() > 0 {
+                let prev_score = self.completed_plys.last().unwrap().clone().best_move.score;
                 (prev_score - 1000.0, prev_score + 1000.0)
 
             } else {
@@ -166,7 +211,7 @@ impl Searcher {
             };
 
             'aspiration_windows: loop {
-                let score = self.search(board, alpha, beta, Player::One, self.current_ply);
+                let score = self.search(board, alpha, beta, Player::One, current_ply, current_ply);
                 
                 if self.stop || score == f64::INFINITY || score == f64::NEG_INFINITY {
                     break 'aspiration_windows;
@@ -191,32 +236,26 @@ impl Searcher {
     
             }   
 
-            self.update_search_data();
-            ugi::info_output(self.search_data.clone(), self.search_stats.clone());
-            
-            self.completed_searchs.push(self.search_data.clone());
-           
-            self.current_ply += 2;
+            self.update_search_data(&mut ply_data);
 
-            if let Some(maxply) = self.options.maxply {
-                if self.current_ply >= maxply {
-                    break 'iterative_deepening;
-    
-                }
-    
-            }
+            ugi::info_output(ply_data.clone());
+            self.completed_plys.push(ply_data);
+
+            // Remove losing moves before next ply
+            self.root_moves.sort();
+            self.root_moves.moves = self.root_moves.moves.iter().filter(|mv| mv.score != f64::NEG_INFINITY).cloned().collect();
+
+            current_ply += 2;
 
         }
 
-        let best_search_data = self.completed_searchs.last().unwrap().clone();
-        ugi::info_output(best_search_data.clone(), self.search_stats.clone());
-        ugi::best_move_output(best_search_data);
+        self.final_output();
     
     }
 
     /// Main search function.
-    fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: Player, ply: i8) -> f64 {
-        let is_root = ply == self.search_data.ply;
+    fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: Player, ply: i8, start_ply: i8) -> f64 {
+        let is_root = ply == start_ply;
         let is_leaf = ply == 0;
         let board_hash = board.hash();
 
@@ -298,12 +337,12 @@ impl Searcher {
 
             // Principal Variation Search
             let score: f64 = if i < 5 {
-                -self.search(board, -beta, -alpha, player.other(), ply - 1) // Full search
+                -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply) // Full search
 
             } else {
-                let mut score = -self.search(board, -alpha - 1.0, -alpha, player.other(), ply - 1); // Null window search
+                let mut score = -self.search(board, -alpha - 1.0, -alpha, player.other(), ply - 1, start_ply); // Null window search
                 if score > alpha && score < beta { 
-                    score = -self.search(board, -beta, -alpha, player.other(), ply - 1);
+                    score = -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply);
 
                 }
 
@@ -315,7 +354,7 @@ impl Searcher {
 
             // Update the score of the rootnode.
             if is_root {
-                self.root_moves.update_move(*mv, score, self.current_ply);
+                self.root_moves.update_move(*mv, score, start_ply);
 
             }
 
@@ -635,6 +674,10 @@ pub struct SearchData {
     pub pv: Vec<RootMove>,
     pub ply: i8,
 
+    pub nodes: usize,
+    pub nps: usize,
+    pub elapsed_time: f64,
+
     pub game_over: bool,
     pub winner: usize,
 
@@ -646,7 +689,9 @@ impl SearchData {
             best_move: RootMove::new_null(),
             pv: vec![],
             ply,
-
+            nodes: 0,
+            nps: 0,
+            elapsed_time: 0.0,
             game_over: false,
             winner: 0,
 
@@ -656,14 +701,13 @@ impl SearchData {
 
 }
 
-/// Structure that holds all statistics about a search.
+/// Structure that holds real time stats during a search. This data is stored into a [SearchData] object whenever a ply is completed.
 #[derive(Debug, Clone)]
 pub struct SearchStats {
     pub nodes: usize,
     pub nps: usize,
 
     pub start_time: Instant,
-    pub search_time: f64
 
 }
 
@@ -674,7 +718,6 @@ impl SearchStats {
             nps: 0,
 
             start_time: Instant::now(),
-            search_time: 0.0
 
         }
 

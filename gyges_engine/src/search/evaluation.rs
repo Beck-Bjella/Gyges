@@ -1,6 +1,8 @@
 //! All logic and functions related to the evaluation of a board.
 //! 
 
+use std::path;
+
 use gyges::board::*;
 use gyges::board::bitboard::*;
 use gyges::core::*;
@@ -17,21 +19,27 @@ pub const WEIGHTS: EvalWeights = EvalWeights {
     final_scale: 1.0,
 
     // Activity Weights
-    activity_type_weights: [5.0, 2.0, 1.0],
-    activity_weight: 100.0,
-    activity_shared_modifier: 0.7,
+    activity_weight: 2000.0,
+    activity_type_weights: [1.0, 1.0, 1.0],
+    activity_shared_modifier: 0.75,
     
     // Network Weights
     total_paths_weight: 0.01,
 
-};
+    // Material Weights
+    material_weight: 1.0,
+    unique_piece_control_weights: [40.0, 4.0, 2.0],
+    shared_piece_control_weights: [3.0, 2.0, 1.0],
+    
+    backline_isolation_penalty: [-0.0, -0.0, -0.0],
 
+};
 
 /// The data related to one players position and all of the data
 pub struct EvaluationContext {
     pub board: BoardState,
 
-    // General Path data
+    // Network Data
     pub total_paths: [usize; 2],
     pub total_bounces: [usize; 2],
     pub total_continuations: [usize; 2],
@@ -114,8 +122,8 @@ impl EvaluationContext {
             let activity_powers = [
                 flow_percentage[0] * continuation_rates[0],
                 flow_percentage[1] * continuation_rates[1],
-            ];
-            
+            ];  
+
             let data = PieceData {
                 piece,
                 sq,
@@ -158,16 +166,26 @@ impl EvaluationContext {
         let p1_activity_score: f64 = self.get_activity_score(Player::One) * WEIGHTS.final_scale;
         let p2_activity_score: f64 = self.get_activity_score(Player::Two) * WEIGHTS.final_scale;
 
-        let p1_network_score: f64 = self.get_network_score(Player::One) * WEIGHTS.final_scale;
-        let p2_network_score: f64 = self.get_network_score(Player::Two) * WEIGHTS.final_scale;
+        let p1_material_score: f64 = self.get_material_score(Player::One) * WEIGHTS.final_scale;
+        let p2_material_score: f64 = self.get_material_score(Player::Two) * WEIGHTS.final_scale;
 
-        let p1_total = 0.0 +
+        let p1_path_score: f64 = self.get_total_path_score(Player::One) * WEIGHTS.final_scale;
+        let p2_path_score: f64 = self.get_total_path_score(Player::Two) * WEIGHTS.final_scale;
+
+        let backline_isolation_penalty_p1 = self.backline_isolation_penalty(Player::One) * WEIGHTS.final_scale;
+        let backline_isolation_penalty_p2 = self.backline_isolation_penalty(Player::Two) * WEIGHTS.final_scale;
+
+        let p1_total: f64 = 0.0 + 
             p1_activity_score +
-            p1_network_score;
+            p1_material_score +
+            p1_path_score +
+            backline_isolation_penalty_p1;
 
-        let p2_total = 0.0 + 
+        let p2_total: f64 = 0.0 +
             p2_activity_score +
-            p2_network_score;
+            p2_material_score +
+            p2_path_score +
+            backline_isolation_penalty_p2;
 
         let total = p1_total - p2_total;
 
@@ -180,9 +198,14 @@ impl EvaluationContext {
             p1_activity_score,
             p2_activity_score,
 
-            p1_network_score,
-            p2_network_score,
+            p1_material_score,
+            p2_material_score,
 
+            p1_path_score,
+            p2_path_score,
+
+            backline_isolation_penalty_p1,
+            backline_isolation_penalty_p2,
         }
 
     }
@@ -211,15 +234,59 @@ impl EvaluationContext {
 
     }
 
-    // FUTURE: WILL HAVE MORE NETWORK FACTORS
-    pub fn get_network_score(&self, player: Player) -> f64 {
-        let mut network_score = 0.0;
+    /// Material score based on piece control
+    pub fn get_material_score(&self, player: Player) -> f64 {
+        let mut material_score = 0.0;
 
-        network_score += self.total_paths[player as usize] as f64 * WEIGHTS.total_paths_weight;
+        for pd in self.piece_data.iter() {
+            let piece_value = if (self.unique_piece_control[player as usize].0 & pd.sq.bit()) != 0 {
+                WEIGHTS.unique_piece_control_weights[pd.piece as usize]
 
-        network_score
+            } else if (self.shared_piece_control.0 & pd.sq.bit()) != 0 {
+                WEIGHTS.shared_piece_control_weights[pd.piece as usize]
+
+            } else {
+                0.0
+
+            };
+
+            material_score += piece_value * WEIGHTS.material_weight;
+
+        }
+
+        material_score
+
 
     }
+    
+    pub fn backline_isolation_penalty(&self, player: Player) -> f64 {
+        let mut penalty = 0.0;
+
+        for pd in self.piece_data.iter() {
+            if pd.path_start_counts[player as usize] > 0 {
+                if (pd.path_continuation_counts[player as usize]) == 0 {
+                    penalty += WEIGHTS.backline_isolation_penalty[pd.piece as usize];
+
+                }
+                               
+            }
+
+        }
+
+        penalty
+
+    }
+
+    /// Total path score based on the number of paths
+    pub fn get_total_path_score(&self, player: Player) -> f64 {
+        let mut path_score = 0.0;
+
+        path_score += self.total_paths[player as usize] as f64 * WEIGHTS.total_paths_weight;
+
+        path_score
+
+    }
+    
 
 }
 
@@ -249,8 +316,8 @@ pub struct PieceData {
     // ===========================
     // ===== INTREPRETATIONS =====
     // ===========================
-
-    pub activity_powers: [f64; 2],
+ 
+    pub activity_powers: [f64; 2], // Flow percentage * continuation rate, representing how "active" this piece is in the network
 
 }
 
@@ -263,8 +330,14 @@ pub struct EvaluationScore {
     pub p1_activity_score: f64,
     pub p2_activity_score: f64,
 
-    pub p1_network_score: f64,
-    pub p2_network_score: f64,
+    pub p1_material_score: f64,
+    pub p2_material_score: f64,
+
+    pub p1_path_score: f64,
+    pub p2_path_score: f64,
+
+    pub backline_isolation_penalty_p1: f64,
+    pub backline_isolation_penalty_p2: f64,
 
 }
 
@@ -273,12 +346,20 @@ pub struct EvalWeights {
     pub final_scale: f64,
 
     // Activity Weights
+     pub activity_weight: f64,
     pub activity_type_weights: [f64; 3],
-    pub activity_weight: f64,
     pub activity_shared_modifier: f64,
 
     // Network Weights
     pub total_paths_weight: f64,
+
+    // Material Weights
+    pub material_weight: f64,
+    pub unique_piece_control_weights: [f64; 3],
+    pub shared_piece_control_weights: [f64; 3],
+
+    // Penalties
+    pub backline_isolation_penalty: [f64; 3],
     
 }
 
@@ -316,8 +397,10 @@ impl EvaluationContext {
             println!("        - Continuation Rates:  [ P1: {:.3}  P2: {:.3} ]", pd.continuation_rates[0], pd.continuation_rates[1]);
             println!("   - Interpretations:");
             println!("        - Activity Powers:         [ P1: {:.3}  P2: {:.3} ]", pd.activity_powers[0], pd.activity_powers[1]);
-            
+
         }
+        println!();
+        self.print_extra();
         println!();
         let eval = self.get_evaluation();
         eval.print();
@@ -335,9 +418,15 @@ impl EvaluationScore {
         println!("    - Activity:");
         println!("        - P1 Activity: {:.3}", self.p1_activity_score);
         println!("        - P2 Activity: {:.3}", self.p2_activity_score);
-        println!("    - Network:");
-        println!("        - P1 Network: {:.3}", self.p1_network_score);
-        println!("        - P2 Network: {:.3}", self.p2_network_score);
+        println!("    - Material:");
+        println!("        - P1 Material: {:.3}", self.p1_material_score);
+        println!("        - P2 Material: {:.3}", self.p2_material_score);
+        println!("    - Total Path Counts:");
+        println!("        - P1 Paths: {:.3}", self.p1_path_score);
+        println!("        - P2 Paths: {:.3}", self.p2_path_score);
+        println!("    - Backline Isolation Penalty:");
+        println!("        - P1 Penalty: {:.3}", self.backline_isolation_penalty_p1);
+        println!("        - P2 Penalty: {:.3}", self.backline_isolation_penalty_p2);
 
     }
 }
