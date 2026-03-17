@@ -227,7 +227,7 @@ impl TranspositionTable {
     /// De-allocates the current table.
     /// 
     pub unsafe fn de_alloc(&self) {
-        let layout = Layout::from_size_align(*self.cap.get(), 2).unwrap();
+        let layout = Layout::from_size_align(*self.cap.get() * mem::size_of::<Cluster>(), 8).unwrap();
         let ptr: *mut u8 = mem::transmute(*self.clusters.get());
     
         alloc::dealloc(ptr, layout);
