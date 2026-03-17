@@ -121,7 +121,7 @@ impl RootMove {
     pub fn new_null() -> RootMove {
         RootMove {
             mv: Move::new_null(),
-            score: 0.0,
+            score: f64::NEG_INFINITY,
             ply: 0,
             threats: 0,
 
@@ -129,9 +129,9 @@ impl RootMove {
 
     }
 
-    /// Checks if a rootmove is null.
+    /// Checks if a rootmove is null
     pub fn is_null(&self) -> bool {
-        self.mv.is_null() && self.score == 0.0 && self.ply == 0
+        self.mv.is_null() && self.score == f64::NEG_INFINITY && self.ply == 0
 
     }
 

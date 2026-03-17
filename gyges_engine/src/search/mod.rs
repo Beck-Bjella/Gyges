@@ -163,7 +163,7 @@ impl Searcher {
         // Immediate win check
         for mv in moves.iter() {
             if mv.is_win() {
-                let mut ply_data = SearchData::new(current_ply);
+                let mut ply_data = SearchData::new(1);
                 ply_data.best_move = RootMove::new(*mv, f64::INFINITY, 1, 0);
                 self.completed_plys.push(ply_data.clone());
 
@@ -177,6 +177,20 @@ impl Searcher {
         // Setup root moves
         self.root_moves = RootMoveList::new();
         self.setup_rootmoves(board);
+
+        // Immediate loss check: No root moves since the losing moves get filtered out
+        if self.root_moves.moves.len() == 0 {
+            let mut ply_data = SearchData::new(1);
+            ply_data.best_move = RootMove::new(moves[0].clone(), f64::NEG_INFINITY, 1, 0);
+            ply_data.game_over = true;
+            ply_data.winner = 2;
+
+            self.completed_plys.push(ply_data.clone());
+
+            self.final_output();
+            return;
+
+        }
         
         // Iterative deepening
         'iterative_deepening: loop {
