@@ -46,7 +46,9 @@ pub struct Searcher {
 
     pub mg: MoveGen,
 
-    pub history: HistoryTable
+    pub history: HistoryTable,
+
+    pub path: Vec<u64>
 
 }
 
@@ -64,7 +66,9 @@ impl Searcher {
 
             mg: MoveGen::default(),
 
-            history: HistoryTable::default()
+            history: HistoryTable::default(),
+
+            path: Vec::new()
 
         }
 
@@ -97,7 +101,7 @@ impl Searcher {
         ply_data.nps = (ply_data.nodes as f64 / ply_data.elapsed_time) as usize;
         
         // Results
-        ply_data.pv = get_pv(&mut self.options.board.clone());
+        ply_data.pv = get_pv(&mut self.options.board.clone(), ply_data.ply);
         ply_data.best_move = ply_data.pv.get(0).unwrap_or(&RootMove::new_null()).clone();
 
         if ply_data.best_move.score == f64::INFINITY {
@@ -192,6 +196,8 @@ impl Searcher {
 
         }
         
+        self.path.clear();
+
         // Iterative deepening
         'iterative_deepening: loop {
             let mut ply_data: SearchData = SearchData::new(current_ply);
@@ -344,10 +350,18 @@ impl Searcher {
         }
         
         // Loop through valid moves and search them.
+        self.path.push(board_hash);
         let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
         for (i, mv) in current_player_moves.iter().enumerate() {
             board.make_move(mv);
+
+            // Skip moves that cycle back to a position already on the path
+            if self.path.contains(&board.hash()) {
+                board.unmake_move(mv);
+                continue;
+
+            }
 
             // Principal Variation Search
             let score: f64 = if i < 5 {
@@ -407,7 +421,8 @@ impl Searcher {
             unsafe { tt().insert(new_entry) };
 
         }
-        
+
+        self.path.pop();
         best_score
 
     }
@@ -659,11 +674,11 @@ impl HistoryTable {
 }
 
 /// Gets the principle variation from the transposition table.
-pub fn get_pv(board: &mut BoardState) -> Vec<RootMove> {
+pub fn get_pv(board: &mut BoardState, max_ply: i8) -> Vec<RootMove> {
     let mut pv: Vec<RootMove> = vec![];
 
     let mut current_board = board.clone();
-    loop {
+    for _ in 0..max_ply {
         let (valid, entry) = unsafe { tt().probe(current_board.hash()) };
         if valid {
             let current_move = entry.bestmove;
@@ -672,11 +687,13 @@ pub fn get_pv(board: &mut BoardState) -> Vec<RootMove> {
             pv.push(RootMove::new(current_move, entry.score, 0, 0));
 
         } else {
-            return pv;
+            break;
 
         }
-        
+
     }
+
+    pv
 
 }
 
