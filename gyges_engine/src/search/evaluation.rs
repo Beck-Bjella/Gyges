@@ -5,7 +5,7 @@ use std::path;
 
 use gyges::board::bitboard::*;
 use gyges::core::masks::RANKS;
-use gyges::core::*;
+use gyges::{AllResults, core::*};
 use gyges::moves::movegen::{GenControlMoveCount, MoveGen, NoQuit};
 use gyges::{board::*, GenResult, PathResult};
 
@@ -139,7 +139,7 @@ pub const WEIGHTS: EvalWeights = EvalWeights {
     shared_piece_control_weights: [75.0, 50.0, 25.0],
 
     // Square Control Weights
-    square_control_weight: 1.0,
+    square_control_weight: 0.25,
     unique_square_control_weight: 10.0,
     shared_square_control_weight: 5.0,
 
@@ -151,10 +151,8 @@ pub const WEIGHTS: EvalWeights = EvalWeights {
 
 /// The data related to one players position and all of the data
 pub struct EvaluationContext {
-    pub p1_gen_data: GenResult,
-    pub p2_gen_data: GenResult,
-    pub p1_path_data: PathResult,
-    pub p2_path_data: PathResult,
+    pub p1_gen_data: AllResults,
+    pub p2_gen_data: AllResults,
 
     pub board: BoardState,
 
@@ -183,25 +181,23 @@ impl EvaluationContext {
             RANKS[active_lines[1] as usize],
         ];
 
-        let p1 = unsafe { mg.gen::<GenControlMoveCount, NoQuit>(board, Player::One) };
-        let p2 = unsafe { mg.gen::<GenControlMoveCount, NoQuit>(board, Player::Two) };
-        let p1_path_data = unsafe { mg.gen_path_data::<NoQuit>(board, Player::One) };
-        let p2_path_data = unsafe { mg.gen_path_data::<NoQuit>(board, Player::Two) };
+        let p1 = unsafe { mg.gen_all(board, Player::One) };
+        let p2 = unsafe { mg.gen_all(board, Player::Two) };
 
         // Collect general total path data
         let total_paths = [
-            p1_path_data.start_count.iter().sum(),
-            p2_path_data.start_count.iter().sum(),
+            p1.start_count.iter().sum(),
+            p2.start_count.iter().sum(),
             
         ];
         let total_bounces = [
-            p1_path_data.bounce_count.iter().sum(),
-            p2_path_data.bounce_count.iter().sum(),
+            p1.bounce_count.iter().sum(),
+            p2.bounce_count.iter().sum(),
 
         ];
         let total_continuations = [
-            p1_path_data.continuation_count.iter().sum(),
-            p2_path_data.continuation_count.iter().sum(),
+            p1.continuation_count.iter().sum(),
+            p2.continuation_count.iter().sum(),
         ];
 
         // Piece Control
@@ -232,26 +228,26 @@ impl EvaluationContext {
             ];
 
             // Raw signals
-            let path_start_counts = [p1_path_data.start_count[pos], p2_path_data.start_count[pos]];
+            let path_start_counts = [p1.start_count[pos], p2.start_count[pos]];
             let path_bounce_counts = [
-                p1_path_data.bounce_count[pos],
-                p2_path_data.bounce_count[pos],
+                p1.bounce_count[pos],
+                p2.bounce_count[pos],
             ];
             let path_continuation_counts = [
-                p1_path_data.continuation_count[pos],
-                p2_path_data.continuation_count[pos],
+                p1.continuation_count[pos],
+                p2.continuation_count[pos],
             ];
             let path_termination_counts = [
-                p1_path_data.bounce_count[pos] - p1_path_data.continuation_count[pos],
-                p2_path_data.bounce_count[pos] - p2_path_data.continuation_count[pos],
+                p1.bounce_count[pos] - p1.continuation_count[pos],
+                p2.bounce_count[pos] - p2.continuation_count[pos],
             ];
             let path_average_depths = [
-                p1_path_data.depth[pos] as f64 / p1_path_data.bounce_count[pos] as f64,
-                p2_path_data.depth[pos] as f64 / p2_path_data.bounce_count[pos] as f64,
+                p1.depth[pos] as f64 / p1.bounce_count[pos] as f64,
+                p2.depth[pos] as f64 / p2.bounce_count[pos] as f64,
             ];
             let path_min_depths = [
-                if p1_path_data.min_depth[pos] == usize::MAX { f64::NAN } else { p1_path_data.min_depth[pos] as f64 },
-                if p2_path_data.min_depth[pos] == usize::MAX { f64::NAN } else { p2_path_data.min_depth[pos] as f64 },
+                if p1.min_depth[pos] == usize::MAX { f64::NAN } else { p1.min_depth[pos] as f64 },
+                if p2.min_depth[pos] == usize::MAX { f64::NAN } else { p2.min_depth[pos] as f64 },
             ];
 
             // Computed signals
@@ -308,8 +304,6 @@ impl EvaluationContext {
         Self {
             p1_gen_data: p1,
             p2_gen_data: p2,
-            p1_path_data,
-            p2_path_data,
 
             board: board.clone(),
 

@@ -270,11 +270,11 @@ impl Searcher {
         }
 
         // Print eval breakdown of the final PV endpoint
-        // if let Some(last) = self.completed_plys.last() {
-        //     let mut board = self.options.board.clone();
-        //     for rm in &last.pv.clone() { board.make_move(&rm.mv); }
-        //     EvaluationContext::new(&mut board, &mut self.mg).print();
-        // }
+        if let Some(last) = self.completed_plys.last() {
+            let mut board = self.options.board.clone();
+            for rm in &last.pv.clone() { board.make_move(&rm.mv); }
+            EvaluationContext::new(&mut board, &mut self.mg).print();
+        }
 
         self.final_output();
 

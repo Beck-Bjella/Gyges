@@ -287,19 +287,23 @@ impl MoveGen {
 
     /// Generate the specified data.
     #[inline(always)]
-    pub unsafe fn gen_path_data<Q: QuitType>(&mut self, board: &mut BoardState, player: Player) -> PathResult {
+    pub unsafe fn gen_all(&mut self, board: &mut BoardState, player: Player) -> AllResults {
         self.path_stack.clear();
         let player_bit = 1 << player as u64;
 
         let active_lines: [usize; 2] = board.get_active_lines();
         let active_line_sq = SQ((active_lines[player as usize] * 6) as u8);
+        let drop_bb = board.get_drops(active_lines, player);
 
-        let mut result = PathResult::new();
+        let mut result = AllResults::new(drop_bb);
 
         for x in 0..6 {
             let starting_sq = active_line_sq + x;
             if board.piece_at(starting_sq) != Piece::None {
                 let starting_piece = board.piece_at(starting_sq);
+
+                result.controlled_pieces |= starting_sq.bit();
+                result.move_list.set_start(x, starting_sq, starting_piece);
 
                 self.path_stack.push(PathStackData::new(Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player, 1));
                 self.path_stack.push(PathStackData::new(Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player, 1));
@@ -342,10 +346,10 @@ impl MoveGen {
                             let path_list = ONE_PATH_LISTS.get_unchecked(current_sq.0 as usize);
                             for i in 0..(path_list.count as usize) {
                                 let path = &path_list.paths[i];
-                
+
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
-                    
+
                                 }
 
                                 result.bounce_count[current_sq.0 as usize] += 1;
@@ -358,18 +362,21 @@ impl MoveGen {
                                 if (board.piece_bb & end_bit).is_not_empty() {
                                     if (banned_positions & end_bit).is_not_empty() {
                                         continue;
-    
+
                                     }
 
                                     result.continuation_count[current_sq.0 as usize] += 1;
+                                    result.controlled_pieces |= end_bit;
+                                    result.move_count += 25;
+                                    result.move_list.set_pickup_position(active_line_idx, end_bit);
 
                                     let end_piece = board.piece_at(end);
                                     let new_banned_positions = banned_positions ^ end_bit;
                                     let new_backtrack_board = backtrack_board ^ path.1;
                                     let new_depth = depth + 1;
-                                    
+
                                     self.path_stack.push(PathStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player, new_depth));
-                                    
+
                                     continue;
 
                                 }
@@ -382,20 +389,19 @@ impl MoveGen {
                                     }
 
                                     result.start_count[starting_sq.0 as usize] += 1;
-
-                                    if Q::check_quit() {
-                                        board.place(starting_piece, starting_sq);
-                                        board.piece_bb ^= starting_sq.bit();
-
-                                        return result;
-
-                                    }
+                                    result.move_count += 1;
+                                    result.move_list.set_end_position(active_line_idx, end_bit);
+                                    result.threat = true;
+                                    result.threat_count += 1;
 
                                     continue;
 
                                 }
 
                                 result.start_count[starting_sq.0 as usize] += 1;
+                                result.controlled_squares |= end_bit;
+                                result.move_count += 1;
+                                result.move_list.set_end_position(active_line_idx, end_bit);
 
                             }
 
@@ -404,7 +410,7 @@ impl MoveGen {
                             let intercepts = ALL_TWO_INTERCEPTS[current_sq.0 as usize];
                             let intercept_bb = board.piece_bb & intercepts;
 
-                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };            
+                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };
                             let valid_paths_idx = TWO_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
 
                             let path_list = TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
@@ -413,7 +419,7 @@ impl MoveGen {
 
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
-                    
+
                                 }
 
                                 result.bounce_count[current_sq.0 as usize] += 1;
@@ -426,10 +432,13 @@ impl MoveGen {
                                 if (board.piece_bb & end_bit).is_not_empty() {
                                     if (banned_positions & end_bit).is_not_empty() {
                                         continue;
-    
+
                                     }
 
                                     result.continuation_count[current_sq.0 as usize] += 1;
+                                    result.controlled_pieces |= end_bit;
+                                    result.move_count += 25;
+                                    result.move_list.set_pickup_position(active_line_idx, end_bit);
 
                                     let end_piece = board.piece_at(end);
                                     let new_banned_positions = banned_positions ^ end_bit;
@@ -437,9 +446,9 @@ impl MoveGen {
                                     let new_depth = depth + 1;
 
                                     self.path_stack.push(PathStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player, new_depth));
-                                    
+
                                     continue;
-                                
+
                                 }
 
                                 let goal_bit = end_bit >> 36;
@@ -450,20 +459,19 @@ impl MoveGen {
                                     }
 
                                     result.start_count[starting_sq.0 as usize] += 1;
-
-                                    if Q::check_quit() {
-                                        board.place(starting_piece, starting_sq);
-                                        board.piece_bb ^= starting_sq.bit();
-
-                                        return result;
-
-                                    }
+                                    result.move_count += 1;
+                                    result.move_list.set_end_position(active_line_idx, end_bit);
+                                    result.threat = true;
+                                    result.threat_count += 1;
 
                                     continue;
 
                                 }
 
                                 result.start_count[starting_sq.0 as usize] += 1;
+                                result.controlled_squares |= end_bit;
+                                result.move_count += 1;
+                                result.move_list.set_end_position(active_line_idx, end_bit);
 
                             }
 
@@ -471,17 +479,17 @@ impl MoveGen {
                         Piece::Three => {
                             let intercepts = ALL_THREE_INTERCEPTS[current_sq.0 as usize];
                             let intercept_bb = board.piece_bb & intercepts;
-                            
-                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };            
+
+                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };
                             let valid_paths_idx: &u16 = THREE_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
-        
+
                             let path_list = THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
                             for i in 0..(path_list.count as usize) {
                                 let path = &path_list.paths[i];
 
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
-                    
+
                                 }
 
                                 result.bounce_count[current_sq.0 as usize] += 1;
@@ -494,18 +502,21 @@ impl MoveGen {
                                 if (board.piece_bb & end_bit).is_not_empty() {
                                     if (banned_positions & end_bit).is_not_empty() {
                                         continue;
-    
+
                                     }
 
                                     result.continuation_count[current_sq.0 as usize] += 1;
+                                    result.controlled_pieces |= end_bit;
+                                    result.move_count += 25;
+                                    result.move_list.set_pickup_position(active_line_idx, end_bit);
 
                                     let end_piece = board.piece_at(end);
                                     let new_banned_positions = banned_positions ^ end_bit;
                                     let new_backtrack_board = backtrack_board ^ path.1;
                                     let new_depth = depth + 1;
-                                    
+
                                     self.path_stack.push(PathStackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player, new_depth));
-                                    
+
                                     continue;
 
                                 }
@@ -518,20 +529,19 @@ impl MoveGen {
                                     }
 
                                     result.start_count[starting_sq.0 as usize] += 1;
-
-                                    if Q::check_quit() {
-                                        board.place(starting_piece, starting_sq);
-                                        board.piece_bb ^= starting_sq.bit();
-
-                                        return result;
-
-                                    }
+                                    result.move_count += 1;
+                                    result.move_list.set_end_position(active_line_idx, end_bit);
+                                    result.threat = true;
+                                    result.threat_count += 1;
 
                                     continue;
 
                                 }
 
                                 result.start_count[starting_sq.0 as usize] += 1;
+                                result.controlled_squares |= end_bit;
+                                result.move_count += 1;
+                                result.move_list.set_end_position(active_line_idx, end_bit);
 
                             }
 
@@ -546,9 +556,12 @@ impl MoveGen {
 
         }
 
+        result.controlled_squares &= !board.piece_bb;
+
         result
 
     }
+
 
 }
 
@@ -891,6 +904,47 @@ pub struct PathResult {
 impl PathResult {
     pub fn new() -> Self {
         Self {
+            start_count: [0; 36],
+            bounce_count: [0; 36],
+            continuation_count: [0; 36],
+            depth: [0; 36],
+            min_depth: [usize::MAX; 36],
+
+        }
+
+    }
+
+}
+
+#[derive(Debug, Clone)]
+pub struct AllResults {
+    // Normal gen
+    pub threat: bool,
+    pub threat_count: usize,
+    pub move_count: usize,
+    pub move_list: RawMoveList,
+    pub controlled_squares: BitBoard,
+    pub controlled_pieces: BitBoard,
+
+    // Path gen
+    pub start_count: [usize; 36],
+    pub bounce_count: [usize; 36],
+    pub continuation_count: [usize; 36],
+    pub depth: [usize; 36],
+    pub min_depth: [usize; 36],
+
+}
+
+impl AllResults {
+    pub fn new(drop_bb: BitBoard) -> Self {
+        Self {
+            threat: false,
+            threat_count: 0,
+            move_count: 0,
+            move_list: RawMoveList::new(drop_bb),
+            controlled_squares: BitBoard::EMPTY,
+            controlled_pieces: BitBoard::EMPTY,
+
             start_count: [0; 36],
             bounce_count: [0; 36],
             continuation_count: [0; 36],
