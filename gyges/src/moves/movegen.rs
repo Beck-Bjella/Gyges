@@ -301,7 +301,6 @@ impl MoveGen {
             if board.piece_at(starting_sq) != Piece::None {
                 let starting_piece = board.piece_at(starting_sq);
 
-                self.path_stack.push(PathStackData::new(Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player, 0));
                 self.path_stack.push(PathStackData::new(Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player, 0));
                 self.path_stack.push(PathStackData::new(Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player, 0));
 
