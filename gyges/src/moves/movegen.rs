@@ -301,8 +301,9 @@ impl MoveGen {
             if board.piece_at(starting_sq) != Piece::None {
                 let starting_piece = board.piece_at(starting_sq);
 
-                self.path_stack.push(PathStackData::new(Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player, 0));
-                self.path_stack.push(PathStackData::new(Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player, 0));
+                self.path_stack.push(PathStackData::new(Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player, 1));
+                self.path_stack.push(PathStackData::new(Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player, 1));
+                self.path_stack.push(PathStackData::new(Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player, 1));
 
             }
 
@@ -349,7 +350,8 @@ impl MoveGen {
 
                                 result.bounce_count[current_sq.0 as usize] += 1;
                                 result.depth[current_sq.0 as usize] += depth;
-                
+                                result.min_depth[current_sq.0 as usize] = result.min_depth[current_sq.0 as usize].min(depth);
+
                                 let end = SQ(path.0[1]);
                                 let end_bit = end.bit();
 
@@ -416,6 +418,7 @@ impl MoveGen {
 
                                 result.bounce_count[current_sq.0 as usize] += 1;
                                 result.depth[current_sq.0 as usize] += depth;
+                                result.min_depth[current_sq.0 as usize] = result.min_depth[current_sq.0 as usize].min(depth);
 
                                 let end = SQ(path.0[2]);
                                 let end_bit = end.bit();
@@ -483,6 +486,7 @@ impl MoveGen {
 
                                 result.bounce_count[current_sq.0 as usize] += 1;
                                 result.depth[current_sq.0 as usize] += depth;
+                                result.min_depth[current_sq.0 as usize] = result.min_depth[current_sq.0 as usize].min(depth);
 
                                 let end = SQ(path.0[3]);
                                 let end_bit = end.bit();
@@ -879,7 +883,8 @@ pub struct PathResult {
     pub start_count: [usize; 36],
     pub bounce_count: [usize; 36],
     pub continuation_count: [usize; 36],
-    pub depth: [usize; 36]
+    pub depth: [usize; 36],
+    pub min_depth: [usize; 36],
 
 }
 
@@ -890,6 +895,7 @@ impl PathResult {
             bounce_count: [0; 36],
             continuation_count: [0; 36],
             depth: [0; 36],
+            min_depth: [usize::MAX; 36],
 
         }
 
