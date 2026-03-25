@@ -122,30 +122,81 @@ pub fn get_evalulation(board: &mut BoardState, mg: &mut MoveGen) -> f64 {
 
 }
 
+/// Piece-square tables for early game development scoring (from P1's perspective).
+/// Rows are ranks 0-5 top to bottom. P2 uses index 35 - sq to mirror.
+/// Values represent how desirable it is for a piece to be on that square.
+pub const PST_ONE: [f64; 36] = [
+    200.0, 200.0, 200.0, 200.0, 200.0, 200.0,  // rank 0 — home rank
+     80.0,  80.0,  80.0,  80.0,  80.0,  80.0,  // rank 1 — second line
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 2
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 3
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 4
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 5 — opponent home
+];
+
+pub const PST_TWO: [f64; 36] = [
+    200.0, 200.0, 200.0, 200.0, 200.0, 200.0,  // rank 0 — home rank
+     80.0,  80.0,  80.0,  80.0,  80.0,  80.0,  // rank 1 — second line
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 2
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 3
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 4
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 5 — opponent home
+];
+
+pub const PST_THREE: [f64; 36] = [
+    200.0, 200.0, 200.0, 200.0, 200.0, 200.0,  // rank 0 — home rank
+     80.0,  80.0,  80.0,  80.0,  80.0,  80.0,  // rank 1 — second line
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 2
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 3
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 4
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 5 — opponent home
+];
+
 pub const WEIGHTS: EvalWeights = EvalWeights {
-    final_scale: 1.0,
+    phase: PhaseWeights {
+        phase_piece_threshold: 2.0,
+        phase_buffer: 2.0,
+        
+    },
 
-    // Activity Weights
-    activity_weight: 0.0,
-    activity_type_weights: [1.0, 1.0, 1.0],
-    activity_shared_modifier: 0.25,
+    earlygame: EarlyGameWeights {
+        final_scale: 5.0,
+        per_path_weight: 0.2,
+        low_backline_penalty: -400.0,
 
-    // Network Weights
-    per_path_weight: 1.0,
+    },
 
-    // Piece Control Weights
-    piece_control_weight: 1.0,
-    unique_piece_control_weights: [500.0, 100.0, 50.0],
-    shared_piece_control_weights: [75.0, 50.0, 25.0],
+    midgame: MidGameWeights {
+        final_scale: 1.0,
 
-    // Square Control Weights
-    square_control_weight: 0.25,
-    unique_square_control_weight: 10.0,
-    shared_square_control_weight: 5.0,
+        // Activity Weights
+        activity_weight: 0.0,
+        activity_type_weights: [1.0, 1.0, 1.0],
+        activity_shared_modifier: 0.25,
 
-    // Penalties
-    backline_trapped_penalty: [-1500.0, -300.0, -150.0],
-    backline_stranded_penalty: [-1500.0, -300.0, -150.0],
+        // Network Weights
+        per_path_weight: 1.0,
+
+        // Piece Control Weights
+        piece_control_weight: 1.0,
+        unique_piece_control_weights: [0.0, 100.0, 50.0],
+        shared_piece_control_weights: [0.0, 100.0, 25.0],
+
+        // Square Control Weights
+        square_control_weight: 0.25,
+        unique_square_control_weight: 10.0,
+        shared_square_control_weight: 5.0,
+
+        // One Control (Exponential)
+        one_control_base: 400.0,
+        one_control_exp: 2.0,
+        shared_one_weight: 0.3,
+
+        // Penalties
+        backline_trapped_penalty: [-1500.0, -300.0, -150.0],
+        backline_stranded_penalty: [-1500.0, -300.0, -150.0],
+
+    }
 
 };
 
@@ -322,45 +373,152 @@ impl EvaluationContext {
 
     }
 
+    /// Evaluation entry point
     pub fn get_evaluation(&self) -> EvaluationScore {
-        let p1_activity_score: f64 = self.get_activity_score(Player::One) * WEIGHTS.final_scale;
-        let p2_activity_score: f64 = self.get_activity_score(Player::Two) * WEIGHTS.final_scale;
+        let phase = self.get_phase();
+    
+        let mg = self.mg_eval();
+        let eg = self.eg_eval();
 
-        let p1_piece_control = self.get_piece_control_score(Player::One) * WEIGHTS.final_scale;
-        let p2_piece_control = self.get_piece_control_score(Player::Two) * WEIGHTS.final_scale;
+        let total = phase * mg.total + (1.0 - phase) * eg.total;
+        
+        EvaluationScore { 
+            total, 
+            phase, 
+            mg, 
+            eg
 
-        let p1_square_control = self.get_square_control_score(Player::One) * WEIGHTS.final_scale;
-        let p2_square_control = self.get_square_control_score(Player::Two) * WEIGHTS.final_scale;
+        }
 
-        let p1_path_score: f64 = self.get_total_path_score(Player::One) * WEIGHTS.final_scale;
-        let p2_path_score: f64 = self.get_total_path_score(Player::Two) * WEIGHTS.final_scale;
+    }
 
-        let p1_backline_penalty = self.backline_penalties(Player::One) * WEIGHTS.final_scale;
-        let p2_backline_penalty = self.backline_penalties(Player::Two) * WEIGHTS.final_scale;
+    /// Gets the game phase based on how many pieces have left the opponent's home rank (rank 5).
+    /// Phase only rises when the opponent has genuinely developed — the engine can't manipulate
+    /// it by over-advancing its own pieces.
+    pub fn get_phase(&self) -> f64 {
+        let p2_home = RANKS[5];
+        let pieces_on_p2_home = (self.board.piece_bb & p2_home).pop_count() as f64;
+        let pieces_left = (6.0 - pieces_on_p2_home).max(0.0);
+        let buffered = (pieces_left - WEIGHTS.phase.phase_buffer).max(0.0);
+        (buffered / WEIGHTS.phase.phase_piece_threshold).clamp(0.0, 1.0)
+
+    }
+
+}
+
+///////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// EARLY GAME EVAL ////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
+
+
+impl EvaluationContext {
+    /// Early game evaluation
+    pub fn eg_eval(&self) -> EarlyGameScore {
+        let p1_path_score = self.eg_path_score(Player::One) * WEIGHTS.earlygame.final_scale;
+        let p2_path_score = self.eg_path_score(Player::Two) * WEIGHTS.earlygame.final_scale;
+
+        let p1_development = self.eg_development_score(Player::One) * WEIGHTS.earlygame.final_scale;
+        let p2_development = self.eg_development_score(Player::Two) * WEIGHTS.earlygame.final_scale;
+
+        let p1_total = 0.0 +
+            p1_path_score +
+            p1_development;
+
+        let p2_total = 0.0 +
+            p2_path_score +
+            p2_development;
+
+        let total    = p1_total - p2_total;
+
+        EarlyGameScore {
+            total,
+            p1_total,
+            p2_total,
+
+            p1_path_score,
+            p2_path_score,
+
+            p1_development,
+            p2_development,
+
+        }
+
+    }
+
+    pub fn eg_path_score(&self, player: Player) -> f64 {
+        self.total_paths[player as usize] as f64 * WEIGHTS.earlygame.per_path_weight
+
+    }
+
+    /// Development score using piece-square tables.
+    /// P1 uses the table directly, P2 mirrors via 35 - sq.
+    /// Extra penalty if fewer than 3 pieces remain on the home rank.
+    pub fn eg_development_score(&self, player: Player) -> f64 {
+        let mut score = 0.0;
+
+        let psts = [&PST_ONE, &PST_TWO, &PST_THREE];
+
+        let mut pieces = self.board.piece_bb.0;
+        while pieces != 0 {
+            let sq = pieces.trailing_zeros() as usize;
+            pieces &= pieces - 1;
+
+            let piece = self.board.data[sq] as usize;
+            let idx = if player == Player::One { sq } else { 35 - sq };
+            score += psts[piece][idx];
+
+        }
+
+        let home_rank = if player == Player::One { RANKS[0] } else { RANKS[5] };
+        let home_count = (self.board.piece_bb & home_rank).pop_count() as f64;
+        let below_three = (3.0 - home_count).max(0.0);
+        score += below_three * WEIGHTS.earlygame.low_backline_penalty;
+
+        score
+
+    }
+
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// MID-END GAME EVAL ////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
+
+impl EvaluationContext {
+    pub fn mg_eval(&self) -> MidGameScore {
+        let p1_piece_control = self.mg_piece_control_score(Player::One) * WEIGHTS.midgame.final_scale;
+        let p2_piece_control = self.mg_piece_control_score(Player::Two) * WEIGHTS.midgame.final_scale;
+
+        let p1_square_control = self.mg_square_control_score(Player::One) * WEIGHTS.midgame.final_scale;
+        let p2_square_control = self.mg_square_control_score(Player::Two) * WEIGHTS.midgame.final_scale;
+
+        let p1_path_score: f64 = self.mg_path_score(Player::One) * WEIGHTS.midgame.final_scale;
+        let p2_path_score: f64 = self.mg_path_score(Player::Two) * WEIGHTS.midgame.final_scale;
+
+        let p1_backline_penalty = self.mg_backline_penalties(Player::One) * WEIGHTS.midgame.final_scale;
+        let p2_backline_penalty = self.mg_backline_penalties(Player::Two) * WEIGHTS.midgame.final_scale;
+
+        let one_control_score = self.mg_one_control_score() * WEIGHTS.midgame.final_scale;
 
         let p1_total: f64 = 0.0 +
-            0.0 * p1_activity_score +
             p1_piece_control +
             p1_square_control +
             p1_path_score +
             p1_backline_penalty;
 
         let p2_total: f64 = 0.0 +
-            0.0 * p2_activity_score +
             p2_piece_control +
             p2_square_control +
             p2_path_score +
             p2_backline_penalty;
 
-        let total = p1_total - p2_total;
+        let total = (p1_total - p2_total) + one_control_score;
 
-        EvaluationScore {
+        MidGameScore {
             total,
             p1_total,
             p2_total,
-
-            p1_activity_score,
-            p2_activity_score,
 
             p1_piece_control,
             p2_piece_control,
@@ -374,48 +532,19 @@ impl EvaluationContext {
             p1_backline_penalty,
             p2_backline_penalty,
 
-        }
-
-    }
-
-    /// 
-    pub fn get_activity_score(&self, player: Player) -> f64 {
-        let mut activity_score = 0.0;
-
-        for pd in self.piece_data.iter() {
-            let activity_power: f64 = pd.activity_powers[player as usize];
-            if !activity_power.is_finite() {
-                continue;
-
-            }
-
-            let type_weight = WEIGHTS.activity_type_weights[pd.piece as usize];
-            let shared_modifier = if pd.shared {
-                WEIGHTS.activity_shared_modifier
-
-            } else {
-                1.0
-
-            };
-
-            activity_score += activity_power 
-                                * type_weight 
-                                * WEIGHTS.activity_weight 
-                                * shared_modifier;
+            one_control_score,
 
         }
-
-        activity_score
 
     }
 
     /// Piece control score, weighted by depth-based ownership for shared pieces.
-    pub fn get_piece_control_score(&self, player: Player) -> f64 {
+    pub fn mg_piece_control_score(&self, player: Player) -> f64 {
         let mut score = 0.0;
 
         for pd in self.piece_data.iter() {
             let piece_value = if (self.unique_piece_control[player as usize].0 & pd.sq.bit()) != 0 {
-                WEIGHTS.unique_piece_control_weights[pd.piece as usize]
+                WEIGHTS.midgame.unique_piece_control_weights[pd.piece as usize]
 
             } else if (self.shared_piece_control.0 & pd.sq.bit()) != 0 {
                 let depth_p1 = pd.path_min_depths[0];
@@ -436,14 +565,14 @@ impl EvaluationContext {
 
                 };
 
-                WEIGHTS.shared_piece_control_weights[pd.piece as usize] * ownership
+                WEIGHTS.midgame.shared_piece_control_weights[pd.piece as usize] * ownership
 
             } else {
                 0.0
 
             };
 
-            score += piece_value * WEIGHTS.piece_control_weight;
+            score += piece_value * WEIGHTS.midgame.piece_control_weight;
 
         }
 
@@ -451,25 +580,25 @@ impl EvaluationContext {
     }
 
     /// Square control score
-    pub fn get_square_control_score(&self, player: Player) -> f64 {
+    pub fn mg_square_control_score(&self, player: Player) -> f64 {
         let unique_squares = self.unique_square_control[player as usize].pop_count() as f64;
         let shared_squares = self.shared_square_control.pop_count() as f64;
 
-        unique_squares * WEIGHTS.unique_square_control_weight + shared_squares * WEIGHTS.shared_square_control_weight
+        unique_squares * WEIGHTS.midgame.unique_square_control_weight + shared_squares * WEIGHTS.midgame.shared_square_control_weight
         
     }
 
     /// Backline penalties for pieces that are trapped or stranded
-    pub fn backline_penalties(&self, player: Player) -> f64 {
+    pub fn mg_backline_penalties(&self, player: Player) -> f64 {
         let mut penalty = 0.0;
 
         for pd in self.piece_data.iter() {
             if pd.on_active_line[player as usize] {
                 if pd.trapped {
-                    penalty += WEIGHTS.backline_trapped_penalty[pd.piece as usize];
+                    penalty += WEIGHTS.midgame.backline_trapped_penalty[pd.piece as usize];
 
                 } else if pd.stranded {
-                    penalty += WEIGHTS.backline_stranded_penalty[pd.piece as usize];
+                    penalty += WEIGHTS.midgame.backline_stranded_penalty[pd.piece as usize];
 
                 }
 
@@ -481,15 +610,159 @@ impl EvaluationContext {
 
     }
 
+    /// Exponential score based on unique 1-piece control differential.
+    /// Shared 1s contribute fractionally via depth-based ownership.
+    pub fn mg_one_control_score(&self) -> f64 {
+        let mut p1_ones: f64 = 0.0;
+        let mut p2_ones: f64 = 0.0;
+
+        for pd in self.piece_data.iter() {
+            if pd.piece != Piece::One { continue; }
+
+            if (self.unique_piece_control[0].0 & pd.sq.bit()) != 0 {
+                p1_ones += 1.0;
+
+            } else if (self.unique_piece_control[1].0 & pd.sq.bit()) != 0 {
+                p2_ones += 1.0;
+
+            } else if (self.shared_piece_control.0 & pd.sq.bit()) != 0 {
+                let d1 = pd.path_min_depths[0];
+                let d2 = pd.path_min_depths[1];
+                let a1 = if d1.is_finite() { 1.0 / d1.max(1.0) } else { 0.0 };
+                let a2: f64 = if d2.is_finite() { 1.0 / d2.max(1.0) } else { 0.0 };
+                let total = a1 + a2;
+
+                if total > 0.0 {
+                    p1_ones += (a1 / total) * WEIGHTS.midgame.shared_one_weight;
+                    p2_ones += (a2 / total) * WEIGHTS.midgame.shared_one_weight;
+
+                }
+
+            }
+
+        }
+
+        let base = WEIGHTS.midgame.one_control_base;
+        let exp = WEIGHTS.midgame.one_control_exp;
+        base * (exp.powf(p1_ones) - exp.powf(p2_ones))
+
+    }
+
     /// Total path score based on the number of paths
-    pub fn get_total_path_score(&self, player: Player) -> f64 {
+    pub fn mg_path_score(&self, player: Player) -> f64 {
         let mut path_score = 0.0;
 
-        path_score += self.total_paths[player as usize] as f64 * WEIGHTS.per_path_weight;
+        path_score += self.total_paths[player as usize] as f64 * WEIGHTS.midgame.per_path_weight;
 
         path_score
 
     }
+
+}
+
+////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////
+
+/// Top-level weights container.
+#[derive(Debug, Clone, Copy)]
+pub struct EvalWeights {
+    pub phase: PhaseWeights,
+    pub earlygame: EarlyGameWeights,
+    pub midgame: MidGameWeights,
+
+}
+
+/// Weights specifically for phase detection and early game evaluation.
+#[derive(Debug, Clone, Copy)]
+pub struct PhaseWeights {
+    pub phase_piece_threshold: f64,
+    pub phase_buffer: f64,
+
+}
+
+/// Early-game weights.
+#[derive(Debug, Clone, Copy)]
+pub struct EarlyGameWeights {
+    pub final_scale: f64,
+
+    pub per_path_weight: f64,
+    pub low_backline_penalty: f64,
+
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MidGameWeights {
+    pub final_scale: f64,
+
+    // Activity Weights
+    pub activity_weight: f64,
+    pub activity_type_weights: [f64; 3],
+    pub activity_shared_modifier: f64,
+
+    // Network Weights
+    pub per_path_weight: f64,
+
+    // Piece Control Weights
+    pub piece_control_weight: f64,
+    pub unique_piece_control_weights: [f64; 3],
+    pub shared_piece_control_weights: [f64; 3],
+
+    // Square Control Weights
+    pub square_control_weight: f64,
+    pub unique_square_control_weight: f64,
+    pub shared_square_control_weight: f64,
+
+    // One Control (Exponential)
+    pub one_control_base: f64,
+    pub one_control_exp: f64,
+    pub shared_one_weight: f64,
+
+    // Penalties
+    pub backline_trapped_penalty: [f64; 3],
+    pub backline_stranded_penalty: [f64; 3],
+
+}
+
+pub struct EvaluationScore {
+    pub total: f64,
+    pub phase: f64,
+    pub eg: EarlyGameScore,
+    pub mg: MidGameScore,
+    
+}
+
+pub struct EarlyGameScore {
+    pub total: f64,
+    pub p1_total: f64,
+    pub p2_total: f64,
+
+    pub p1_path_score: f64,
+    pub p2_path_score: f64,
+
+    pub p1_development: f64,
+    pub p2_development: f64,
+
+}
+
+pub struct MidGameScore {
+    pub total: f64,
+    pub p1_total: f64,
+    pub p2_total: f64,
+
+    pub p1_piece_control: f64,
+    pub p2_piece_control: f64,
+
+    pub p1_square_control: f64,
+    pub p2_square_control: f64,
+
+    pub p1_path_score: f64,
+    pub p2_path_score: f64,
+
+    pub p1_backline_penalty: f64,
+    pub p2_backline_penalty: f64,
+
+    pub one_control_score: f64,
 
 }
 
@@ -523,56 +796,6 @@ pub struct PieceData {
 
 }
 
-pub struct EvaluationScore {
-    pub total: f64,
-    pub p1_total: f64,
-    pub p2_total: f64,
-
-    // Components
-    pub p1_activity_score: f64,
-    pub p2_activity_score: f64,
-
-    pub p1_piece_control: f64,
-    pub p2_piece_control: f64,
-
-    pub p1_square_control: f64,
-    pub p2_square_control: f64,
-
-    pub p1_path_score: f64,
-    pub p2_path_score: f64,
-
-    pub p1_backline_penalty: f64,
-    pub p2_backline_penalty: f64,
-
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct EvalWeights {
-    pub final_scale: f64,
-
-    // Activity Weights
-    pub activity_weight: f64,
-    pub activity_type_weights: [f64; 3],
-    pub activity_shared_modifier: f64,
-
-    // Network Weights
-    pub per_path_weight: f64,
-
-    // Piece Control Weights
-    pub piece_control_weight: f64,
-    pub unique_piece_control_weights: [f64; 3],
-    pub shared_piece_control_weights: [f64; 3],
-
-    // Square Control Weights
-    pub square_control_weight: f64,
-    pub unique_square_control_weight: f64,
-    pub shared_square_control_weight: f64,
-
-    // Penalties
-    pub backline_trapped_penalty: [f64; 3],
-    pub backline_stranded_penalty: [f64; 3],
-
-}
 
 //////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////
@@ -608,6 +831,8 @@ impl EvaluationContext {
             println!("        - Continuation Rates:  [ P1: {:.3}  P2: {:.3} ]", pd.continuation_rates[0], pd.continuation_rates[1]);
             println!("   - Interpretations:");
             println!("        - Activity Powers:         [ P1: {:.3}  P2: {:.3} ]", pd.activity_powers[0], pd.activity_powers[1]);
+            println!("        - Trapped: {}", pd.trapped);
+            println!("        - Stranded: {}", pd.stranded);
         }
         println!();
         self.print_extra();
@@ -622,24 +847,39 @@ impl EvaluationContext {
 impl EvaluationScore {
     pub fn print(&self) {
         println!("Evaluation Score Breakdown:");
-        println!("    - Total: {:.3}", self.total);
-        println!("        - P1 Total: {:.3}", self.p1_total);
-        println!("        - P2 Total: {:.3}", self.p2_total);
-        println!("    - Activity:");
-        println!("        - P1 Activity: {:.3}", self.p1_activity_score);
-        println!("        - P2 Activity: {:.3}", self.p2_activity_score);
-        println!("    - Piece Control:");
-        println!("        - P1 Piece Control: {:.3}", self.p1_piece_control);
-        println!("        - P2 Piece Control: {:.3}", self.p2_piece_control);
-        println!("    - Square Control:");
-        println!("        - P1 Square Control: {:.3}", self.p1_square_control);
-        println!("        - P2 Square Control: {:.3}", self.p2_square_control);
-        println!("    - Total Path Counts:");
-        println!("        - P1 Paths: {:.3}", self.p1_path_score);
-        println!("        - P2 Paths: {:.3}", self.p2_path_score);
-        println!("    - Backline Penalties:");
-        println!("        - P1 Penalty: {:.3}", self.p1_backline_penalty);
-        println!("        - P2 Penalty: {:.3}", self.p2_backline_penalty);
+        println!("    - Total: {:.3}  (phase: {:.3})", self.total, self.phase);
+        println!();
+        println!("    [Earlygame weight: {:.3}]", 1.0 - self.phase);
+        self.eg.print();
+        println!("    [Midgame  weight: {:.3}]", self.phase);
+        self.mg.print();
+        println!();
+       
+
+    }
+
+}
+
+impl EarlyGameScore {
+    pub fn print(&self) {
+        println!("        - Total: {:.3}", self.total);
+        println!("            P1: {:.3}  P2: {:.3}", self.p1_total, self.p2_total);
+        println!("        - Path Score:        P1: {:.3}  P2: {:.3}", self.p1_path_score, self.p2_path_score);
+        println!("        - Development:       P1: {:.3}  P2: {:.3}", self.p1_development, self.p2_development);
+
+    }
+
+}
+
+impl MidGameScore {
+    pub fn print(&self) {
+        println!("        - Total: {:.3}", self.total);
+        println!("            P1: {:.3}  P2: {:.3}", self.p1_total, self.p2_total);
+        println!("        - Piece Control:    P1: {:.3}  P2: {:.3}", self.p1_piece_control, self.p2_piece_control);
+        println!("        - Square Control:   P1: {:.3}  P2: {:.3}", self.p1_square_control, self.p2_square_control);
+        println!("        - Path Score:       P1: {:.3}  P2: {:.3}", self.p1_path_score, self.p2_path_score);
+        println!("        - Backline Penalty: P1: {:.3}  P2: {:.3}", self.p1_backline_penalty, self.p2_backline_penalty);
+        println!("        - One Control (exp): {:.3}", self.one_control_score);
 
     }
 
