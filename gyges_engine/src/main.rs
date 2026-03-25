@@ -7,4 +7,11 @@ fn main() {
     let mut ugi = Ugi::new();
     ugi.start();
 
+    // let mut board = BoardState::from("231312000000000000000000000000231132");
+
+    // let mut mg = MoveGen::default();
+    // let eval = EvaluationContext::new(&mut board, &mut mg);
+
+    // eval.print();
+
 }

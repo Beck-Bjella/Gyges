@@ -284,6 +284,10 @@ impl EvaluationContext {
                 p1.bounce_count[pos],
                 p2.bounce_count[pos],
             ];
+            let start_continuation_counts = [
+                p1.start_continuation_count[pos],
+                p2.start_continuation_count[pos],
+            ];
             let path_continuation_counts = [
                 p1.continuation_count[pos],
                 p2.continuation_count[pos],
@@ -320,9 +324,15 @@ impl EvaluationContext {
                 path_bounce_counts[0] as f64 + 10.0 * path_continuation_counts[0] as f64,
                 path_bounce_counts[1] as f64 + 10.0 * path_continuation_counts[1] as f64,
             ];
-
-            let trapped = path_bounce_counts[0] == 0 && path_bounce_counts[1] == 0; // Cant do anything
-            let stranded = path_continuation_counts[0] == 0 && path_continuation_counts[1] == 0; // Cant reach other pieces
+            
+            let trapped = [
+                on_active_line[0] && path_start_counts[0] == 0,
+                on_active_line[1] && path_start_counts[1] == 0,
+            ];
+            let stranded = [
+                on_active_line[0] && start_continuation_counts[0] == 0,
+                on_active_line[1] && start_continuation_counts[1] == 0,
+            ];
 
             let data = PieceData {
                 piece,
@@ -593,14 +603,11 @@ impl EvaluationContext {
         let mut penalty = 0.0;
 
         for pd in self.piece_data.iter() {
-            if pd.on_active_line[player as usize] {
-                if pd.trapped {
-                    penalty += WEIGHTS.midgame.backline_trapped_penalty[pd.piece as usize];
+            if pd.trapped[player as usize] {
+                penalty += WEIGHTS.midgame.backline_trapped_penalty[pd.piece as usize];
 
-                } else if pd.stranded {
-                    penalty += WEIGHTS.midgame.backline_stranded_penalty[pd.piece as usize];
-
-                }
+            } else if pd.stranded[player as usize] {
+                penalty += WEIGHTS.midgame.backline_stranded_penalty[pd.piece as usize];
 
             }
 
@@ -790,8 +797,8 @@ pub struct PieceData {
     pub continuation_rates: [f64; 2], // Percentage of bounces that are continuations
 
     // ========== INTREPRETATIONS ==========
-    pub trapped: bool,  // Cant do anything
-    pub stranded: bool, // Cant reach other pieces
+    pub trapped: [bool; 2],  // per-player: on active line and can't bounce
+    pub stranded: [bool; 2], // per-player: on active line and can't reach other pieces
     pub activity_powers: [f64; 2], // Bounces + 10 * continuations, representing how "active" this piece is in the network
 
 }
@@ -831,8 +838,8 @@ impl EvaluationContext {
             println!("        - Continuation Rates:  [ P1: {:.3}  P2: {:.3} ]", pd.continuation_rates[0], pd.continuation_rates[1]);
             println!("   - Interpretations:");
             println!("        - Activity Powers:         [ P1: {:.3}  P2: {:.3} ]", pd.activity_powers[0], pd.activity_powers[1]);
-            println!("        - Trapped: {}", pd.trapped);
-            println!("        - Stranded: {}", pd.stranded);
+            println!("        - Trapped:  [ P1: {}  P2: {} ]", pd.trapped[0], pd.trapped[1]);
+            println!("        - Stranded: [ P1: {}  P2: {} ]", pd.stranded[0], pd.stranded[1]);
         }
         println!();
         self.print_extra();

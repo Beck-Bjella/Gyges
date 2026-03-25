@@ -321,7 +321,7 @@ impl MoveGen {
             let banned_positions = data.banned_positions;
             let current_sq = data.current_sq;
             let current_piece = data.current_piece;
-            let starting_sq = data.starting_sq;
+            let starting_sq: SQ = data.starting_sq;
             let starting_piece = data.starting_piece;
             let active_line_idx = data.active_line_idx;
             let player: Player = data.player;
@@ -366,6 +366,10 @@ impl MoveGen {
                                     }
 
                                     result.continuation_count[current_sq.0 as usize] += 1;
+                                    
+                                    // If we bounce onto another piece - give starting piece credit
+                                    result.start_continuation_count[starting_sq.0 as usize] += 1;
+
                                     result.controlled_pieces |= end_bit;
                                     result.move_count += 25;
                                     result.move_list.set_pickup_position(active_line_idx, end_bit);
@@ -436,6 +440,10 @@ impl MoveGen {
                                     }
 
                                     result.continuation_count[current_sq.0 as usize] += 1;
+
+                                    // If we bounce onto another piece - give starting piece credit
+                                    result.start_continuation_count[starting_sq.0 as usize] += 1;
+
                                     result.controlled_pieces |= end_bit;
                                     result.move_count += 25;
                                     result.move_list.set_pickup_position(active_line_idx, end_bit);
@@ -506,6 +514,10 @@ impl MoveGen {
                                     }
 
                                     result.continuation_count[current_sq.0 as usize] += 1;
+
+                                    // If we bounce onto another piece - give starting piece credit
+                                    result.start_continuation_count[starting_sq.0 as usize] += 1;
+
                                     result.controlled_pieces |= end_bit;
                                     result.move_count += 25;
                                     result.move_list.set_pickup_position(active_line_idx, end_bit);
@@ -926,8 +938,11 @@ pub struct AllResults {
     pub controlled_squares: BitBoard,
     pub controlled_pieces: BitBoard,
 
-    // Path gen
+    // Path gen (on active lines only)
     pub start_count: [usize; 36],
+    pub start_continuation_count: [usize; 36],
+
+    // Path gen
     pub bounce_count: [usize; 36],
     pub continuation_count: [usize; 36],
     pub depth: [usize; 36],
@@ -945,7 +960,10 @@ impl AllResults {
             controlled_squares: BitBoard::EMPTY,
             controlled_pieces: BitBoard::EMPTY,
 
+            // FOR STARTING PIECES (ON ACTIVE-LINES ONLY)
             start_count: [0; 36],
+            start_continuation_count: [0; 36],
+
             bounce_count: [0; 36],
             continuation_count: [0; 36],
             depth: [0; 36],
