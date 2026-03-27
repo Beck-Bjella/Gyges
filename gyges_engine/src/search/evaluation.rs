@@ -122,46 +122,49 @@ pub fn get_evalulation(board: &mut BoardState, mg: &mut MoveGen) -> f64 {
 
 }
 
-/// Piece-square tables for early game development scoring (from P1's perspective).
-/// Rows are ranks 0-5 top to bottom. P2 uses index 35 - sq to mirror.
-/// Values represent how desirable it is for a piece to be on that square.
+/// Ones piece-square table 
+#[rustfmt::skip]
 pub const PST_ONE: [f64; 36] = [
-    200.0, 200.0, 200.0, 200.0, 200.0, 200.0,  // rank 0 — home rank
-     80.0,  80.0,  80.0,  80.0,  80.0,  80.0,  // rank 1 — second line
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 2
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 3
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 4
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 5 — opponent home
+    100.0, 100.0, 100.0, 100.0, 100.0, 100.0,  // rank 0
+     25.0,  50.0,  75.0,  75.0,  50.0,  25.0,  // rank 1
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 2+
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
 ];
 
+// Twos piece-square table
+#[rustfmt::skip]
 pub const PST_TWO: [f64; 36] = [
-    200.0, 200.0, 200.0, 200.0, 200.0, 200.0,  // rank 0 — home rank
-     80.0,  80.0,  80.0,  80.0,  80.0,  80.0,  // rank 1 — second line
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 2
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 3
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 4
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 5 — opponent home
+    100.0, 100.0, 100.0, 100.0, 100.0, 100.0,  // rank 0
+     50.0, 100.0, 100.0, 100.0, 100.0,  50.0,  // rank 1
+     25.0,  50.0,  75.0,  75.0,  50.0,  25.0,  // rank 2+
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
 ];
 
+// Threes piece-square table
+#[rustfmt::skip]
 pub const PST_THREE: [f64; 36] = [
-    200.0, 200.0, 200.0, 200.0, 200.0, 200.0,  // rank 0 — home rank
-     80.0,  80.0,  80.0,  80.0,  80.0,  80.0,  // rank 1 — second line
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 2
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 3
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 4
-      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,  // rank 5 — opponent home
+    100.0, 100.0, 100.0, 100.0, 100.0, 100.0,  // rank 0
+     50.0, 100.0, 100.0, 100.0, 100.0,  50.0,  // rank 1
+     25.0,  50.0,  75.0,  75.0,  50.0,  25.0,  // rank 2+
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
+      0.0,   0.0,   0.0,   0.0,   0.0,   0.0,
 ];
 
 pub const WEIGHTS: EvalWeights = EvalWeights {
     phase: PhaseWeights {
-        phase_piece_threshold: 2.0,
-        phase_buffer: 2.0,
-        
+        phase_table: [1.0, 1.0, 1.0, 1.0, 0.66, 0.33, 0.0],
+
     },
 
     earlygame: EarlyGameWeights {
         final_scale: 5.0,
-        per_path_weight: 0.2,
+
+        per_path_weight: 1.0,
         low_backline_penalty: -400.0,
 
     },
@@ -179,8 +182,8 @@ pub const WEIGHTS: EvalWeights = EvalWeights {
 
         // Piece Control Weights
         piece_control_weight: 1.0,
-        unique_piece_control_weights: [0.0, 100.0, 50.0],
-        shared_piece_control_weights: [0.0, 100.0, 25.0],
+        unique_piece_control_weights: [100.0, 500.0, 500.0],
+        shared_piece_control_weights: [0.0, 0.0, 0.0],
 
         // Square Control Weights
         square_control_weight: 0.25,
@@ -193,8 +196,8 @@ pub const WEIGHTS: EvalWeights = EvalWeights {
         shared_one_weight: 0.3,
 
         // Penalties
-        backline_trapped_penalty: [-1500.0, -300.0, -150.0],
-        backline_stranded_penalty: [-1500.0, -300.0, -150.0],
+        backline_trapped_penalty: [-1500.0, -300.0, -300.0],
+        backline_stranded_penalty: [-1500.0, -300.0, -300.0],
 
     }
 
@@ -402,15 +405,10 @@ impl EvaluationContext {
 
     }
 
-    /// Gets the game phase based on how many pieces have left the opponent's home rank (rank 5).
-    /// Phase only rises when the opponent has genuinely developed — the engine can't manipulate
-    /// it by over-advancing its own pieces.
+    /// Gets the game phase based on opp piece count
     pub fn get_phase(&self) -> f64 {
-        let p2_home = RANKS[5];
-        let pieces_on_p2_home = (self.board.piece_bb & p2_home).pop_count() as f64;
-        let pieces_left = (6.0 - pieces_on_p2_home).max(0.0);
-        let buffered = (pieces_left - WEIGHTS.phase.phase_buffer).max(0.0);
-        (buffered / WEIGHTS.phase.phase_piece_threshold).clamp(0.0, 1.0)
+        let count = (self.board.piece_bb & RANKS[5]).pop_count().min(6) as usize;
+        WEIGHTS.phase.phase_table[count]
 
     }
 
@@ -460,9 +458,6 @@ impl EvaluationContext {
 
     }
 
-    /// Development score using piece-square tables.
-    /// P1 uses the table directly, P2 mirrors via 35 - sq.
-    /// Extra penalty if fewer than 3 pieces remain on the home rank.
     pub fn eg_development_score(&self, player: Player) -> f64 {
         let mut score = 0.0;
 
@@ -482,6 +477,7 @@ impl EvaluationContext {
         let home_rank = if player == Player::One { RANKS[0] } else { RANKS[5] };
         let home_count = (self.board.piece_bb & home_rank).pop_count() as f64;
         let below_three = (3.0 - home_count).max(0.0);
+        
         score += below_three * WEIGHTS.earlygame.low_backline_penalty;
 
         score
@@ -683,8 +679,7 @@ pub struct EvalWeights {
 /// Weights specifically for phase detection and early game evaluation.
 #[derive(Debug, Clone, Copy)]
 pub struct PhaseWeights {
-    pub phase_piece_threshold: f64,
-    pub phase_buffer: f64,
+    pub phase_table: [f64; 7],
 
 }
 
