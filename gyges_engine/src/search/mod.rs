@@ -365,20 +365,23 @@ impl Searcher {
         for (i, mv) in current_player_moves.iter().enumerate() {
             board.make_move(mv);
 
-            let score: f64 = if self.path.contains(&board.hash()) { // cycle = draw
-                0.0 
-                
+            // Skip moves that cycle back to a position already on the path
+            if self.path.contains(&board.hash()) {
+                board.unmake_move(mv);
+                continue;
+
+            }
+
+            // Principal Variation Search
+            let score: f64 = if i < 5 {
+                -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply) // Full search
+
             } else {
-                // Principal Variation Search
-                if i < 5 { 
-                    -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply) // Full search
-                } else {
-                    let mut score = -self.search(board, -alpha - 1.0, -alpha, player.other(), ply - 1, start_ply); // Null window search
-                    if score > alpha && score < beta {
-                        score = -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply);
-                    }
-                    score
+                let mut score = -self.search(board, -alpha - 1.0, -alpha, player.other(), ply - 1, start_ply); // Null window search
+                if score > alpha && score < beta {
+                    score = -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply);
                 }
+                score
 
             };
 
@@ -427,7 +430,7 @@ impl Searcher {
                 NodeBound::ExactValue
 
             };
-            
+
             let new_entry = Entry::new(board_hash, best_score, ply, best_move, node_bound);
             unsafe { tt().insert(new_entry) };
 
