@@ -79,13 +79,21 @@ impl Move {
 
 impl Display for Move {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // if self.flag == MoveType::Bounce {
+        //     write!(f, "({}, {}) : ({}, {})", self.data[0].0, self.data[0].1, self.data[1].0, self.data[1].1)
+
+        // } else {
+        //     write!(f, "({}, {}) : ({}, {}) : ({}, {})", self.data[0].0, self.data[0].1, self.data[1].0, self.data[1].1, self.data[2].0, self.data[2].1)
+
+        // }
         if self.flag == MoveType::Bounce {
-            write!(f, "({}, {}) : ({}, {})", self.data[0].0, self.data[0].1, self.data[1].0, self.data[1].1)
+            write!(f, "{}|{}", self.data[0].1, self.data[1].1)
 
         } else {
-            write!(f, "({}, {}) : ({}, {}) : ({}, {})", self.data[0].0, self.data[0].1, self.data[1].0, self.data[1].1, self.data[2].0, self.data[2].1)
+            write!(f, "{}|{}|{}", self.data[0].1, self.data[1].1, self.data[2].1)
 
         }
+
 
     }
 

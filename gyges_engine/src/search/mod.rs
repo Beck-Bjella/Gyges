@@ -359,30 +359,26 @@ impl Searcher {
         
         // Loop through valid moves and search them.
         self.path.push(board_hash);
+        let original_alpha = alpha;
         let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
         for (i, mv) in current_player_moves.iter().enumerate() {
             board.make_move(mv);
 
-            // Skip moves that cycle back to a position already on the path
-            if self.path.contains(&board.hash()) {
-                board.unmake_move(mv);
-                continue;
-
-            }
-
-            // Principal Variation Search
-            let score: f64 = if i < 5 {
-                -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply) // Full search
-
+            let score: f64 = if self.path.contains(&board.hash()) { // cycle = draw
+                0.0 
+                
             } else {
-                let mut score = -self.search(board, -alpha - 1.0, -alpha, player.other(), ply - 1, start_ply); // Null window search
-                if score > alpha && score < beta { 
-                    score = -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply);
-
+                // Principal Variation Search
+                if i < 5 { 
+                    -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply) // Full search
+                } else {
+                    let mut score = -self.search(board, -alpha - 1.0, -alpha, player.other(), ply - 1, start_ply); // Null window search
+                    if score > alpha && score < beta {
+                        score = -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply);
+                    }
+                    score
                 }
-
-                score
 
             };
 
@@ -397,6 +393,13 @@ impl Searcher {
             if score > best_score {
                 best_score = score;
                 best_move = *mv;
+
+                // Output new best move immediately when found at root
+                if is_root && !self.stop {
+                    let elapsed = self.search_stats.start_time.elapsed().as_secs_f64();
+                    ugi::new_best_output(mv, score, start_ply, self.search_stats.nodes, elapsed);
+
+                }
 
             }
             if best_score > alpha {
@@ -416,13 +419,13 @@ impl Searcher {
         if !self.stop {
             let node_bound: NodeBound = if best_score >= beta {
                 NodeBound::LowerBound
-    
-            } else if best_score <= alpha  {
+
+            } else if best_score <= original_alpha {
                 NodeBound::UpperBound
-    
+
             } else {
                 NodeBound::ExactValue
-    
+
             };
             
             let new_entry = Entry::new(board_hash, best_score, ply, best_move, node_bound);
