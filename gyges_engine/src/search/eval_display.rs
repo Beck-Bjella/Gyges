@@ -1,5 +1,6 @@
 // eval_display.rs
 
+use gyges::core::SQ;
 use crate::search::{EvaluationContext, PieceData, Piece};
 
 // ── Cell display config ───────────────────────────────────────────────────────
@@ -7,7 +8,7 @@ use crate::search::{EvaluationContext, PieceData, Piece};
 // CW must be large enough to fit your largest value + sign + spaces.
 // A value like -0.123 needs at minimum: 1 (sign) + 1 (digit) + 1 (.) + 3 (decimals) = 6
 // Plus 2 spaces padding = CW 8. Increase CW for larger numbers.
-const CW: usize = 8;         // total cell width in chars
+const CW: usize = 10;        // total cell width in chars
 const DECIMALS: usize = 3;   // decimal places shown in each cell
 
 // ── Public colour helpers ─────────────────────────────────────────────────────
@@ -40,68 +41,73 @@ pub fn normalise(vals: &[f64]) -> impl Fn(f64) -> f64 {
 // ── EvaluationContext ─────────────────────────────────────────────────────────
 
 impl EvaluationContext {
-    pub fn print_extra(&self) {
-        println!("=======================================================================");
-        println!("============================== HEAT MAPS ==============================");
-        println!("=======================================================================");
+    /// Material heatmap: colored background per piece type, piece number + net value per cell.
+    pub fn print_material_heatmap(&self) {
+        const SIZE: usize = 6;
+        const MCW: usize = 12; // cell: space + letter + space + +xxx.xxx + space = 12
+        const INDENT: usize = 4;
 
-        // ── helpers ───────────────────────────────────────────────────────────
-
-        let heat = |f: fn(&PieceData) -> f64| -> Vec<(usize, f64, (u8,u8,u8))> {
-            let vals: Vec<f64> = self.piece_data.iter().map(|pd| f(pd)).collect();
-            let norm = normalise(&vals);
-            self.piece_data.iter().map(|pd| {
-                let v = f(pd);
-                let c = if v.is_finite() { heat_rgb(norm(v)) } else { (40,40,40) };
-                (pd.sq.0 as usize, v, c)
-            }).collect()
-        };
-
-        let div = |f: fn(&PieceData) -> f64| -> Vec<(usize, f64, (u8,u8,u8))> {
-            let vals: Vec<f64> = self.piece_data.iter().map(|pd| f(pd)).collect();
-            let norm = normalise(&vals);
-            self.piece_data.iter().map(|pd| {
-                let v = f(pd);
-                let c = if v.is_finite() { diverge_rgb(norm(v)) } else { (40,40,40) };
-                (pd.sq.0 as usize, v, c)
-            }).collect()
-        };
-
-        // ── heatmaps ──────────────────────────────────────────────────────────
-
-        // control
-        self.print_heatmap("Control Map", (0..36).map(|sq| {
+        // Build a grid indexed by square: (piece, net_value, color)
+        let mut grid: Vec<Option<(Piece, f64, (u8, u8, u8))>> = vec![None; SIZE * SIZE];
+        for pd in self.piece_data.iter() {
+            let sq = pd.sq.0 as usize;
+            let v = (pd.material_score[0] - pd.material_score[1]) * 0.001;
             let bit = 1u64 << sq;
-            let p1  = (self.unique_piece_control[0].0 & bit) != 0;
-            let p2  = (self.unique_piece_control[1].0 & bit) != 0;
-            let sh  = (self.shared_piece_control.0    & bit) != 0;
-            let (v, c) = match (p1, p2, sh) {
-                (_, _, true) => (3.0, (160, 100, 200)),
-                (true, _, _) => (1.0, (92,  180, 130)),
-                (_, true, _) => (2.0, (200, 90,  90 )),
-                _            => (0.0, (40,  40,  40 )),
+            let p1 = (self.unique_piece_control[0].0 & bit) != 0;
+            let p2 = (self.unique_piece_control[1].0 & bit) != 0;
+            let sh = (self.shared_piece_control.0    & bit) != 0;
+            let c = match (p1, p2, sh) {
+                (_, _, true) => (160u8, 100u8, 200u8), // shared — purple
+                (true, _, _) => ( 92u8, 180u8, 130u8), // P1 unique — green
+                (_, true, _) => (200u8,  90u8,  90u8), // P2 unique — red
+                _            => ( 40u8,  40u8,  40u8), // uncontrolled
             };
-            (sq, v, c)
-        }).collect());
+            grid[sq] = Some((pd.piece, v, c));
+        }
 
-        // self.print_heatmap("Stop Power", heat(|pd| pd.stop_power[0]));
-        // self.print_heatmap("Stop Power", heat(|pd| pd.stop_power[1]));
-        // self.print_heatmap("FLOW P1", heat(|pd| pd.flow_percentage[0]));
-        // self.print_heatmap("FLOW P2", heat(|pd| pd.flow_percentage[1]));
+        let border = |left: &str, mid: &str, right: &str| {
+            let pad = " ".repeat(INDENT);
+            let inner: String = (0..SIZE)
+                .map(|i| format!("{}{}", "─".repeat(MCW), if i < SIZE - 1 { mid } else { right }))
+                .collect();
+            println!("\x1b[38;2;50;50;50m{}{}{}\x1b[0m", pad, left, inner);
+        };
 
-        // Ownership map — only for shared pieces, color = P1 vs P2 dominance, value = P1 ownership
-        self.print_heatmap("Ownership (P1 share of shared pieces)", self.piece_data.iter().filter_map(|pd| {
-            if !pd.shared { return None; }
-            let d1 = pd.path_min_depths[0];
-            let d2 = pd.path_min_depths[1];
-            let a1 = if d1.is_finite() { 1.0 / d1.max(1.0) } else { 0.0 };
-            let a2 = if d2.is_finite() { 1.0 / d2.max(1.0) } else { 0.0 };
-            let total = a1 + a2;
-            let ownership = if total == 0.0 { 0.5 } else { a1 / total };
-            let c = diverge_rgb(ownership);
-            Some((pd.sq.0 as usize, ownership, c))
-        }).collect());
-        
+        println!();
+        println!("{}\x1b[1m\x1b[38;2;210;210;210mMaterial Score  (P1 + / P2 −)\x1b[0m", " ".repeat(INDENT));
+        println!();
+
+        border("┌", "┬", "┐");
+        for row in (0..SIZE).rev() {
+            // 4 passes: top padding, piece letter, value, bottom padding
+            for pass in 0..4usize {
+                print!("{}\x1b[38;2;50;50;50m│\x1b[0m", " ".repeat(INDENT));
+                for col in 0..SIZE {
+                    let sq = row * SIZE + col;
+                    match grid[sq] {
+                        Some((piece, v, (r, g, b))) => {
+                            if pass == 1 {
+                                let piece_str = match piece { Piece::One => "1", Piece::Two => "2", Piece::Three => "3", Piece::None => "?" };
+                                print!("\x1b[48;2;{r};{g};{b}m\x1b[38;2;220;220;220m{:^MCW$}\x1b[0m", piece_str);
+                            } else if pass == 2 {
+                                let num = format!("{:+.3}", v);
+                                print!("\x1b[48;2;{r};{g};{b}m\x1b[38;2;220;220;220m{:^MCW$}\x1b[0m", num);
+                            } else {
+                                print!("\x1b[48;2;{r};{g};{b}m{}\x1b[0m", " ".repeat(MCW));
+                            }
+                        }
+                        None => {
+                            print!("\x1b[48;2;22;22;22m{}\x1b[0m", " ".repeat(MCW));
+                        }
+                    }
+                    print!("\x1b[38;2;50;50;50m│\x1b[0m");
+                }
+                println!();
+            }
+            if row > 0 { border("├", "┼", "┤"); }
+        }
+        border("└", "┴", "┘");
+        println!();
     }
 
     /// Generic heatmap.
@@ -193,6 +199,84 @@ impl EvaluationContext {
         println!();
 
     }
+}
+
+// ── Material Breakdown  ──────────────────────────────────────────────────
+
+impl EvaluationContext {
+    pub fn print_material_breakdown(&self) {
+        const INDENT: &str = "    ";
+
+        println!();
+        println!("{}\x1b[1m\x1b[38;2;210;210;210mMaterial Breakdown\x1b[0m", INDENT);
+        println!();
+
+        println!(
+            "{}\x1b[38;2;100;100;100m{:>4}  {:4}  {:8}  {:>6}  {:>7}  {:>7}  {:>7}  {}\x1b[0m",
+            INDENT, "sq", "type", "control", "own", "P1", "P2", "net", "flags"
+        );
+        println!("{}\x1b[38;2;50;50;50m{}\x1b[0m", INDENT, "─".repeat(62));
+
+        let mut pieces: Vec<&PieceData> = self.piece_data.iter().collect();
+        pieces.sort_by_key(|pd| pd.sq.0);
+
+        for pd in pieces {
+            let sq = pd.sq.0 as usize;
+            let piece_str = match pd.piece { Piece::One => "1", Piece::Two => "2", Piece::Three => "3", Piece::None => "?" };
+
+            let p1_unique = (self.unique_piece_control[0].0 & pd.sq.bit()) != 0;
+            let p2_unique = (self.unique_piece_control[1].0 & pd.sq.bit()) != 0;
+            let shared    = (self.shared_piece_control.0    & pd.sq.bit()) != 0;
+
+            let (ctrl_str, ctrl_r, ctrl_g, ctrl_b) = match (p1_unique, p2_unique, shared) {
+                (true, _, _) => ("P1 uniq",  92u8, 180u8, 130u8),
+                (_, true, _) => ("P2 uniq", 200u8,  90u8,  90u8),
+                (_, _, true) => ("shared ", 160u8, 100u8, 200u8),
+                _            => ("none   ",  60u8,  60u8,  60u8),
+            };
+
+            let own = {
+                let a1 = if pd.path_min_depths[0].is_finite() { 1.0 / pd.path_min_depths[0].max(1.0) } else { 0.0 };
+                let a2 = if pd.path_min_depths[1].is_finite() { 1.0 / pd.path_min_depths[1].max(1.0) } else { 0.0 };
+                let total = a1 + a2;
+                if total == 0.0 { 0.0 } else { (a1 - a2) / total }
+            };
+            let (own_r, own_g, own_b) = if own > 0.05 { (92u8, 180u8, 130u8) }
+                else if own < -0.05 { (200u8, 90u8, 90u8) }
+                else { (140u8, 140u8, 140u8) };
+
+            let p1_s = pd.material_score[0] * 0.001;
+            let p2_s = pd.material_score[1] * 0.001;
+            let net  = p1_s - p2_s;
+
+            let mut flags = String::new();
+            if pd.trapped[0]  { flags.push_str("T1 "); }
+            if pd.trapped[1]  { flags.push_str("T2 "); }
+            if pd.stranded[0] { flags.push_str("S1 "); }
+            if pd.stranded[1] { flags.push_str("S2 "); }
+
+            let (net_r, net_g, net_b) = if net > 0.05 { (92u8, 180u8, 130u8) }
+                else if net < -0.05 { (200u8, 90u8, 90u8) }
+                else { (140u8, 140u8, 140u8) };
+
+            println!(
+                "{}\x1b[38;2;140;140;140m{:>4}  \x1b[38;2;200;169;110m{:4}  \x1b[38;2;{};{};{}m{:8}\x1b[38;2;{};{};{}m  {:>+6.2}  \x1b[38;2;140;140;140m{:>7.3}  {:>7.3}  \x1b[38;2;{};{};{}m{:>+7.3}\x1b[38;2;80;80;80m  {}\x1b[0m",
+                INDENT, sq, piece_str,
+                ctrl_r, ctrl_g, ctrl_b, ctrl_str,
+                own_r, own_g, own_b, own,
+                p1_s, p2_s,
+                net_r, net_g, net_b, net,
+                flags
+            );
+        }
+
+        println!("{}\x1b[38;2;50;50;50m{}\x1b[0m", INDENT, "─".repeat(62));
+        println!();
+        self.print_material_heatmap();
+        println!();
+        
+    }
+
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

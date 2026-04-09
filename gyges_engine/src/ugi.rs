@@ -7,7 +7,7 @@ use std::thread;
 
 use rayon;
 
-use gyges::board::*;
+use gyges::{MoveGen, board::*};
 
 use crate::search::*;
 use crate::consts::*;
@@ -73,6 +73,12 @@ impl Ugi {
                 },
                 Some(&"showpos") => {
                     println!("{}", self.search_options.board);
+
+                },
+                Some(&"eval") => {
+                    let mut mg = MoveGen::default();
+                    let ctx = evaluation::EvaluationContext::new(&mut self.search_options.board, &mut mg);
+                    ctx.print();
 
                 },
                 Some(&"go") => {

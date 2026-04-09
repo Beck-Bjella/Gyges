@@ -1,119 +1,11 @@
 //! All logic and functions related to the evaluation of a board.
 //!
 
-use std::path;
-
 use gyges::board::bitboard::*;
 use gyges::core::masks::RANKS;
 use gyges::{AllResults, core::*};
-use gyges::moves::movegen::{GenControlMoveCount, MoveGen, NoQuit};
-use gyges::{board::*, GenResult, PathResult};
-
-////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////// OLD EVALUATION ////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////
-
-// pub const UNIQUE_PIECE_CONTROL_SCORES: [f64; 3] = [500.0, 100.0, 50.0];
-// pub const SHARED_PIECE_CONTROL_SCORES: [f64; 3] = [75.0, 50.0, 25.0];
-
-// pub const UNIQUE_SQUARE_CONTROL_SCORE: f64 = 10.0;
-// pub const SHARED_SQUARE_CONTROL_SCORE: f64 = 5.0;
-
-// // BEST EVALUATION FUNCTION
-// pub fn get_evalulation(board: &mut BoardState, mg: &mut MoveGen) -> f64 {
-//     let p1 = unsafe { mg.gen::<GenControlMoveCount, NoQuit>(board, Player::One) };
-//     let p2 = unsafe { mg.gen::<GenControlMoveCount, NoQuit>(board, Player::Two) };
-//     let control_squares = [p1.controlled_squares, p2.controlled_squares];
-//     let control_pieces = [p1.controlled_pieces, p2.controlled_pieces];
-//     let move_counts = [p1.move_count, p2.move_count];
-
-//     let mut eval = 0.0;
-
-//     eval += mobility_eval(Player::One, move_counts) - mobility_eval(Player::Two, move_counts);
-//     eval += (control_eval(board, Player::One, control_pieces, control_squares) - control_eval(board, Player::Two, control_pieces, control_squares)) * 3.0;
-
-//     eval
-
-// }
-
-// pub fn unique_controlled_pieces_score(board: &mut BoardState, player: Player, control_pieces: [BitBoard; 2]) -> f64 {
-//     let pieces = control_pieces[player as usize];
-//     let opp_pieces = control_pieces[player.other() as usize];
-
-//     let mut unique_controlled_pieces = (pieces & !opp_pieces).0;
-
-//     let mut score = 0.0;
-//     while unique_controlled_pieces != 0 {
-//         let pos = unique_controlled_pieces.trailing_zeros() as usize;
-//         unique_controlled_pieces &= unique_controlled_pieces - 1;
-
-//         let piece = board.data[pos];
-//         score += UNIQUE_PIECE_CONTROL_SCORES[piece as usize];
-
-//     }
-
-//     score
-
-// }
-
-// pub fn shared_controlled_pieces_score(board: &mut BoardState, player: Player, control_pieces: [BitBoard; 2]) -> f64 {
-//     let mut pieces = control_pieces[player as usize].0;
-
-//     let mut score = 0.0;
-//     while pieces != 0 {
-//         let pos = pieces.trailing_zeros() as usize;
-//         pieces &= pieces - 1;
-
-//         let piece = board.data[pos];
-//         score += SHARED_PIECE_CONTROL_SCORES[piece as usize];
-
-//     }
-
-//     score
-
-// }
-
-// pub fn unique_controlled_squares_score(player: Player, control_squares: [BitBoard; 2]) -> f64 {
-//     let squares = control_squares[player as usize];
-//     let opp_squares = control_squares[player.other() as usize];
-
-//     let unique_squares = squares & !opp_squares;
-
-//     unique_squares.pop_count() as f64 * UNIQUE_SQUARE_CONTROL_SCORE
-
-// }
-
-// pub fn shared_controlled_squares_score(player: Player, control_squares: [BitBoard; 2]) -> f64 {
-//     let squares = control_squares[player as usize];
-//     squares.pop_count() as f64 * SHARED_SQUARE_CONTROL_SCORE
-
-// }
-
-// pub fn mobility_eval(player: Player, move_counts: [usize; 2]) -> f64 {
-//     let mut eval = 0.0;
-
-//     eval += move_counts[player as usize] as f64;
-
-//     eval
-
-// }
-
-// pub fn control_eval(board: &mut BoardState, player: Player, control_pieces: [BitBoard; 2], control_squares: [BitBoard; 2]) -> f64 {
-//     let mut eval = 0.0;
-
-//     eval +=  unique_controlled_pieces_score(board, player, control_pieces);
-//     eval +=  unique_controlled_squares_score(player, control_squares);
-
-//     // eval +=  shared_controlled_pieces_score(board, player, control_pieces);
-//     // eval +=  shared_controlled_squares_score(player, control_squares);
-
-//     eval
-
-// }
-
-////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////
+use gyges::moves::movegen::{MoveGen};
+use gyges::{board::*};
 
 // Drop in replacement for the old function
 pub fn get_evalulation(board: &mut BoardState, mg: &mut MoveGen) -> f64 {
@@ -337,6 +229,47 @@ impl EvaluationContext {
                 on_active_line[1] && start_continuation_counts[1] == 0,
             ];
 
+            let material_score = {
+                let mut scores = [0.0, 0.0];
+
+                for player in [Player::One, Player::Two] {
+                    let piece_value = if (unique_piece_control[player as usize].0 & sq.bit()) != 0 {
+                        WEIGHTS.midgame.unique_piece_control_weights[piece as usize]
+
+                    } else if (shared_piece_control & sq.bit()).0 != 0 {
+                        let depth_p1 = path_min_depths[0];
+                        let depth_p2 = path_min_depths[1];
+
+                        let access_p1 = if !depth_p1.is_nan() { 1.0 / depth_p1 } else { 0.0 };
+                        let access_p2 = if !depth_p2.is_nan() { 1.0 / depth_p2 } else { 0.0 };
+                        let total_access = access_p1 + access_p2;
+
+                        let ownership = if total_access == 0.0 {
+                            0.0
+
+                        } else if player == Player::One {
+                            access_p1 / total_access
+
+                        } else {
+                            access_p2 / total_access
+
+                        };
+
+                        WEIGHTS.midgame.shared_piece_control_weights[piece as usize] * ownership
+
+                    } else {
+                        0.0
+
+                    };
+
+                    scores[player as usize] = piece_value * WEIGHTS.midgame.piece_control_weight;
+
+                }
+
+                scores
+
+            };
+
             let data = PieceData {
                 piece,
                 sq,
@@ -358,6 +291,8 @@ impl EvaluationContext {
                 trapped,
                 stranded,
                 activity_powers,
+
+                material_score,
                 
             };
 
@@ -493,8 +428,8 @@ impl EvaluationContext {
 
 impl EvaluationContext {
     pub fn mg_eval(&self) -> MidGameScore {
-        let p1_piece_control = self.mg_piece_control_score(Player::One) * WEIGHTS.midgame.final_scale;
-        let p2_piece_control = self.mg_piece_control_score(Player::Two) * WEIGHTS.midgame.final_scale;
+        let p1_material = self.mg_material_score(Player::One) * WEIGHTS.midgame.final_scale;
+        let p2_material = self.mg_material_score(Player::Two) * WEIGHTS.midgame.final_scale;
 
         let p1_square_control = self.mg_square_control_score(Player::One) * WEIGHTS.midgame.final_scale;
         let p2_square_control = self.mg_square_control_score(Player::Two) * WEIGHTS.midgame.final_scale;
@@ -508,13 +443,13 @@ impl EvaluationContext {
         let one_control_score = self.mg_one_control_score() * WEIGHTS.midgame.final_scale;
 
         let p1_total: f64 = 0.0 +
-            p1_piece_control +
+            p1_material +
             p1_square_control +
             p1_path_score +
             p1_backline_penalty;
-
+    
         let p2_total: f64 = 0.0 +
-            p2_piece_control +
+            p2_material +
             p2_square_control +
             p2_path_score +
             p2_backline_penalty;
@@ -526,8 +461,8 @@ impl EvaluationContext {
             p1_total,
             p2_total,
 
-            p1_piece_control,
-            p2_piece_control,
+            p1_material,
+            p2_material,
 
             p1_square_control,
             p2_square_control,
@@ -538,47 +473,18 @@ impl EvaluationContext {
             p1_backline_penalty,
             p2_backline_penalty,
 
-            one_control_score,
+            one_control_score
 
         }
 
     }
 
-    /// Piece control score, weighted by depth-based ownership for shared pieces.
-    pub fn mg_piece_control_score(&self, player: Player) -> f64 {
+    /// Material score
+    pub fn mg_material_score(&self, player: Player) -> f64 {
         let mut score = 0.0;
 
         for pd in self.piece_data.iter() {
-            let piece_value = if (self.unique_piece_control[player as usize].0 & pd.sq.bit()) != 0 {
-                WEIGHTS.midgame.unique_piece_control_weights[pd.piece as usize]
-
-            } else if (self.shared_piece_control.0 & pd.sq.bit()) != 0 {
-                let depth_p1 = pd.path_min_depths[0];
-                let depth_p2 = pd.path_min_depths[1];
-
-                let access_p1 = if !depth_p1.is_nan() { 1.0 / depth_p1 } else { 0.0 };
-                let access_p2 = if !depth_p2.is_nan() { 1.0 / depth_p2 } else { 0.0 };
-                let total_access = access_p1 + access_p2;
-
-                let ownership = if total_access == 0.0 {
-                    0.0
-
-                } else if player == Player::One {
-                    access_p1 / total_access
-
-                } else {
-                    access_p2 / total_access
-
-                };
-
-                WEIGHTS.midgame.shared_piece_control_weights[pd.piece as usize] * ownership
-
-            } else {
-                0.0
-
-            };
-
-            score += piece_value * WEIGHTS.midgame.piece_control_weight;
+            score += pd.material_score[player as usize];
 
         }
 
@@ -752,8 +658,8 @@ pub struct MidGameScore {
     pub p1_total: f64,
     pub p2_total: f64,
 
-    pub p1_piece_control: f64,
-    pub p2_piece_control: f64,
+    pub p1_material: f64,
+    pub p2_material: f64,
 
     pub p1_square_control: f64,
     pub p2_square_control: f64,
@@ -791,10 +697,13 @@ pub struct PieceData {
     pub flow_percentage: [f64; 2],    // Percentage of total bounces that are at this piece
     pub continuation_rates: [f64; 2], // Percentage of bounces that are continuations
 
-    // ========== INTREPRETATIONS ==========
+    // ========== INTERPRETATIONS ==========
     pub trapped: [bool; 2],  // per-player: on active line and can't bounce
     pub stranded: [bool; 2], // per-player: on active line and can't reach other pieces
     pub activity_powers: [f64; 2], // Bounces + 10 * continuations, representing how "active" this piece is in the network
+
+    // ========== SCORES ==========
+    pub material_score: [f64; 2], // Material value for each player
 
 }
 
@@ -820,24 +729,8 @@ impl EvaluationContext {
         println!("P2 Piece Control: {}", self.unique_piece_control[1]);
         println!("Shared Piece Control: {}", self.shared_piece_control);
         println!();
-        println!("Per Piece Data:");
-        for pd in self.piece_data.iter() {
-            println!("[ POS: {} TYPE: {} ]:", pd.sq.0, pd.piece);
-            println!("    - Shared: {}", pd.shared);
-            println!("    - Raw Pathing Signals:");
-            println!("        - P1 Pathing: [ starts: {}  bounces: {}  continuations: {}  terminations: {}  avg_depth: {:.2} ]", pd.path_start_counts[0], pd.path_bounce_counts[0], pd.path_continuation_counts[0], pd.path_termination_counts[0], pd.path_average_depths[0]);
-            println!("        - P2 Pathing: [ starts: {}  bounces: {}  continuations: {}  terminations: {}  avg_depth: {:.2} ]", pd.path_start_counts[1], pd.path_bounce_counts[1], pd.path_continuation_counts[1], pd.path_termination_counts[1], pd.path_average_depths[1]);
-            println!("    - Computed Signals:");
-            println!("        - Starter Percentages:   [ P1: {:.3}  P2: {:.3} ]", pd.starter_percentage[0], pd.starter_percentage[1]);
-            println!("        - Flow Percentages:    [ P1: {:.3}  P2: {:.3} ]", pd.flow_percentage[0], pd.flow_percentage[1]);
-            println!("        - Continuation Rates:  [ P1: {:.3}  P2: {:.3} ]", pd.continuation_rates[0], pd.continuation_rates[1]);
-            println!("   - Interpretations:");
-            println!("        - Activity Powers:         [ P1: {:.3}  P2: {:.3} ]", pd.activity_powers[0], pd.activity_powers[1]);
-            println!("        - Trapped:  [ P1: {}  P2: {} ]", pd.trapped[0], pd.trapped[1]);
-            println!("        - Stranded: [ P1: {}  P2: {} ]", pd.stranded[0], pd.stranded[1]);
-        }
         println!();
-        self.print_extra();
+        self.print_material_breakdown();
         println!();
         let eval = self.get_evaluation();
         eval.print();
@@ -877,7 +770,7 @@ impl MidGameScore {
     pub fn print(&self) {
         println!("        - Total: {:.3}", self.total);
         println!("            P1: {:.3}  P2: {:.3}", self.p1_total, self.p2_total);
-        println!("        - Piece Control:    P1: {:.3}  P2: {:.3}", self.p1_piece_control, self.p2_piece_control);
+        println!("        - Material:        P1: {:.3}  P2: {:.3}", self.p1_material, self.p2_material);
         println!("        - Square Control:   P1: {:.3}  P2: {:.3}", self.p1_square_control, self.p2_square_control);
         println!("        - Path Score:       P1: {:.3}  P2: {:.3}", self.p1_path_score, self.p2_path_score);
         println!("        - Backline Penalty: P1: {:.3}  P2: {:.3}", self.p1_backline_penalty, self.p2_backline_penalty);
