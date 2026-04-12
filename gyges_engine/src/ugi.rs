@@ -161,6 +161,10 @@ impl Ugi {
                 self.search_options.board = BoardState::from(TEST_BOARD);
 
             }
+            Some(&"draw") => {
+                self.search_options.board = BoardState::from(DRAW_BOARD);
+
+            },
             Some(&"data") => {
                 if let Some(board_str) = raw_commands.get(2) {
                     self.search_options.board = BoardState::from(*board_str);
@@ -249,6 +253,12 @@ pub fn new_best_output(mv: &impl std::fmt::Display, score: f64, ply: i8, nodes: 
 }
 
 pub fn best_move_output(search_data: SearchData) {
-    println!("bestmove {} score {:.3} time {:.3}", search_data.best_move, search_data.best_move.score, search_data.elapsed_time);
+    if search_data.is_draw {
+        println!("bestmove null score {:.3} time {:.3}", search_data.best_move.score, search_data.elapsed_time);
+
+    } else {
+        println!("bestmove {} score {:.3} time {:.3}", search_data.best_move, search_data.best_move.score, search_data.elapsed_time);
+
+    }
 
 }

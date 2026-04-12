@@ -380,7 +380,7 @@ pub const BENCH_BOARD: [usize; 38] = [
 
 ];
 
-/// Array representing the boardstate used for testing.
+/// Array representing the boardstate used for testing. P1 has a forced win at ply 11.
 pub const TEST_BOARD: [usize; 38] = [
     0, 0, 2, 1, 3, 0,
     3, 0, 0, 3, 0, 0,
@@ -388,6 +388,18 @@ pub const TEST_BOARD: [usize; 38] = [
     0, 0, 2, 0, 0, 0,
     0, 0, 0, 2, 0, 0,
     0, 3, 0, 1, 0, 0,
+    0, 0
+
+];
+
+/// Array representing an baordstate where player 1 has no legal moves (draw).
+pub const DRAW_BOARD: [usize; 38] = [
+    3, 0, 3, 0, 3, 0, 
+    2, 2, 2, 2, 1, 1,
+    0, 0, 0, 0, 0, 1, 
+    1, 3, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0,
     0, 0
 
 ];

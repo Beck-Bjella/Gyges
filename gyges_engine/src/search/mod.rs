@@ -155,12 +155,19 @@ impl Searcher {
 
         }
 
-        // No move check (draw - but cannot search if game is over)
+        // No move check: if the current player has no legal moves the position is a draw.
         let mut move_list: GenResult = unsafe { self.mg.gen::<GenMoves, NoQuit>(board, Player::One) };
         let moves = move_list.move_list.moves(board);
 
         if moves.len() == 0 {
-            panic!("SEARCH ERROR: NO LEGAL MOVES. Cannot start the search if the game is already over.");
+            let mut ply_data = SearchData::new(1);
+            ply_data.elapsed_time = self.search_stats.start_time.elapsed().as_secs_f64();
+            ply_data.best_move.score = 0.0; // draw: neither side wins
+            ply_data.game_over = true;
+            ply_data.is_draw = true;
+            self.completed_plys.push(ply_data);
+            self.final_output();
+            return;
 
         }
 
@@ -344,14 +351,21 @@ impl Searcher {
         // Use previous ply search to order the moves, otherwise generate and order them.
         let current_player_moves: Vec<Move> = if is_root {
             self.root_moves.clone().into()
-            
+
         } else {
             let moves = move_list.moves(board);
+        
+            // No raw moves at all means the current player has no legal moves: draw.
+            if moves.is_empty() {
+                return 0.0;
+
+            }
+
             self.order_moves(moves, board, player)
 
         };
 
-        // If there are no valid moves, return negative infinity.
+        // All moves were filtered out (every move hands opponent an immediate win): loss.
         if current_player_moves.len() == 0 {
             return f64::NEG_INFINITY;
 
@@ -365,7 +379,7 @@ impl Searcher {
         for (i, mv) in current_player_moves.iter().enumerate() {
             board.make_move(mv);
 
-            // Skip moves that cycle back to a position already on the path
+            // Skip moves that cycle back to a position already on the path: cycle.
             if self.path.contains(&board.hash()) {
                 board.unmake_move(mv);
                 continue;
@@ -725,6 +739,7 @@ pub struct SearchData {
 
     pub game_over: bool,
     pub winner: usize,
+    pub is_draw: bool,
 
 }
 
@@ -739,6 +754,7 @@ impl SearchData {
             elapsed_time: 0.0,
             game_over: false,
             winner: 0,
+            is_draw: false,
 
         }
 
