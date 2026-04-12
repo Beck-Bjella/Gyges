@@ -34,6 +34,13 @@ use crate::ugi;
 pub const LOSE_MOVE_SCORE: f64 = -1000000.0;
 pub const TT_MOVE_SCORE: f64 = 1000000.0;
 
+// Win/loss score constants.
+pub const WIN_SCORE: f64 = 100_000_000.0;
+pub const LOSS_SCORE: f64 = -WIN_SCORE;
+pub const WIN_THRESHOLD: f64 = WIN_SCORE - 10_000.0;
+pub const LOSS_THRESHOLD: f64 = -WIN_SCORE + 10_000.0;
+pub const DRAW_SCORE: f64 = 0.0;
+
 /// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
 pub struct Searcher {
     pub options: SearchOptions,
@@ -104,18 +111,18 @@ impl Searcher {
         ply_data.pv = get_pv(&mut self.options.board.clone(), ply_data.ply);
         ply_data.best_move = ply_data.pv.get(0).unwrap_or(&RootMove::new_null()).clone();
 
-        if ply_data.best_move.score == f64::INFINITY {
+        if ply_data.best_move.score >= WIN_THRESHOLD {
             ply_data.game_over = true;
             ply_data.winner = 1;
 
-        } else if ply_data.best_move.score == f64::NEG_INFINITY {
+        } else if ply_data.best_move.score <= LOSS_THRESHOLD {
             ply_data.game_over = true;
             ply_data.winner = 2;
 
             // Handle best move when their are no valid moves (best losing move)
             if self.completed_plys.len() > 0 {
                 let mut prev_ply_mv = self.completed_plys.last().unwrap().best_move.clone();
-                prev_ply_mv.score = f64::NEG_INFINITY;
+                prev_ply_mv.score = LOSS_SCORE;
 
                 ply_data.best_move = prev_ply_mv;
        
@@ -162,7 +169,7 @@ impl Searcher {
         if moves.len() == 0 {
             let mut ply_data = SearchData::new(1);
             ply_data.elapsed_time = self.search_stats.start_time.elapsed().as_secs_f64();
-            ply_data.best_move.score = 0.0; // draw: neither side wins
+            ply_data.best_move.score = DRAW_SCORE;
             ply_data.game_over = true;
             ply_data.is_draw = true;
             self.completed_plys.push(ply_data);
@@ -175,7 +182,7 @@ impl Searcher {
         for mv in moves.iter() {
             if mv.is_win() {
                 let mut ply_data = SearchData::new(1);
-                ply_data.best_move = RootMove::new(*mv, f64::INFINITY, 1, 0);
+                ply_data.best_move = RootMove::new(*mv, WIN_SCORE, 1, 0);
                 self.completed_plys.push(ply_data.clone());
 
                 self.final_output();
@@ -192,7 +199,7 @@ impl Searcher {
         // Immediate loss check: No root moves since the losing moves get filtered out
         if self.root_moves.moves.len() == 0 {
             let mut ply_data = SearchData::new(1);
-            ply_data.best_move = RootMove::new(moves[0].clone(), f64::NEG_INFINITY, 1, 0);
+            ply_data.best_move = RootMove::new(moves[0].clone(), LOSS_SCORE, 1, 0);
             ply_data.game_over = true;
             ply_data.winner = 2;
 
@@ -240,9 +247,9 @@ impl Searcher {
             'aspiration_windows: loop {
                 let score = self.search(board, alpha, beta, Player::One, current_ply, current_ply);
                 
-                if self.stop || score == f64::INFINITY || score == f64::NEG_INFINITY {
+                if self.stop || score >= WIN_THRESHOLD || score <= LOSS_THRESHOLD {
                     break 'aspiration_windows;
-        
+
                 }
 
                 if score <= alpha {
@@ -270,7 +277,7 @@ impl Searcher {
 
             // Remove losing moves before next ply
             self.root_moves.sort();
-            self.root_moves.moves = self.root_moves.moves.iter().filter(|mv| mv.score != f64::NEG_INFINITY).cloned().collect();
+            self.root_moves.moves = self.root_moves.moves.iter().filter(|mv| mv.score > LOSS_THRESHOLD).cloned().collect();
 
             current_ply += 2;
 
@@ -307,10 +314,11 @@ impl Searcher {
         let data: GenResult = unsafe { self.mg.gen::<GenMoves, QuitOnThreat>(board, player) };
         let (has_threat, mut move_list) = (data.threat, data.move_list);
     
-        // If there is the threat for the current player return INF, because that move would eventualy be picked as best.
+        // If there is the threat for the current player return a depth-adjusted win score.
+        // Shallower wins score higher, so the engine always picks the quickest forced win.
         if has_threat {
-            return f64::INFINITY;
-            
+            return WIN_SCORE - (start_ply - ply) as f64;
+
         }
 
         self.search_stats.nodes += 1;
@@ -357,7 +365,7 @@ impl Searcher {
         
             // No raw moves at all means the current player has no legal moves: draw.
             if moves.is_empty() {
-                return 0.0;
+                return DRAW_SCORE;
 
             }
 
@@ -366,8 +374,9 @@ impl Searcher {
         };
 
         // All moves were filtered out (every move hands opponent an immediate win): loss.
+        // Returns -(WIN_SCORE - depth) so parent sees WIN_SCORE - depth after negation.
         if current_player_moves.len() == 0 {
-            return f64::NEG_INFINITY;
+            return LOSS_SCORE + (start_ply - ply) as f64;
 
         }
         
