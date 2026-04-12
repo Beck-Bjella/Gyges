@@ -83,6 +83,12 @@ impl Searcher {
 
     // Checks to see if the engine should stop the search.
     pub fn check_stop(&mut self) {
+        // Wait for at least ply 1 data before quiting
+        if self.completed_plys.is_empty() {
+            return;
+
+        }
+
         // Check if the stop signal has been sent.
         if self.stop_in.try_recv().is_ok() {
             self.stop = true;
@@ -150,7 +156,7 @@ impl Searcher {
     pub fn iterative_deepening_search(&mut self) {
         // Setup search
         self.stop = false;
-        let mut current_ply = 3;
+        let mut current_ply = 1;
         let board = &mut self.options.board.clone();
 
         self.search_stats = SearchStats::new();
@@ -222,15 +228,6 @@ impl Searcher {
 
             }
 
-            // Maxply check
-            if let Some(maxply) = self.options.maxply {
-                if current_ply > maxply {
-                    break 'iterative_deepening;
-    
-                }
-    
-            }
-
             // History table decay
             self.history.decay();
 
@@ -280,6 +277,15 @@ impl Searcher {
             self.root_moves.moves = self.root_moves.moves.iter().filter(|mv| mv.score > LOSS_THRESHOLD).cloned().collect();
 
             current_ply += 2;
+
+            // Maxply check
+            if let Some(maxply) = self.options.maxply {
+                if current_ply > maxply {
+                    break 'iterative_deepening;
+
+                }
+
+            }
 
         }
 
