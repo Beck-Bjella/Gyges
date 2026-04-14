@@ -426,12 +426,12 @@ impl Searcher {
                 best_score = score;
                 best_move = *mv;
 
-                // Output new best move immediately when found at root
-                if is_root && !self.stop {
-                    let elapsed = self.search_stats.start_time.elapsed().as_secs_f64();
-                    ugi::new_best_output(mv, score, start_ply, self.search_stats.nodes, elapsed);
+                // // Output new best move immediately when found at root
+                // if is_root && !self.stop {
+                //     let elapsed = self.search_stats.start_time.elapsed().as_secs_f64();
+                //     ugi::new_best_output(mv, score, start_ply, self.search_stats.nodes, elapsed);
 
-                }
+                // }
 
             }
             if best_score > alpha {
