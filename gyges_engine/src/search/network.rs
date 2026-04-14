@@ -58,7 +58,10 @@ pub const NETWORK_SCALE: f64 = 10000.0;
 ///   net.3.bias    [1]               1 float   offset 11648
 ///   Total: 11649 floats = 46596 bytes
 pub struct GygesNet {
-    w1: Box<[[f32; 180]; 64]>,
+    /// First-layer weights, transposed for cache-friendly access during sparse evaluation.
+    /// Layout: w1t[input_feature][neuron] — each column (all 64 neuron weights for one input)
+    /// is contiguous in memory, enabling vectorized addition in the fused forward pass.
+    w1t: Box<[[f32; 64]; 180]>,
     b1: [f32; 64],
     w2: [f32; 64],
     b2: f32,
@@ -85,11 +88,12 @@ impl GygesNet {
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
             .collect();
 
-        // net.0.weight: [64, 180] row-major — offset 0
-        let mut w1 = Box::new([[0f32; 180]; 64]);
+        // net.0.weight: [64, 180] row-major in the file — transpose to [180, 64] for
+        // cache-friendly sparse access: w1t[feature][neuron]
+        let mut w1t = Box::new([[0f32; 64]; 180]);
         for i in 0..64 {
             for j in 0..180 {
-                w1[i][j] = floats[i * 180 + j];
+                w1t[j][i] = floats[i * 180 + j];
             }
         }
 
@@ -108,22 +112,33 @@ impl GygesNet {
         // net.3.bias: scalar — offset 11648
         let b2 = floats[11648];
 
-        Ok(Self { w1, b1, w2, b2 })
+        Ok(Self { w1t, b1, w2, b2 })
     }
 
-    /// Encode a board position as a 180-dim feature vector.
+    /// Fused encode + forward pass.
     ///
-    /// The board is oriented so the current player's home rank is at rank 0.
-    /// For P1, the board is read as-is. For P2, ranks are flipped vertically.
-    ///
+    /// The board is encoded from the active player's perspective (P2 flipped vertically).
     /// For each square sq in 0..36:
     ///   features[sq*5 + 0] = 1.0  →  empty
     ///   features[sq*5 + 1] = 1.0  →  Piece::One
     ///   features[sq*5 + 2] = 1.0  →  Piece::Two
     ///   features[sq*5 + 3] = 1.0  →  Piece::Three
     ///   features[sq*5 + 4] = control scalar (+1.0 my / 0.0 shared / -1.0 opponent)
-    fn encode(board: &BoardState, player: Player, p1_control: u64, p2_control: u64) -> [f32; 180] {
-        let mut features = [0f32; 180];
+    ///
+    /// Instead of building this 180-element feature vector and then multiplying by the weight
+    /// matrix, we exploit the sparsity of the input: each square contributes exactly one
+    /// non-zero one-hot feature (+1.0) and optionally one control feature (+1.0 or -1.0).
+    /// That means only ~36-72 of the 180 inputs are non-zero.
+    ///
+    /// For each non-zero feature, we directly add (or subtract) the corresponding weight
+    /// column into the hidden accumulator. This replaces 64×180 = 11,520 multiply-adds
+    /// with ~36-72 vectorizable additions of 64-element arrays — no multiplies needed.
+    ///
+    /// The transposed weight layout (w1t[feature][neuron]) ensures each column is contiguous
+    /// in memory, enabling auto-vectorization of the inner loop.
+    pub fn eval(&self, board: &BoardState, player: Player, p1_control: u64, p2_control: u64) -> f64 {
+        // Start with bias — equivalent to the constant term in each neuron
+        let mut hidden = self.b1;
 
         let (my_control, opp_control) = match player {
             Player::One => (p1_control, p2_control),
@@ -131,54 +146,52 @@ impl GygesNet {
         };
 
         for sq in 0..36usize {
-            // For P2, flip the board vertically: read from the mirrored rank
+            // For P2, flip the board vertically so active player's home rank is always rank 0
             let board_sq = match player {
                 Player::One => sq,
                 Player::Two => (5 - sq / 6) * 6 + sq % 6,
             };
 
             let bit = 1u64 << board_sq;
+
+            // Determine which piece (if any) is on this square
             let piece_idx = if board.piece_bb.0 & bit != 0 {
                 board.data[board_sq] as usize + 1
             } else {
                 0
             };
-            features[sq * 5 + piece_idx] = 1.0;
 
-            // Control scalar from current player's perspective
+            // One-hot piece feature: add the weight column for this feature
+            // (equivalent to multiplying by 1.0 — no multiply needed)
+            let piece_col = &self.w1t[sq * 5 + piece_idx];
+            for i in 0..64 {
+                hidden[i] += piece_col[i];
+            }
+
+            // Control feature: only applies to occupied squares
             if piece_idx != 0 {
-                features[sq * 5 + 4] = if my_control & bit != 0 {
-                    1.0
+                let ctrl_col = &self.w1t[sq * 5 + 4];
+                if my_control & bit != 0 {
+                    // +1.0 control — add the weight column
+                    for i in 0..64 {
+                        hidden[i] += ctrl_col[i];
+                    }
                 } else if opp_control & bit != 0 {
-                    -1.0
-                } else {
-                    0.0
-                };
+                    // -1.0 control — subtract the weight column
+                    for i in 0..64 {
+                        hidden[i] -= ctrl_col[i];
+                    }
+                }
+                // 0.0 control (shared/no control) — skip entirely
             }
         }
 
-        features
-    }
-
-    /// Forward pass: encode → 64 ReLU → tanh → scaled output.
-    ///
-    /// `p1_control` / `p2_control`: unique_piece_control bitboards from EvaluationContext.
-    /// Returns a value in [-NETWORK_SCALE, +NETWORK_SCALE].
-    /// Positive means current player is winning, negative means losing.
-    pub fn eval(&self, board: &BoardState, player: Player, p1_control: u64, p2_control: u64) -> f64 {
-        let input = Self::encode(board, player, p1_control, p2_control);
-
-        // Layer 1: hidden[i] = ReLU(w1[i] · input + b1[i])
-        let mut hidden = [0f32; 64];
+        // ReLU activation
         for i in 0..64 {
-            let mut sum = self.b1[i];
-            for j in 0..180 {
-                sum += self.w1[i][j] * input[j];
-            }
-            hidden[i] = sum.max(0.0);
+            hidden[i] = hidden[i].max(0.0);
         }
 
-        // Layer 2: out = tanh(w2 · hidden + b2)
+        // Layer 2: out = tanh(w2 · hidden + b2) — dense, since hidden is fully populated
         let mut out = self.b2;
         for i in 0..64 {
             out += self.w2[i] * hidden[i];
