@@ -11,6 +11,7 @@ use std::ops::Add;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
+use gyges::GenControlMoveCount;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
@@ -354,9 +355,11 @@ impl Searcher {
 
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
-            let ctx = EvaluationContext::new(board, &mut self.mg);
-            let p1_ctrl = ctx.unique_piece_control[0].0;
-            let p2_ctrl = ctx.unique_piece_control[1].0;
+            let p1_raw = unsafe { self.mg.gen::<GenControlMoveCount, NoQuit>(board, Player::One).controlled_pieces.0 };
+            let p2_raw = unsafe { self.mg.gen::<GenControlMoveCount, NoQuit>(board, Player::Two).controlled_pieces.0 };
+            let p1_ctrl = p1_raw & !p2_raw;
+            let p2_ctrl = p2_raw & !p1_raw;
+
             return get_evalulation_nn(board, player, p1_ctrl, p2_ctrl);
 
         }
