@@ -3,12 +3,16 @@
 
 pub mod evaluation;
 pub mod eval_display;
+pub mod network;
 
 use core::f64;
 use std::cmp::Ordering;
 use std::ops::Add;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
+
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 use movegen::GenMoveCount;
 use movegen::GenMoves;
@@ -27,6 +31,7 @@ use gyges::tools::tt::*;
 use gyges::core::*;
 
 use crate::search::evaluation::*;
+use crate::search::network::get_evalulation_nn;
 use crate::consts::*;
 use crate::ugi;
 
@@ -147,6 +152,24 @@ impl Searcher {
 
         // Update final time
         best_search_data.elapsed_time = self.search_stats.start_time.elapsed().as_secs_f64();
+
+        // When randomize is on, pick randomly among moves within 5% of the best score.
+        if self.options.randomize && !best_search_data.game_over {
+            let best_score = self.root_moves.moves.first().map(|m| m.score).unwrap_or(0.0);
+            let threshold = best_score.abs() * 0.05;
+
+            let candidates: Vec<&RootMove> = self.root_moves.moves.iter()
+                .filter(|m| (best_score - m.score).abs() <= threshold)
+                .collect();
+
+            if candidates.len() > 1 {
+                let mut rng = thread_rng();
+                let chosen = candidates.choose(&mut rng).unwrap();
+                best_search_data.best_move = (*chosen).clone();
+                
+            }
+
+        }
 
         ugi::best_move_output(best_search_data);
 
@@ -331,8 +354,10 @@ impl Searcher {
 
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
-            let eval = get_evalulation(board, &mut self.mg) * player.eval_multiplier();
-            return eval;
+            let ctx = EvaluationContext::new(board, &mut self.mg);
+            let p1_ctrl = ctx.unique_piece_control[0].0;
+            let p2_ctrl = ctx.unique_piece_control[1].0;
+            return get_evalulation_nn(board, player, p1_ctrl, p2_ctrl);
 
         }
 
@@ -491,27 +516,27 @@ impl Searcher {
 
         }
 
-        let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_par_iter().filter_map(|mv| {
-            let mut sort_val: f64 = 0.0;
-            let mut new_board = board.make_move_clone(&mv);
+        // let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_par_iter().filter_map(|mv| {
+        //     let mut sort_val: f64 = 0.0;
+        //     let mut new_board = board.make_move_clone(&mv);
 
-            THREAD_LOCAL_MOVEGEN.with(|movegen| {
-                let mut movegen = movegen.borrow_mut();
+        //     THREAD_LOCAL_MOVEGEN.with(|movegen| {
+        //         let mut movegen = movegen.borrow_mut();
 
-            // let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_iter().filter_map(|mv| {
-            //     let mut sort_val: f64 = 0.0;
-            //     board.make_move(&mv);
+            let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_iter().filter_map(|mv| {
+                let mut sort_val: f64 = 0.0;
+                board.make_move(&mv);
                                                                             
-                let data = unsafe { movegen.gen::<GenMoveCount, QuitOnThreat>(&mut new_board, player.other()) };
+                let data = unsafe { self.mg.gen::<GenMoveCount, QuitOnThreat>(board, player.other()) };
                 if data.threat {
-                    // board.unmake_move(&mv);
+                    board.unmake_move(&mv);
                     return None;
 
                 }
                 let opp_movecount = data.move_count;
 
                 // If the move has a threat then increase the sort value.
-                let data = unsafe { movegen.gen::<GenNone, QuitOnThreat>(&mut new_board, player) };
+                let data = unsafe { self.mg.gen::<GenNone, QuitOnThreat>(board, player) };
                 if data.threat {
                     sort_val += 1000.0;
 
@@ -519,11 +544,11 @@ impl Searcher {
                     
                 sort_val -= opp_movecount as f64;
 
-                // board.unmake_move(&mv);
+                board.unmake_move(&mv);
 
                 return Some((mv, sort_val, self.history.fetch(&mv)));
 
-            })
+            // })
 
         }).collect();
 
@@ -808,15 +833,18 @@ pub struct SearchOptions {
     pub board: BoardState,
     pub maxply: Option<i8>,
     pub maxtime: Option<f64>,
+    /// When true, randomly select among moves within 5% of the best score.
+    pub randomize: bool,
 
 }
 
 impl SearchOptions {
     pub fn new() -> SearchOptions {
         SearchOptions {
-            board: BoardState::from(STARTING_BOARD),   
+            board: BoardState::from(STARTING_BOARD),
             maxply: Option::None,
             maxtime: Option::None,
+            randomize: false,
 
         }
 
