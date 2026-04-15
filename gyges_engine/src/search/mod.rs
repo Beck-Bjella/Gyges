@@ -19,6 +19,8 @@ use movegen::MoveGen;
 use movegen::NoQuit;
 use movegen::QuitOnThreat;
 use rayon::prelude::*;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 use gyges::board::*;
 use gyges::moves::*;
@@ -153,6 +155,24 @@ impl Searcher {
     /// Displays the final output of the search.
     pub fn final_output(&self) {
         let mut best_search_data = self.completed_plys.last().unwrap().clone();
+
+        // When randomize is on, pick randomly among moves within 5% of the best score.
+        if self.options.randomize && !best_search_data.game_over {
+            let best_score = self.root_moves.moves.first().map(|m| m.score).unwrap_or(0.0);
+            let threshold = best_score.abs() * 0.05;
+
+            let candidates: Vec<&RootMove> = self.root_moves.moves.iter()
+                .filter(|m| (best_score - m.score).abs() <= threshold)
+                .collect();
+
+            if candidates.len() > 1 {
+                let mut rng = thread_rng();
+                let chosen = candidates.choose(&mut rng).unwrap();
+                best_search_data.best_move = (*chosen).clone();
+
+            }
+
+        }
 
         // Update final time
         best_search_data.elapsed_time = self.search_stats.start_time.elapsed().as_secs_f64();
@@ -818,6 +838,7 @@ pub struct SearchOptions {
     pub maxply: Option<i8>,
     pub maxtime: Option<f64>,
     pub maxnodes: Option<usize>,
+    pub randomize: bool,
 
 }
 
@@ -828,6 +849,7 @@ impl SearchOptions {
             maxply: Option::None,
             maxtime: Option::None,
             maxnodes: Option::None,
+            randomize: false,
 
         }
 
