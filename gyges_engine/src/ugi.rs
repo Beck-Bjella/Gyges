@@ -56,6 +56,7 @@ impl Ugi {
                     println!("id author Beck-Bjella");                
                     println!("option maxPly");
                     println!("option maxTime");
+                    println!("option maxNodes");
                     println!("ugiok");
 
                 },
@@ -131,6 +132,16 @@ impl Ugi {
             Some(&"maxTime") => {
                 if let Some(value_str) = raw_commands.get(2) {
                     self.search_options.maxtime = Some(value_str.parse::<f64>().unwrap());
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"maxNodes") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    self.search_options.maxnodes = Some(value_str.parse::<usize>().unwrap());
 
                 } else {
                     println!("Unknown Command: '{}'", trimmed);

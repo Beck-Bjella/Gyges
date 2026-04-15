@@ -104,6 +104,15 @@ impl Searcher {
 
         }
 
+        // Check if the max nodes has been reached.
+        if let Some(maxnodes) = self.options.maxnodes {
+            if self.search_stats.nodes >= maxnodes {
+                self.stop = true;
+
+            }
+
+        }
+
     }
 
     /// Update search data based on the current search stats and results.
@@ -808,15 +817,17 @@ pub struct SearchOptions {
     pub board: BoardState,
     pub maxply: Option<i8>,
     pub maxtime: Option<f64>,
+    pub maxnodes: Option<usize>,
 
 }
 
 impl SearchOptions {
     pub fn new() -> SearchOptions {
         SearchOptions {
-            board: BoardState::from(STARTING_BOARD),   
+            board: BoardState::from(STARTING_BOARD),
             maxply: Option::None,
             maxtime: Option::None,
+            maxnodes: Option::None,
 
         }
 
