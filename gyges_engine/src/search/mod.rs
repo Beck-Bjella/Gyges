@@ -3,12 +3,17 @@
 
 pub mod evaluation;
 pub mod eval_display;
+pub mod network;
 
 use core::f64;
 use std::cmp::Ordering;
 use std::ops::Add;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
+
+use gyges::GenControlMoveCount;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 use movegen::GenMoveCount;
 use movegen::GenMoves;
@@ -19,8 +24,6 @@ use movegen::MoveGen;
 use movegen::NoQuit;
 use movegen::QuitOnThreat;
 use rayon::prelude::*;
-use rand::seq::SliceRandom;
-use rand::thread_rng;
 
 use gyges::board::*;
 use gyges::moves::*;
@@ -29,6 +32,7 @@ use gyges::tools::tt::*;
 use gyges::core::*;
 
 use crate::search::evaluation::*;
+use crate::search::network::get_evalulation_nn;
 use crate::consts::*;
 use crate::ugi;
 
@@ -350,8 +354,12 @@ impl Searcher {
 
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
-            let eval = get_evalulation(board, &mut self.mg) * player.eval_multiplier();
-            return eval;
+            let p1_raw = unsafe { self.mg.gen::<GenControlMoveCount, NoQuit>(board, Player::One).controlled_pieces.0 };
+            let p2_raw = unsafe { self.mg.gen::<GenControlMoveCount, NoQuit>(board, Player::Two).controlled_pieces.0 };
+            let p1_ctrl = p1_raw & !p2_raw;
+            let p2_ctrl = p2_raw & !p1_raw;
+
+            return get_evalulation_nn(board, player, p1_ctrl, p2_ctrl);
 
         }
 
@@ -510,27 +518,27 @@ impl Searcher {
 
         }
 
-        let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_par_iter().filter_map(|mv| {
-            let mut sort_val: f64 = 0.0;
-            let mut new_board = board.make_move_clone(&mv);
+        // let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_par_iter().filter_map(|mv| {
+        //     let mut sort_val: f64 = 0.0;
+        //     let mut new_board = board.make_move_clone(&mv);
 
-            THREAD_LOCAL_MOVEGEN.with(|movegen| {
-                let mut movegen = movegen.borrow_mut();
+        //     THREAD_LOCAL_MOVEGEN.with(|movegen| {
+        //         let mut movegen = movegen.borrow_mut();
 
-            // let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_iter().filter_map(|mv| {
-            //     let mut sort_val: f64 = 0.0;
-            //     board.make_move(&mv);
+            let mut moves_to_sort: Vec<(Move, f64, f64)> = moves.into_iter().filter_map(|mv| {
+                let mut sort_val: f64 = 0.0;
+                board.make_move(&mv);
                                                                             
-                let data = unsafe { movegen.gen::<GenMoveCount, QuitOnThreat>(&mut new_board, player.other()) };
+                let data = unsafe { self.mg.gen::<GenMoveCount, QuitOnThreat>(board, player.other()) };
                 if data.threat {
-                    // board.unmake_move(&mv);
+                    board.unmake_move(&mv);
                     return None;
 
                 }
                 let opp_movecount = data.move_count;
 
                 // If the move has a threat then increase the sort value.
-                let data = unsafe { movegen.gen::<GenNone, QuitOnThreat>(&mut new_board, player) };
+                let data = unsafe { self.mg.gen::<GenNone, QuitOnThreat>(board, player) };
                 if data.threat {
                     sort_val += 1000.0;
 
@@ -538,11 +546,11 @@ impl Searcher {
                     
                 sort_val -= opp_movecount as f64;
 
-                // board.unmake_move(&mv);
+                board.unmake_move(&mv);
 
                 return Some((mv, sort_val, self.history.fetch(&mv)));
 
-            })
+            // })
 
         }).collect();
 

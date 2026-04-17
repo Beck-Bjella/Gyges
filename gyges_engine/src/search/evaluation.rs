@@ -7,6 +7,7 @@ use gyges::{AllResults, core::*};
 use gyges::moves::movegen::{MoveGen};
 use gyges::{board::*};
 
+use crate::search::network::try_evalulation_nn;
 
 //////////////////////////////////////////////////////////////////////////////////
 ////////////////////// GYGES ENGINE V1.1.0 EVALUATION ////////////////////////////
@@ -114,7 +115,6 @@ pub fn control_eval(board: &mut BoardState, player: Player, control_pieces: [Bit
 //////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////
 
-
 // Drop in replacement for the old function
 pub fn get_evalulation_new(board: &mut BoardState, mg: &mut MoveGen) -> f64 {
     let evaluation_ctx = EvaluationContext::new(board, mg);
@@ -122,7 +122,7 @@ pub fn get_evalulation_new(board: &mut BoardState, mg: &mut MoveGen) -> f64 {
 
 }
 
-/// Ones piece-square table 
+/// Ones piece-square table
 #[rustfmt::skip]
 pub const PST_ONE: [f64; 36] = [
     100.0, 100.0, 100.0, 100.0, 100.0, 100.0,  // rank 0
@@ -843,6 +843,21 @@ impl EvaluationContext {
         let eval = self.get_evaluation();
         eval.print();
 
+        // ── Neural network eval ───────────────────────────────────────────────
+        println!();
+        match try_evalulation_nn(&self.board, self.unique_piece_control[0].0, self.unique_piece_control[1].0) {
+            Some((p1, p2)) => {
+                println!("  ══ Neural Network Eval ══");
+                println!("    P1 to move: {:>+.4}  P2 to move: {:>+.4}", p1, p2);
+           
+            }
+            None => {
+                println!("  ══ Neural Network Eval ══  (not loaded)");
+
+            }
+
+        }
+
     }
 
 }
@@ -857,7 +872,6 @@ impl EvaluationScore {
         println!("    [Midgame  weight: {:.3}]", self.phase);
         self.mg.print();
         println!();
-       
 
     }
 
