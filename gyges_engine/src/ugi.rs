@@ -32,6 +32,20 @@ impl Ugi {
 
     }
 
+    /// Initializes the engine
+    pub fn init(&self) {
+        // Initialize transposition table
+        init_tt(2usize.pow(22)); // 400 MB
+
+        // Configure rayon
+        rayon::ThreadPoolBuilder::new().num_threads(4).build_global().unwrap();
+
+        // Load default network
+        let _ = network::load_network("./weights/default.bin");
+
+    }
+
+    /// Starts the UGI loop
     pub fn start(&mut self) {
         self.init();
 
@@ -53,11 +67,13 @@ impl Ugi {
             match raw_commands.first() {
                 Some(&"ugi") => {
                     println!("id name Helios");
-                    println!("id author Beck-Bjella");                
+                    println!("id author Beck-Bjella");
                     println!("option maxPly");
                     println!("option maxTime");
                     println!("option maxNodes");
                     println!("option randomize");
+                    println!("option nn");
+                    println!("option weightsPath");
                     println!("ugiok");
 
                 },
@@ -109,15 +125,6 @@ impl Ugi {
     
     }
 
-    pub fn init(&self) {
-        // Initialize transposition table
-        init_tt(2usize.pow(22)); // 400 MB
-
-        // Configure rayon
-        rayon::ThreadPoolBuilder::new().num_threads(4).build_global().unwrap();
-
-    }
-
     pub fn parse_option(&mut self, trimmed: &str, raw_commands: Vec<&str>) {
         match raw_commands.get(1) {
             Some(&"maxPly") => {
@@ -159,8 +166,34 @@ impl Ugi {
                     }
 
                 } else {
-                    // Toggle if no value given
-                    self.search_options.randomize = !self.search_options.randomize;
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"nn") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    match *value_str {
+                        "true" | "1" | "on" => self.search_options.nn = true,
+                        "false" | "0" | "off" => self.search_options.nn = false,
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"weightsPath") => {
+                if let Some(path) = raw_commands.get(2) {
+                    if let Err(e) = network::load_network(path) {
+                        println!("info string weight load failed: {}", e);
+
+                    }
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
 
                 }
 
@@ -213,6 +246,13 @@ impl Ugi {
 
     pub fn go(&mut self) {
         unsafe { tt().reset() }; // Reset tt before new search
+
+        // Display eval type
+        match (self.search_options.nn, network::network_name()) {
+            (true, Some(name)) => println!("info string NN evaluation using {} enabled", name),
+            _ => println!("info string classical evaluation enabled"),
+        
+        }
 
         self.searching = true;
 

@@ -32,7 +32,7 @@ use gyges::tools::tt::*;
 use gyges::core::*;
 
 use crate::search::evaluation::*;
-use crate::search::network::get_evalulation_nn;
+use crate::search::network::{get_evalulation_nn, network_loaded};
 use crate::consts::*;
 use crate::ugi;
 
@@ -354,12 +354,19 @@ impl Searcher {
 
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
-            let p1_raw = unsafe { self.mg.gen::<GenControlMoveCount, NoQuit>(board, Player::One).controlled_pieces.0 };
-            let p2_raw = unsafe { self.mg.gen::<GenControlMoveCount, NoQuit>(board, Player::Two).controlled_pieces.0 };
-            let p1_ctrl = p1_raw & !p2_raw;
-            let p2_ctrl = p2_raw & !p1_raw;
+            if self.options.nn && network_loaded() {
+                let p1_raw = unsafe { self.mg.gen::<GenControlMoveCount, NoQuit>(board, Player::One).controlled_pieces.0 };
+                let p2_raw = unsafe { self.mg.gen::<GenControlMoveCount, NoQuit>(board, Player::Two).controlled_pieces.0 };
+                let p1_ctrl = p1_raw & !p2_raw;
+                let p2_ctrl = p2_raw & !p1_raw;
 
-            return get_evalulation_nn(board, player, p1_ctrl, p2_ctrl);
+                return get_evalulation_nn(board, player, p1_ctrl, p2_ctrl);
+
+            } else {
+                // Classical evaluation fallback
+                return get_evalulation(board, &mut self.mg) * player.eval_multiplier();
+
+            }
 
         }
 
@@ -837,6 +844,7 @@ pub struct SearchOptions {
     pub maxtime: Option<f64>,
     pub maxnodes: Option<usize>,
     pub randomize: bool,
+    pub nn: bool, // Use NN if set, fallback to old evaluation if not loaded
 
 }
 
@@ -848,6 +856,7 @@ impl SearchOptions {
             maxtime: Option::None,
             maxnodes: Option::None,
             randomize: false,
+            nn: true,
 
         }
 

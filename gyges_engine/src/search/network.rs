@@ -9,35 +9,53 @@
 
 use gyges::{board::*, core::*};
 use std::fs;
-use std::sync::OnceLock;
 
-/// Global network instance — initialised once at startup via `init_network`.
-static NETWORK: OnceLock<GygesNet> = OnceLock::new();
+/// Global network instance — loaded via `load_network`, read during search.
+/// Must not be replaced while a search is in progress (same discipline as the TT).
+static mut NETWORK: Option<GygesNet> = None;
+static mut NETWORK_NAME: Option<String> = None;
 
-/// Load weights from `path` and store in the global instance.
-/// Call this once at startup before any search begins.
-pub fn init_network(path: &str) -> Result<(), String> {
+/// Load weights from `path` and install them as the active network.
+/// Can be called multiple times to swap weights — must only be called when no
+/// search is running.
+pub fn load_network(path: &str) -> Result<(), String> {
     let net = GygesNet::load(path)?;
-    NETWORK.set(net).map_err(|_| "Network already initialised".to_string())
+    let name = std::path::Path::new(path)
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string());
+    unsafe {
+        NETWORK = Some(net);
+        NETWORK_NAME = Some(name);
+    }
+    Ok(())
 }
 
-/// Returns the raw network score for both players, or None if not loaded.
-/// `p1_control` / `p2_control` are the unique-piece-control bitboards from EvaluationContext.
+/// Returns true if a network is currently loaded.
+pub fn network_loaded() -> bool {
+    unsafe { NETWORK.is_some() }
+}
+
+/// Returns the filename of the loaded network, if any.
+pub fn network_name() -> Option<&'static str> {
+    unsafe { NETWORK_NAME.as_deref() }
+}
+
+/// Returns the raw network score for both players (P1-relative), or None if not loaded.
 pub fn try_evalulation_nn(board: &BoardState, p1_control: u64, p2_control: u64) -> Option<(f64, f64)> {
-    let net = NETWORK.get()?;
+    let net = unsafe { NETWORK.as_ref() }?;
     Some((
-        net.eval(board, Player::One,  p1_control, p2_control),
-        -net.eval(board, Player::Two,  p1_control, p2_control), // negate to P1-relative for display
+        net.eval(board, Player::One, p1_control, p2_control),
+        -net.eval(board, Player::Two, p1_control, p2_control),
     ))
 }
 
-/// Drop-in replacement for `get_evalulation` — requires control bitboards from EvaluationContext.
+/// Drop-in replacement for `get_evalulation` — requires control bitboards.
 ///
-/// Returns a score from the current player's perspective (negamax-compatible):
-///   positive = current player is winning
-///   negative = current player is losing
+/// Returns a score from the current player's perspective (negamax-compatible).
+/// Panics if no network is loaded — gate with `network_loaded()` or a config flag.
 pub fn get_evalulation_nn(board: &BoardState, player: Player, p1_control: u64, p2_control: u64) -> f64 {
-    let net = NETWORK.get().expect("Network not initialised — call init_network first");
+    let net = unsafe { NETWORK.as_ref() }.expect("Network not loaded — call load_network first");
     net.eval(board, player, p1_control, p2_control)
 }
 
@@ -65,6 +83,7 @@ pub struct GygesNet {
     b1: [f32; 64],
     w2: [f32; 64],
     b2: f32,
+
 }
 
 impl GygesNet {
@@ -81,6 +100,7 @@ impl GygesNet {
                 bytes.len(),
                 expected_bytes
             ));
+
         }
 
         let floats: Vec<f32> = bytes
@@ -94,25 +114,30 @@ impl GygesNet {
         for i in 0..64 {
             for j in 0..180 {
                 w1t[j][i] = floats[i * 180 + j];
+
             }
+
         }
 
         // net.0.bias: [64] — offset 11520
         let mut b1 = [0f32; 64];
         for i in 0..64 {
             b1[i] = floats[11520 + i];
+
         }
 
         // net.3.weight: [1, 64] — offset 11584
         let mut w2 = [0f32; 64];
         for i in 0..64 {
             w2[i] = floats[11584 + i];
+
         }
 
         // net.3.bias: scalar — offset 11648
         let b2 = floats[11648];
 
         Ok(Self { w1t, b1, w2, b2 })
+
     }
 
     /// Fused encode + forward pass.
@@ -157,8 +182,10 @@ impl GygesNet {
             // Determine which piece (if any) is on this square
             let piece_idx = if board.piece_bb.0 & bit != 0 {
                 board.data[board_sq] as usize + 1
+
             } else {
                 0
+
             };
 
             // One-hot piece feature: add the weight column for this feature
@@ -166,6 +193,7 @@ impl GygesNet {
             let piece_col = &self.w1t[sq * 5 + piece_idx];
             for i in 0..64 {
                 hidden[i] += piece_col[i];
+
             }
 
             // Control feature: only applies to occupied squares
@@ -175,28 +203,37 @@ impl GygesNet {
                     // +1.0 control — add the weight column
                     for i in 0..64 {
                         hidden[i] += ctrl_col[i];
+
                     }
+                    
                 } else if opp_control & bit != 0 {
                     // -1.0 control — subtract the weight column
                     for i in 0..64 {
                         hidden[i] -= ctrl_col[i];
+
                     }
+
                 }
                 // 0.0 control (shared/no control) — skip entirely
             }
+
         }
 
         // ReLU activation
         for i in 0..64 {
             hidden[i] = hidden[i].max(0.0);
+
         }
 
         // Layer 2: out = tanh(w2 · hidden + b2) — dense, since hidden is fully populated
         let mut out = self.b2;
         for i in 0..64 {
             out += self.w2[i] * hidden[i];
+            
         }
 
         (out.tanh() as f64) * NETWORK_SCALE
+        
     }
+
 }
