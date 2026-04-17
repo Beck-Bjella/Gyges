@@ -56,6 +56,8 @@ impl Ugi {
                     println!("id author Beck-Bjella");                
                     println!("option maxPly");
                     println!("option maxTime");
+                    println!("option maxNodes");
+                    println!("option randomize");
                     println!("ugiok");
 
                 },
@@ -134,6 +136,31 @@ impl Ugi {
 
                 } else {
                     println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"maxNodes") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    self.search_options.maxnodes = Some(value_str.parse::<usize>().unwrap());
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"randomize") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    match *value_str {
+                        "true" | "1" | "on" => self.search_options.randomize = true,
+                        "false" | "0" | "off" => self.search_options.randomize = false,
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
+
+                } else {
+                    // Toggle if no value given
+                    self.search_options.randomize = !self.search_options.randomize;
 
                 }
 

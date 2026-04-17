@@ -19,6 +19,8 @@ use movegen::MoveGen;
 use movegen::NoQuit;
 use movegen::QuitOnThreat;
 use rayon::prelude::*;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
 
 use gyges::board::*;
 use gyges::moves::*;
@@ -104,6 +106,15 @@ impl Searcher {
 
         }
 
+        // Check if the max nodes has been reached.
+        if let Some(maxnodes) = self.options.maxnodes {
+            if self.search_stats.nodes >= maxnodes {
+                self.stop = true;
+
+            }
+
+        }
+
     }
 
     /// Update search data based on the current search stats and results.
@@ -144,6 +155,14 @@ impl Searcher {
     /// Displays the final output of the search.
     pub fn final_output(&self) {
         let mut best_search_data = self.completed_plys.last().unwrap().clone();
+
+        // When randomize is on, pick a random move from all root moves.
+        if self.options.randomize && !best_search_data.game_over && !self.root_moves.moves.is_empty() {
+            let mut rng = thread_rng();
+            let chosen = self.root_moves.moves.choose(&mut rng).unwrap();
+            best_search_data.best_move = chosen.clone();
+
+        }
 
         // Update final time
         best_search_data.elapsed_time = self.search_stats.start_time.elapsed().as_secs_f64();
@@ -426,12 +445,12 @@ impl Searcher {
                 best_score = score;
                 best_move = *mv;
 
-                // Output new best move immediately when found at root
-                if is_root && !self.stop {
-                    let elapsed = self.search_stats.start_time.elapsed().as_secs_f64();
-                    ugi::new_best_output(mv, score, start_ply, self.search_stats.nodes, elapsed);
+                // // Output new best move immediately when found at root
+                // if is_root && !self.stop {
+                //     let elapsed = self.search_stats.start_time.elapsed().as_secs_f64();
+                //     ugi::new_best_output(mv, score, start_ply, self.search_stats.nodes, elapsed);
 
-                }
+                // }
 
             }
             if best_score > alpha {
@@ -808,15 +827,19 @@ pub struct SearchOptions {
     pub board: BoardState,
     pub maxply: Option<i8>,
     pub maxtime: Option<f64>,
+    pub maxnodes: Option<usize>,
+    pub randomize: bool,
 
 }
 
 impl SearchOptions {
     pub fn new() -> SearchOptions {
         SearchOptions {
-            board: BoardState::from(STARTING_BOARD),   
+            board: BoardState::from(STARTING_BOARD),
             maxply: Option::None,
             maxtime: Option::None,
+            maxnodes: Option::None,
+            randomize: false,
 
         }
 

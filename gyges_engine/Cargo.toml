@@ -25,3 +25,4 @@ debug = false
 gyges = { path = "../gyges", version = "1.1.0" }
 itertools = "0.13.0"
 rayon = "1.10.0"
+rand = "0.8"
