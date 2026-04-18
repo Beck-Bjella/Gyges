@@ -845,7 +845,7 @@ impl EvaluationContext {
 
         // ── Neural network eval ───────────────────────────────────────────────
         println!();
-        match try_evalulation_nn(&self.board, self.unique_piece_control[0].0, self.unique_piece_control[1].0) {
+        match try_evalulation_nn(&self.board) {
             Some((p1, p2)) => {
                 println!("  ══ Neural Network Eval ══");
                 println!("    P1 to move: {:>+.4}  P2 to move: {:>+.4}", p1, p2);
