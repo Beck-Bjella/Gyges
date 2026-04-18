@@ -4,10 +4,12 @@
 pub mod evaluation;
 pub mod eval_display;
 pub mod network;
+pub mod policy_data;
 
 use core::f64;
 use std::cmp::Ordering;
 use std::ops::Add;
+use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
@@ -33,6 +35,7 @@ use gyges::core::*;
 
 use crate::search::evaluation::*;
 use crate::search::network::{get_evalulation_nn, network_loaded};
+use crate::search::policy_data::PolicyDataLogger;
 use crate::consts::*;
 use crate::ugi;
 
@@ -61,7 +64,12 @@ pub struct Searcher {
 
     pub history: HistoryTable,
 
-    pub path: Vec<u64>
+    pub path: Vec<u64>,
+
+    /// Snapshot of root_moves captured right before the losing-move filter
+    /// runs on each completed ply. Used only when policy-data collection is
+    /// enabled; holds the final iteration's scored moves at IDS exit.
+    pub policy_snapshot: Option<Vec<RootMove>>,
 
 }
 
@@ -81,7 +89,9 @@ impl Searcher {
 
             history: HistoryTable::default(),
 
-            path: Vec::new()
+            path: Vec::new(),
+
+            policy_snapshot: None,
 
         }
 
@@ -295,6 +305,13 @@ impl Searcher {
             ugi::info_output(ply_data.clone());
             self.completed_plys.push(ply_data);
 
+            // Snapshot scored root moves before any filtering — used by the
+            // policy-data hook so the final iteration's scores are preserved.
+            if self.options.policy_data {
+                self.policy_snapshot = Some(self.root_moves.moves.clone());
+
+            }
+
             // Remove losing moves before next ply
             self.root_moves.sort();
             self.root_moves.moves = self.root_moves.moves.iter().filter(|mv| mv.score > LOSS_THRESHOLD).cloned().collect();
@@ -319,6 +336,21 @@ impl Searcher {
         //     EvaluationContext::new(&mut board, &mut self.mg).print();
 
         // }
+
+        // Policy-data hook: dump root moves with final-iteration scores.
+        if self.options.policy_data {
+            if let Some(logger) = &self.options.policy_logger {
+                if let Some(snap) = &self.policy_snapshot {
+                    if let Err(e) = logger.record(&self.options.board, snap) {
+                        println!("info string policy data write failed: {}", e);
+
+                    }
+
+                }
+
+            }
+
+        }
 
         self.final_output();
 
@@ -845,6 +877,8 @@ pub struct SearchOptions {
     pub maxnodes: Option<usize>,
     pub randomize: bool,
     pub nn: bool, // Use NN if set, fallback to old evaluation if not loaded
+    pub policy_data: bool,
+    pub policy_logger: Option<Arc<PolicyDataLogger>>,
 
 }
 
@@ -857,6 +891,8 @@ impl SearchOptions {
             maxnodes: Option::None,
             randomize: false,
             nn: true,
+            policy_data: false,
+            policy_logger: None,
 
         }
 

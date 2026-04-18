@@ -2,6 +2,7 @@
 //! 
 
 use std::io;
+use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
@@ -10,6 +11,7 @@ use rayon;
 use gyges::{MoveGen, board::*};
 
 use crate::search::*;
+use crate::search::policy_data::PolicyDataLogger;
 use crate::consts::*;
 
 pub struct Ugi {
@@ -17,7 +19,8 @@ pub struct Ugi {
     searcher_stop: Option<Sender<bool>>,
     searching: bool,
     search_options: SearchOptions,
-   
+    policy_data_path: String,
+
 }
 
 impl Ugi {
@@ -25,9 +28,10 @@ impl Ugi {
         Ugi {
             searching_thread: Option::None,
             searcher_stop: Option::None,
-            searching: false, 
+            searching: false,
             search_options: SearchOptions::new(),
-            
+            policy_data_path: String::from("data/policy.csv"),
+
         }
 
     }
@@ -74,6 +78,8 @@ impl Ugi {
                     println!("option randomize");
                     println!("option nn");
                     println!("option weightsPath");
+                    println!("option policyData");
+                    println!("option policyDataPath");
                     println!("ugiok");
 
                 },
@@ -189,6 +195,67 @@ impl Ugi {
                 if let Some(path) = raw_commands.get(2) {
                     if let Err(e) = network::load_network(path) {
                         println!("info string weight load failed: {}", e);
+
+                    }
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"policyData") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    match *value_str {
+                        "true" | "1" | "on" => {
+                            self.search_options.policy_data = true;
+                            if self.search_options.policy_logger.is_none() {
+                                match PolicyDataLogger::new(&self.policy_data_path) {
+                                    Ok(logger) => {
+                                        println!("info string policy data logging to {}", logger.path().display());
+                                        self.search_options.policy_logger = Some(Arc::new(logger));
+
+                                    }
+                                    Err(e) => {
+                                        println!("info string policy data init failed: {}", e);
+                                        self.search_options.policy_data = false;
+
+                                    }
+
+                                }
+
+                            }
+
+                        }
+                        "false" | "0" | "off" => self.search_options.policy_data = false,
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"policyDataPath") => {
+                if let Some(path) = raw_commands.get(2) {
+                    self.policy_data_path = (*path).to_string();
+                    // If logging is already active, reopen at the new path.
+                    if self.search_options.policy_data {
+                        match PolicyDataLogger::new(&self.policy_data_path) {
+                            Ok(logger) => {
+                                println!("info string policy data logging to {}", logger.path().display());
+                                self.search_options.policy_logger = Some(Arc::new(logger));
+
+                            }
+                            Err(e) => {
+                                println!("info string policy data init failed: {}", e);
+                                self.search_options.policy_logger = None;
+                                self.search_options.policy_data = false;
+
+                            }
+
+                        }
 
                     }
 
