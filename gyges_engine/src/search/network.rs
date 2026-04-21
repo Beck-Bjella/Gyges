@@ -162,7 +162,7 @@ impl GygesNet {
 
     /// Fused encode + forward pass.
     ///
-    /// The board is encoded from the active player's perspective (P2 flipped vertically).
+    /// The board is encoded from the active player's perspective (P2 rotated 180°).
     /// For each square sq in 0..36:
     ///   features[sq*4 + 0] = 1.0  →  empty
     ///   features[sq*4 + 1] = 1.0  →  Piece::One
@@ -184,10 +184,10 @@ impl GygesNet {
         let mut hidden = self.b1;
 
         for sq in 0..36usize {
-            // For P2, flip the board vertically so active player's home rank is always rank 0
+            // For P2, rotate the board 180° so active player's home rank is always rank 0
             let board_sq = match player {
                 Player::One => sq,
-                Player::Two => (5 - sq / 6) * 6 + sq % 6,
+                Player::Two => 35 - sq,
             };
 
             let bit = 1u64 << board_sq;
