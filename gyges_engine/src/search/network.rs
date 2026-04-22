@@ -1,6 +1,6 @@
 //! Neural network evaluation — fast board eval without gen_all.
 //!
-//! Architecture: 144 → 64 (ReLU) → 1 (tanh)
+//! Architecture: 144 → 128 (ReLU) → 1 (tanh)
 //! Weights loaded from `weights.bin` exported by the Python training script.
 //!
 //! The board is always encoded from the current player's perspective:
@@ -83,25 +83,28 @@ pub fn eval_from_accumulator_active(acc: &Accumulator, player: Player) -> f64 {
 /// Scale the tanh output to match the hand-crafted eval's magnitude.
 pub const NETWORK_SCALE: f64 = 10000.0;
 
-/// Two-layer MLP: 144 → 64 (ReLU) → 1 (tanh)
+/// Hidden layer width.
+pub const HIDDEN: usize = 64;
+
+/// Two-layer MLP: 144 → HIDDEN (ReLU) → 1 (tanh)
 ///
 /// Input encoding — 4 features per square × 36 squares = 144:
 ///   Board is always oriented so the current player's home rank is at rank 0.
 ///   features[sq*4 + 0..3] = one-hot piece type (empty, 1-ring, 2-ring, 3-ring)
 ///
 /// Weight layout in `weights.bin` (float32, little-endian):
-///   net.0.weight  [64 × 144]    9216 floats  offset 0
-///   net.0.bias    [64]             64 floats  offset 9216
-///   net.3.weight  [1  × 64]       64 floats  offset 9280
-///   net.3.bias    [1]               1 float   offset 9344
-///   Total: 9345 floats = 37380 bytes
+///   net.0.weight  [128 × 144]   18432 floats  offset 0
+///   net.0.bias    [128]           128 floats  offset 18432
+///   net.3.weight  [1  × 128]      128 floats  offset 18560
+///   net.3.bias    [1]               1 float   offset 18688
+///   Total: 18689 floats = 74756 bytes
 pub struct GygesNet {
     /// First-layer weights, transposed for cache-friendly access during sparse evaluation.
-    /// Layout: w1t[input_feature][neuron] — each column (all 64 neuron weights for one input)
+    /// Layout: w1t[input_feature][neuron] — each column (all HIDDEN neuron weights for one input)
     /// is contiguous in memory, enabling vectorized addition in the fused forward pass.
-    w1t: Box<[[f32; 64]; 144]>,
-    b1: [f32; 64],
-    w2: [f32; 64],
+    w1t: Box<[[f32; HIDDEN]; 144]>,
+    b1: [f32; HIDDEN],
+    w2: [f32; HIDDEN],
     b2: f32,
 
 }
@@ -112,13 +115,16 @@ impl GygesNet {
         let bytes = fs::read(path)
             .map_err(|e| format!("Cannot read weight file '{}': {}", path, e))?;
 
-        let expected_bytes = 9345 * 4;
+        let expected_floats = HIDDEN * 144 + HIDDEN + HIDDEN + 1;
+        let expected_bytes = expected_floats * 4;
         if bytes.len() != expected_bytes {
             return Err(format!(
-                "Weight file is {} bytes, expected {} (9345 × float32). \
-                 Check that the Python export matches the 144→64→1 architecture.",
+                "Weight file is {} bytes, expected {} ({} × float32). \
+                 Check that the Python export matches the 144→{}→1 architecture.",
                 bytes.len(),
-                expected_bytes
+                expected_bytes,
+                expected_floats,
+                HIDDEN
             ));
 
         }
@@ -128,10 +134,10 @@ impl GygesNet {
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
             .collect();
 
-        // net.0.weight: [64, 144] row-major in the file — transpose to [144, 64] for
+        // net.0.weight: [HIDDEN, 144] row-major in the file — transpose to [144, HIDDEN] for
         // cache-friendly sparse access: w1t[feature][neuron]
-        let mut w1t = Box::new([[0f32; 64]; 144]);
-        for i in 0..64 {
+        let mut w1t = Box::new([[0f32; HIDDEN]; 144]);
+        for i in 0..HIDDEN {
             for j in 0..144 {
                 w1t[j][i] = floats[i * 144 + j];
 
@@ -139,22 +145,27 @@ impl GygesNet {
 
         }
 
-        // net.0.bias: [64] — offset 9216
-        let mut b1 = [0f32; 64];
-        for i in 0..64 {
-            b1[i] = floats[9216 + i];
+        let w1_len = HIDDEN * 144;
+        let b1_off = w1_len;
+        let w2_off = b1_off + HIDDEN;
+        let b2_off = w2_off + HIDDEN;
+
+        // net.0.bias: [HIDDEN]
+        let mut b1 = [0f32; HIDDEN];
+        for i in 0..HIDDEN {
+            b1[i] = floats[b1_off + i];
 
         }
 
-        // net.3.weight: [1, 64] — offset 9280
-        let mut w2 = [0f32; 64];
-        for i in 0..64 {
-            w2[i] = floats[9280 + i];
+        // net.3.weight: [1, HIDDEN]
+        let mut w2 = [0f32; HIDDEN];
+        for i in 0..HIDDEN {
+            w2[i] = floats[w2_off + i];
 
         }
 
-        // net.3.bias: scalar — offset 9344
-        let b2 = floats[9344];
+        // net.3.bias: scalar
+        let b2 = floats[b2_off];
 
         Ok(Self { w1t, b1, w2, b2 })
 
@@ -174,8 +185,8 @@ impl GygesNet {
     /// non-zero one-hot feature (+1.0). That means only 36 of the 144 inputs are non-zero.
     ///
     /// For each non-zero feature, we directly add the corresponding weight column into the
-    /// hidden accumulator. This replaces 64×144 = 9,216 multiply-adds with 36 vectorizable
-    /// additions of 64-element arrays — no multiplies needed.
+    /// hidden accumulator. This replaces HIDDEN×144 multiply-adds with 36 vectorizable
+    /// additions of HIDDEN-element arrays — no multiplies needed.
     ///
     /// The transposed weight layout (w1t[feature][neuron]) ensures each column is contiguous
     /// in memory, enabling auto-vectorization of the inner loop.
@@ -203,7 +214,7 @@ impl GygesNet {
             // One-hot piece feature: add the weight column for this feature
             // (equivalent to multiplying by 1.0 — no multiply needed)
             let piece_col = &self.w1t[sq * 4 + piece_idx];
-            for i in 0..64 {
+            for i in 0..HIDDEN {
                 hidden[i] += piece_col[i];
 
             }
@@ -211,16 +222,16 @@ impl GygesNet {
         }
 
         // ReLU activation
-        for i in 0..64 {
+        for i in 0..HIDDEN {
             hidden[i] = hidden[i].max(0.0);
 
         }
 
         // Layer 2: out = tanh(w2 · hidden + b2) — dense, since hidden is fully populated
         let mut out = self.b2;
-        for i in 0..64 {
+        for i in 0..HIDDEN {
             out += self.w2[i] * hidden[i];
-            
+
         }
 
         (out.tanh() as f64) * NETWORK_SCALE
@@ -248,7 +259,7 @@ impl GygesNet {
 
             };
             let col_p1 = &self.w1t[sq * 4 + p1_idx];
-            for i in 0..64 {
+            for i in 0..HIDDEN {
                 p1[i] += col_p1[i];
 
             }
@@ -263,7 +274,7 @@ impl GygesNet {
 
             };
             let col_p2 = &self.w1t[sq * 4 + p2_idx];
-            for i in 0..64 {
+            for i in 0..HIDDEN {
                 p2[i] += col_p2[i];
 
             }
@@ -336,7 +347,7 @@ impl GygesNet {
             let sub_p2 = &self.w1t[f_old_p2];
             let add_p2 = &self.w1t[f_new_p2];
 
-            for j in 0..64 {
+            for j in 0..HIDDEN {
                 next.p1[j] += add_p1[j] - sub_p1[j];
                 next.p2[j] += add_p2[j] - sub_p2[j];
 
@@ -355,7 +366,7 @@ impl GygesNet {
         };
 
         let mut out = self.b2;
-        for i in 0..64 {
+        for i in 0..HIDDEN {
             out += self.w2[i] * pre[i].max(0.0);
 
         }
@@ -371,14 +382,14 @@ impl GygesNet {
 /// Both accumulators store the pre-ReLU output of `fc1` (i.e. `b1 + sum of weight columns`),
 /// using the same weight matrix; only the feature indexing differs:
 ///   - `p1` indexes by raw board square `q`
-///   - `p2` indexes by `MIRROR[q]` (rank flip), matching `GygesNet::eval`'s P2 path
+///   - `p2` indexes by `MIRROR[q]` (180° rotation), matching `GygesNet::eval`'s P2 path
 ///
 /// Single-perspective network, two accumulator views — eval reads whichever one
 /// matches the side to move.
 #[derive(Clone, Copy)]
 pub struct Accumulator {
-    pub p1: [f32; 64],
-    pub p2: [f32; 64],
+    pub p1: [f32; HIDDEN],
+    pub p2: [f32; HIDDEN],
 
 }
 
@@ -386,19 +397,20 @@ impl Accumulator {
     /// All-zeros accumulator — used only to size the search stack. Real values
     /// come from `accumulator_from_scratch` (root) and `patch_make` (children).
     pub fn zero() -> Self {
-        Accumulator { p1: [0.0; 64], p2: [0.0; 64] }
+        Accumulator { p1: [0.0; HIDDEN], p2: [0.0; HIDDEN] }
 
     }
 
 }
 
-/// Rank-flip permutation: square `q` from P1's view maps to `MIRROR[q]` from P2's view.
-/// Same flip the existing `eval` does for P2 (`(5 - sq/6) * 6 + sq%6`).
+/// 180° board rotation: square `q` from P1's view maps to `MIRROR[q] = 35 - q`
+/// from P2's view. Matches `eval`'s P2 path (`board_sq = 35 - sq`), which flips
+/// both rank and file so the active player's home rank is always rank 0.
 const MIRROR: [u8; 36] = {
     let mut m = [0u8; 36];
     let mut q = 0;
     while q < 36 {
-        m[q] = ((5 - q / 6) * 6 + q % 6) as u8;
+        m[q] = (35 - q) as u8;
         q += 1;
 
     }
@@ -435,15 +447,15 @@ mod tests {
             (state as f32 / u32::MAX as f32) * 2.0 - 1.0
         };
 
-        let mut w1t = Box::new([[0f32; 64]; 144]);
+        let mut w1t = Box::new([[0f32; HIDDEN]; 144]);
         for j in 0..144 {
-            for i in 0..64 {
+            for i in 0..HIDDEN {
                 w1t[j][i] = next();
             }
         }
-        let mut b1 = [0f32; 64];
+        let mut b1 = [0f32; HIDDEN];
         for v in b1.iter_mut() { *v = next(); }
-        let mut w2 = [0f32; 64];
+        let mut w2 = [0f32; HIDDEN];
         for v in w2.iter_mut() { *v = next(); }
         let b2 = next();
 
@@ -451,7 +463,7 @@ mod tests {
     }
 
     fn accs_close(a: &Accumulator, b: &Accumulator, tol: f32) -> bool {
-        (0..64).all(|i| (a.p1[i] - b.p1[i]).abs() <= tol && (a.p2[i] - b.p2[i]).abs() <= tol)
+        (0..HIDDEN).all(|i| (a.p1[i] - b.p1[i]).abs() <= tol && (a.p2[i] - b.p2[i]).abs() <= tol)
     }
 
     /// `eval_from_accumulator` is just layer 2 + tanh on a pre-built layer-1 output.
