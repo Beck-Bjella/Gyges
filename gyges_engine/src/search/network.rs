@@ -1,11 +1,6 @@
-//! Neural network evaluation — fast board eval without gen_all.
-//!
-//! Architecture: 144 → 128 (ReLU) → 1 (tanh)
-//! Weights loaded from `weights.bin` exported by the Python training script.
-//!
-//! The board is always encoded from the current player's perspective:
-//! their home rank maps to rank 0. Output in [-NETWORK_SCALE, +NETWORK_SCALE],
-//! positive = current player winning.
+//! NN evaluation. 144 → L1_SIZE (ReLU) → 1 (tanh).
+//! Board encoded from the side-to-move's perspective (home rank = rank 0).
+//! Output in [-NETWORK_SCALE, +NETWORK_SCALE], positive = side-to-move winning.
 
 use gyges::{board::*, core::*, moves::*};
 use std::fs;
@@ -80,31 +75,21 @@ pub fn eval_from_accumulator_active(acc: &Accumulator, player: Player) -> f64 {
     net.eval_from_accumulator(acc, player)
 }
 
-/// Scale the tanh output to match the hand-crafted eval's magnitude.
+/// Scales tanh output to match the hand-crafted eval's magnitude.
 pub const NETWORK_SCALE: f64 = 10000.0;
 
-/// Hidden layer width.
-pub const HIDDEN: usize = 64;
+/// Layer 1 width.
+pub const L1_SIZE: usize = 256;
 
-/// Two-layer MLP: 144 → HIDDEN (ReLU) → 1 (tanh)
-///
-/// Input encoding — 4 features per square × 36 squares = 144:
-///   Board is always oriented so the current player's home rank is at rank 0.
-///   features[sq*4 + 0..3] = one-hot piece type (empty, 1-ring, 2-ring, 3-ring)
-///
-/// Weight layout in `weights.bin` (float32, little-endian):
-///   net.0.weight  [128 × 144]   18432 floats  offset 0
-///   net.0.bias    [128]           128 floats  offset 18432
-///   net.3.weight  [1  × 128]      128 floats  offset 18560
-///   net.3.bias    [1]               1 float   offset 18688
-///   Total: 18689 floats = 74756 bytes
+/// 144 → L1_SIZE (ReLU) → 1 (tanh).
+/// Input: one-hot piece per square (4 features × 36 squares = 144).
+/// Weights file (float32 LE): w1 [L1 × 144], b1 [L1], w2 [1 × L1], b2 [1].
 pub struct GygesNet {
-    /// First-layer weights, transposed for cache-friendly access during sparse evaluation.
-    /// Layout: w1t[input_feature][neuron] — each column (all HIDDEN neuron weights for one input)
-    /// is contiguous in memory, enabling vectorized addition in the fused forward pass.
-    w1t: Box<[[f32; HIDDEN]; 144]>,
-    b1: [f32; HIDDEN],
-    w2: [f32; HIDDEN],
+    /// Layer-1 weights, transposed: w1t[feature][neuron]. Each column is contiguous
+    /// for vectorized column-adds in the sparse forward pass.
+    w1t: Box<[[f32; L1_SIZE]; 144]>,
+    b1: [f32; L1_SIZE],
+    w2: [f32; L1_SIZE],
     b2: f32,
 
 }
@@ -115,7 +100,7 @@ impl GygesNet {
         let bytes = fs::read(path)
             .map_err(|e| format!("Cannot read weight file '{}': {}", path, e))?;
 
-        let expected_floats = HIDDEN * 144 + HIDDEN + HIDDEN + 1;
+        let expected_floats = L1_SIZE * 144 + L1_SIZE + L1_SIZE + 1;
         let expected_bytes = expected_floats * 4;
         if bytes.len() != expected_bytes {
             return Err(format!(
@@ -124,7 +109,7 @@ impl GygesNet {
                 bytes.len(),
                 expected_bytes,
                 expected_floats,
-                HIDDEN
+                L1_SIZE
             ));
 
         }
@@ -134,10 +119,10 @@ impl GygesNet {
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
             .collect();
 
-        // net.0.weight: [HIDDEN, 144] row-major in the file — transpose to [144, HIDDEN] for
+        // net.0.weight: [L1_SIZE, 144] row-major in the file — transpose to [144, L1_SIZE] for
         // cache-friendly sparse access: w1t[feature][neuron]
-        let mut w1t = Box::new([[0f32; HIDDEN]; 144]);
-        for i in 0..HIDDEN {
+        let mut w1t = Box::new([[0f32; L1_SIZE]; 144]);
+        for i in 0..L1_SIZE {
             for j in 0..144 {
                 w1t[j][i] = floats[i * 144 + j];
 
@@ -145,21 +130,21 @@ impl GygesNet {
 
         }
 
-        let w1_len = HIDDEN * 144;
+        let w1_len = L1_SIZE * 144;
         let b1_off = w1_len;
-        let w2_off = b1_off + HIDDEN;
-        let b2_off = w2_off + HIDDEN;
+        let w2_off = b1_off + L1_SIZE;
+        let b2_off = w2_off + L1_SIZE;
 
-        // net.0.bias: [HIDDEN]
-        let mut b1 = [0f32; HIDDEN];
-        for i in 0..HIDDEN {
+        // net.0.bias: [L1_SIZE]
+        let mut b1 = [0f32; L1_SIZE];
+        for i in 0..L1_SIZE {
             b1[i] = floats[b1_off + i];
 
         }
 
-        // net.3.weight: [1, HIDDEN]
-        let mut w2 = [0f32; HIDDEN];
-        for i in 0..HIDDEN {
+        // net.3.weight: [1, L1_SIZE]
+        let mut w2 = [0f32; L1_SIZE];
+        for i in 0..L1_SIZE {
             w2[i] = floats[w2_off + i];
 
         }
@@ -171,25 +156,9 @@ impl GygesNet {
 
     }
 
-    /// Fused encode + forward pass.
-    ///
-    /// The board is encoded from the active player's perspective (P2 rotated 180°).
-    /// For each square sq in 0..36:
-    ///   features[sq*4 + 0] = 1.0  →  empty
-    ///   features[sq*4 + 1] = 1.0  →  Piece::One
-    ///   features[sq*4 + 2] = 1.0  →  Piece::Two
-    ///   features[sq*4 + 3] = 1.0  →  Piece::Three
-    ///
-    /// Instead of building this 144-element feature vector and then multiplying by the weight
-    /// matrix, we exploit the sparsity of the input: each square contributes exactly one
-    /// non-zero one-hot feature (+1.0). That means only 36 of the 144 inputs are non-zero.
-    ///
-    /// For each non-zero feature, we directly add the corresponding weight column into the
-    /// hidden accumulator. This replaces HIDDEN×144 multiply-adds with 36 vectorizable
-    /// additions of HIDDEN-element arrays — no multiplies needed.
-    ///
-    /// The transposed weight layout (w1t[feature][neuron]) ensures each column is contiguous
-    /// in memory, enabling auto-vectorization of the inner loop.
+    /// Encode + forward pass from `player`'s perspective (P2 rotated 180°).
+    /// Sparse: only 36 of 144 inputs are non-zero, so we add weight columns
+    /// instead of running a full matmul.
     pub fn eval(&self, board: &BoardState, player: Player) -> f64 {
         // Start with bias — equivalent to the constant term in each neuron
         let mut hidden = self.b1;
@@ -214,7 +183,7 @@ impl GygesNet {
             // One-hot piece feature: add the weight column for this feature
             // (equivalent to multiplying by 1.0 — no multiply needed)
             let piece_col = &self.w1t[sq * 4 + piece_idx];
-            for i in 0..HIDDEN {
+            for i in 0..L1_SIZE {
                 hidden[i] += piece_col[i];
 
             }
@@ -222,14 +191,14 @@ impl GygesNet {
         }
 
         // ReLU activation
-        for i in 0..HIDDEN {
+        for i in 0..L1_SIZE {
             hidden[i] = hidden[i].max(0.0);
 
         }
 
         // Layer 2: out = tanh(w2 · hidden + b2) — dense, since hidden is fully populated
         let mut out = self.b2;
-        for i in 0..HIDDEN {
+        for i in 0..L1_SIZE {
             out += self.w2[i] * hidden[i];
 
         }
@@ -238,13 +207,8 @@ impl GygesNet {
 
     }
 
-    /// Slow path: rebuild both accumulators from scratch.
-    ///
-    /// Iteration order matches `eval` exactly (display-square 0..36 with the piece
-    /// looked up at the perspective-flipped raw square for P2). This guarantees the
-    /// seed is bit-identical to the dense forward pass, so the only drift between
-    /// patched and from-scratch values comes from incremental patches reordering
-    /// adds — small, bounded float roundoff.
+    /// Rebuild both perspective accumulators from scratch. Iteration order matches
+    /// `eval` so the seed is bit-identical to the dense forward pass.
     pub fn accumulator_from_scratch(&self, board: &BoardState) -> Accumulator {
         let mut p1 = self.b1;
         let mut p2 = self.b1;
@@ -259,7 +223,7 @@ impl GygesNet {
 
             };
             let col_p1 = &self.w1t[sq * 4 + p1_idx];
-            for i in 0..HIDDEN {
+            for i in 0..L1_SIZE {
                 p1[i] += col_p1[i];
 
             }
@@ -274,7 +238,7 @@ impl GygesNet {
 
             };
             let col_p2 = &self.w1t[sq * 4 + p2_idx];
-            for i in 0..HIDDEN {
+            for i in 0..L1_SIZE {
                 p2[i] += col_p2[i];
 
             }
@@ -285,11 +249,9 @@ impl GygesNet {
 
     }
 
-    /// Fast path: derive `next` from `prev` by patching the features that change
-    /// when `mv` is applied to `board_before` (board state BEFORE the move).
-    ///
-    /// Patches both perspective accumulators in lockstep, since the same fc1 weight
-    /// matrix is used for both — only the feature index (raw vs. mirrored square) differs.
+    /// Derive `next` from `prev` by patching only the features that change under `mv`.
+    /// Patches both perspectives in lockstep (same weights, mirrored feature index).
+    /// `board_before` is the state BEFORE the move is applied.
     pub fn patch_make(
         &self,
         prev: &Accumulator,
@@ -347,7 +309,7 @@ impl GygesNet {
             let sub_p2 = &self.w1t[f_old_p2];
             let add_p2 = &self.w1t[f_new_p2];
 
-            for j in 0..HIDDEN {
+            for j in 0..L1_SIZE {
                 next.p1[j] += add_p1[j] - sub_p1[j];
                 next.p2[j] += add_p2[j] - sub_p2[j];
 
@@ -366,7 +328,7 @@ impl GygesNet {
         };
 
         let mut out = self.b2;
-        for i in 0..HIDDEN {
+        for i in 0..L1_SIZE {
             out += self.w2[i] * pre[i].max(0.0);
 
         }
@@ -377,19 +339,12 @@ impl GygesNet {
 
 }
 
-/// Pair of layer-1 accumulators, one per perspective.
-///
-/// Both accumulators store the pre-ReLU output of `fc1` (i.e. `b1 + sum of weight columns`),
-/// using the same weight matrix; only the feature indexing differs:
-///   - `p1` indexes by raw board square `q`
-///   - `p2` indexes by `MIRROR[q]` (180° rotation), matching `GygesNet::eval`'s P2 path
-///
-/// Single-perspective network, two accumulator views — eval reads whichever one
-/// matches the side to move.
+/// Pre-ReLU layer-1 output, one per perspective.
+/// `p1` indexes by raw square, `p2` by `MIRROR[q]`. Eval reads whichever matches STM.
 #[derive(Clone, Copy)]
 pub struct Accumulator {
-    pub p1: [f32; HIDDEN],
-    pub p2: [f32; HIDDEN],
+    pub p1: [f32; L1_SIZE],
+    pub p2: [f32; L1_SIZE],
 
 }
 
@@ -397,15 +352,13 @@ impl Accumulator {
     /// All-zeros accumulator — used only to size the search stack. Real values
     /// come from `accumulator_from_scratch` (root) and `patch_make` (children).
     pub fn zero() -> Self {
-        Accumulator { p1: [0.0; HIDDEN], p2: [0.0; HIDDEN] }
+        Accumulator { p1: [0.0; L1_SIZE], p2: [0.0; L1_SIZE] }
 
     }
 
 }
 
-/// 180° board rotation: square `q` from P1's view maps to `MIRROR[q] = 35 - q`
-/// from P2's view. Matches `eval`'s P2 path (`board_sq = 35 - sq`), which flips
-/// both rank and file so the active player's home rank is always rank 0.
+/// 180° rotation: P1 square `q` maps to P2 square `35 - q`.
 const MIRROR: [u8; 36] = {
     let mut m = [0u8; 36];
     let mut q = 0;
@@ -447,15 +400,15 @@ mod tests {
             (state as f32 / u32::MAX as f32) * 2.0 - 1.0
         };
 
-        let mut w1t = Box::new([[0f32; HIDDEN]; 144]);
+        let mut w1t = Box::new([[0f32; L1_SIZE]; 144]);
         for j in 0..144 {
-            for i in 0..HIDDEN {
+            for i in 0..L1_SIZE {
                 w1t[j][i] = next();
             }
         }
-        let mut b1 = [0f32; HIDDEN];
+        let mut b1 = [0f32; L1_SIZE];
         for v in b1.iter_mut() { *v = next(); }
-        let mut w2 = [0f32; HIDDEN];
+        let mut w2 = [0f32; L1_SIZE];
         for v in w2.iter_mut() { *v = next(); }
         let b2 = next();
 
@@ -463,7 +416,7 @@ mod tests {
     }
 
     fn accs_close(a: &Accumulator, b: &Accumulator, tol: f32) -> bool {
-        (0..HIDDEN).all(|i| (a.p1[i] - b.p1[i]).abs() <= tol && (a.p2[i] - b.p2[i]).abs() <= tol)
+        (0..L1_SIZE).all(|i| (a.p1[i] - b.p1[i]).abs() <= tol && (a.p2[i] - b.p2[i]).abs() <= tol)
     }
 
     /// `eval_from_accumulator` is just layer 2 + tanh on a pre-built layer-1 output.
@@ -534,7 +487,6 @@ mod tests {
     fn patch_handles_drop_with_sq3_equals_sq1() {
         let net = synth_net();
         let board = BoardState::from(STARTING_BOARD);
-        let acc = net.accumulator_from_scratch(&board);
 
         // Construct a synthetic Drop move where sq3 == sq1: piece moves from a3 to a1
         // (picking up whatever's at a1) and the displaced piece bounces back to a3.

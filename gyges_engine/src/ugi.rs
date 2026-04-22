@@ -41,7 +41,7 @@ impl Ugi {
         rayon::ThreadPoolBuilder::new().num_threads(4).build_global().unwrap();
 
         // Load default network
-        let _ = network::load_network("./weights/default.bin");
+        let _ = network::load_network("./weights/baseline_100n_e100_144x256.bin");
 
     }
 

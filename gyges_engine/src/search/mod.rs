@@ -489,7 +489,7 @@ impl Searcher {
             if acc_active {
                 let expected = accumulator_from_scratch_active(board);
                 let got = &self.nn_acc_stack[depth + 1];
-                for k in 0..64 {
+                for k in 0..crate::search::network::L1_SIZE {
                     debug_assert!(
                         (expected.p1[k] - got.p1[k]).abs() < 1e-3,
                         "p1 accumulator drift at neuron {} after move {}: expected {}, got {}",
@@ -532,7 +532,7 @@ impl Searcher {
             if acc_active {
                 let expected = accumulator_from_scratch_active(board);
                 let got = &self.nn_acc_stack[depth];
-                for k in 0..64 {
+                for k in 0..crate::search::network::L1_SIZE {
                     debug_assert!(
                         (expected.p1[k] - got.p1[k]).abs() < 1e-3,
                         "parent p1 accumulator drift after unmake of {} at neuron {}",
