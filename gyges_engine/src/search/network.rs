@@ -1,8 +1,8 @@
-//! NN evaluation. 144 → L1_SIZE (ReLU) → 1 (tanh).
+//! NN evaluation. FEATURE_COUNT sparse pair-factored inputs → L1_SIZE (ReLU) → 1 (tanh).
 //! Board encoded from the side-to-move's perspective (home rank = rank 0).
 //! Output in [-NETWORK_SCALE, +NETWORK_SCALE], positive = side-to-move winning.
 
-use gyges::{board::*, core::*, moves::*};
+use gyges::{board::*, core::*};
 use std::fs;
 
 /// Global network instance — loaded via `load_network`, read during search.
@@ -54,40 +54,29 @@ pub fn get_evalulation_nn(board: &BoardState, player: Player) -> f64 {
     net.eval(board, player)
 }
 
-/// Build both perspectives' accumulators from scratch using the active network.
-/// Panics if no network is loaded.
-pub fn accumulator_from_scratch_active(board: &BoardState) -> Accumulator {
-    let net = unsafe { NETWORK.as_ref() }.expect("Network not loaded");
-    net.accumulator_from_scratch(board)
-}
-
-/// Patch `next` from `prev` for the move `mv` applied to `board_before`.
-/// Panics if no network is loaded.
-pub fn patch_make_active(prev: &Accumulator, next: &mut Accumulator, board_before: &BoardState, mv: &Move) {
-    let net = unsafe { NETWORK.as_ref() }.expect("Network not loaded");
-    net.patch_make(prev, next, board_before, mv);
-}
-
-/// Layer-2 + tanh applied to a pre-built accumulator, picking the perspective for `player`.
-/// Panics if no network is loaded.
-pub fn eval_from_accumulator_active(acc: &Accumulator, player: Player) -> f64 {
-    let net = unsafe { NETWORK.as_ref() }.expect("Network not loaded");
-    net.eval_from_accumulator(acc, player)
-}
-
 /// Scales tanh output to match the hand-crafted eval's magnitude.
 pub const NETWORK_SCALE: f64 = 10000.0;
 
 /// Layer 1 width.
-pub const L1_SIZE: usize = 256;
+pub const L1_SIZE: usize = 1024;
 
-/// 144 → L1_SIZE (ReLU) → 1 (tanh).
-/// Input: one-hot piece per square (4 features × 36 squares = 144).
-/// Weights file (float32 LE): w1 [L1 × 144], b1 [L1], w2 [1 × L1], b2 [1].
+/// Total input features: 108 singletons + 3×630 same-type pairs + 3×1296 cross-type pairs.
+pub const FEATURE_COUNT: usize = 5886;
+
+// Offsets into the sparse feature index space (must match the Python encoder).
+const PAIR_11_OFFSET: u32 = 108;
+const PAIR_22_OFFSET: u32 = 738;
+const PAIR_33_OFFSET: u32 = 1368;
+const PAIR_12_OFFSET: u32 = 1998;
+const PAIR_13_OFFSET: u32 = 3294;
+const PAIR_23_OFFSET: u32 = 4590;
+
+/// FEATURE_COUNT → L1_SIZE (ReLU) → 1 (tanh).
+/// Sparse input: singletons + same-type pairs + cross-type pairs.
+/// Weights file (float32 LE): w1 [L1 × F], b1 [L1], w2 [1 × L1], b2 [1].
 pub struct GygesNet {
-    /// Layer-1 weights, transposed: w1t[feature][neuron]. Each column is contiguous
-    /// for vectorized column-adds in the sparse forward pass.
-    w1t: Box<[[f32; L1_SIZE]; 144]>,
+    /// Layer-1 weights, transposed: w1t[feature][neuron]. Column-major sparse adds.
+    w1t: Box<[[f32; L1_SIZE]; FEATURE_COUNT]>,
     b1: [f32; L1_SIZE],
     w2: [f32; L1_SIZE],
     b2: f32,
@@ -100,15 +89,16 @@ impl GygesNet {
         let bytes = fs::read(path)
             .map_err(|e| format!("Cannot read weight file '{}': {}", path, e))?;
 
-        let expected_floats = L1_SIZE * 144 + L1_SIZE + L1_SIZE + 1;
+        let expected_floats = L1_SIZE * FEATURE_COUNT + L1_SIZE + L1_SIZE + 1;
         let expected_bytes = expected_floats * 4;
         if bytes.len() != expected_bytes {
             return Err(format!(
                 "Weight file is {} bytes, expected {} ({} × float32). \
-                 Check that the Python export matches the 144→{}→1 architecture.",
+                 Check the Python export matches {}→{}→1.",
                 bytes.len(),
                 expected_bytes,
                 expected_floats,
+                FEATURE_COUNT,
                 L1_SIZE
             ));
 
@@ -119,84 +109,68 @@ impl GygesNet {
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
             .collect();
 
-        // net.0.weight: [L1_SIZE, 144] row-major in the file — transpose to [144, L1_SIZE] for
-        // cache-friendly sparse access: w1t[feature][neuron]
-        let mut w1t = Box::new([[0f32; L1_SIZE]; 144]);
+        // fc1.weight: [L1_SIZE, FEATURE_COUNT] row-major in the file — transpose to
+        // [FEATURE_COUNT, L1_SIZE] for cache-friendly sparse access: w1t[feature][neuron].
+        // Allocate via Vec to avoid blowing the stack on the multi-MB array literal.
+        let mut w1t_vec: Vec<[f32; L1_SIZE]> = vec![[0.0f32; L1_SIZE]; FEATURE_COUNT];
         for i in 0..L1_SIZE {
-            for j in 0..144 {
-                w1t[j][i] = floats[i * 144 + j];
+            for j in 0..FEATURE_COUNT {
+                w1t_vec[j][i] = floats[i * FEATURE_COUNT + j];
 
             }
 
         }
+        let w1t: Box<[[f32; L1_SIZE]; FEATURE_COUNT]> = w1t_vec
+            .into_boxed_slice()
+            .try_into()
+            .map_err(|_| "internal: w1t length mismatch".to_string())?;
 
-        let w1_len = L1_SIZE * 144;
-        let b1_off = w1_len;
+        let b1_off = L1_SIZE * FEATURE_COUNT;
         let w2_off = b1_off + L1_SIZE;
         let b2_off = w2_off + L1_SIZE;
 
-        // net.0.bias: [L1_SIZE]
+        // fc1.bias: [L1_SIZE]
         let mut b1 = [0f32; L1_SIZE];
         for i in 0..L1_SIZE {
             b1[i] = floats[b1_off + i];
 
         }
 
-        // net.3.weight: [1, L1_SIZE]
+        // fc2.weight: [1, L1_SIZE]
         let mut w2 = [0f32; L1_SIZE];
         for i in 0..L1_SIZE {
             w2[i] = floats[w2_off + i];
 
         }
 
-        // net.3.bias: scalar
+        // fc2.bias: scalar
         let b2 = floats[b2_off];
 
         Ok(Self { w1t, b1, w2, b2 })
 
     }
 
-    /// Encode + forward pass from `player`'s perspective (P2 rotated 180°).
-    /// Sparse: only 36 of 144 inputs are non-zero, so we add weight columns
-    /// instead of running a full matmul.
+    /// Encode + forward pass from `player`'s perspective (P2 sees board mirrored 180°).
     pub fn eval(&self, board: &BoardState, player: Player) -> f64 {
-        // Start with bias — equivalent to the constant term in each neuron
         let mut hidden = self.b1;
 
-        for sq in 0..36usize {
-            // For P2, rotate the board 180° so active player's home rank is always rank 0
-            let board_sq = match player {
-                Player::One => sq,
-                Player::Two => 35 - sq,
-            };
-
-            let bit = 1u64 << board_sq;
-
-            let piece_idx = if board.piece_bb.0 & bit != 0 {
-                board.data[board_sq] as usize + 1
-
-            } else {
-                0
-
-            };
-
-            // One-hot piece feature: add the weight column for this feature
-            // (equivalent to multiplying by 1.0 — no multiply needed)
-            let piece_col = &self.w1t[sq * 4 + piece_idx];
+        let mirror = matches!(player, Player::Two);
+        encode_position(board, mirror, |feat| {
+            let col = &self.w1t[feat as usize];
             for i in 0..L1_SIZE {
-                hidden[i] += piece_col[i];
+                hidden[i] += col[i];
 
             }
 
-        }
+        });
 
-        // ReLU activation
+        // ReLU
         for i in 0..L1_SIZE {
             hidden[i] = hidden[i].max(0.0);
 
         }
 
-        // Layer 2: out = tanh(w2 · hidden + b2) — dense, since hidden is fully populated
+        // Layer 2: out = tanh(w2 · hidden + b2)
         let mut out = self.b2;
         for i in 0..L1_SIZE {
             out += self.w2[i] * hidden[i];
@@ -207,179 +181,120 @@ impl GygesNet {
 
     }
 
-    /// Rebuild both perspective accumulators from scratch. Iteration order matches
-    /// `eval` so the seed is bit-identical to the dense forward pass.
-    pub fn accumulator_from_scratch(&self, board: &BoardState) -> Accumulator {
-        let mut p1 = self.b1;
-        let mut p2 = self.b1;
-
-        for sq in 0..36usize {
-            // P1 view: display square == raw square
-            let p1_idx = if board.piece_bb.0 & (1u64 << sq) != 0 {
-                board.data[sq] as usize + 1
-
-            } else {
-                0
-
-            };
-            let col_p1 = &self.w1t[sq * 4 + p1_idx];
-            for i in 0..L1_SIZE {
-                p1[i] += col_p1[i];
-
-            }
-
-            // P2 view: read piece at the mirrored raw square, deposit into feature `sq`
-            let p2_raw = MIRROR[sq] as usize;
-            let p2_idx = if board.piece_bb.0 & (1u64 << p2_raw) != 0 {
-                board.data[p2_raw] as usize + 1
-
-            } else {
-                0
-
-            };
-            let col_p2 = &self.w1t[sq * 4 + p2_idx];
-            for i in 0..L1_SIZE {
-                p2[i] += col_p2[i];
-
-            }
-
-        }
-
-        Accumulator { p1, p2 }
-
-    }
-
-    /// Derive `next` from `prev` by patching only the features that change under `mv`.
-    /// Patches both perspectives in lockstep (same weights, mirrored feature index).
-    /// `board_before` is the state BEFORE the move is applied.
-    pub fn patch_make(
-        &self,
-        prev: &Accumulator,
-        next: &mut Accumulator,
-        board_before: &BoardState,
-        mv: &Move,
-    ) {
-        *next = *prev;
-
-        let s1 = mv.data[0].1.0 as usize;
-        let s2 = mv.data[1].1.0 as usize;
-        let s3 = mv.data[2].1.0 as usize;
-
-        // Touched squares: 2 for Bounce, 3 for Drop. Drop's sq3 may equal sq1
-        // (displaced piece bouncing back to the start square), so dedup is required.
-        let sqs = [s1, s2, s3];
-        let len = if mv.flag == MoveType::Drop { 3 } else { 2 };
-
-        for i in 0..len {
-            let sq = sqs[i];
-
-            // Skip duplicate squares already patched on a prior step
-            let mut dup = false;
-            for j in 0..i {
-                if sqs[j] == sq { dup = true; break; }
-
-            }
-            if dup { continue; }
-
-            // BEFORE state: empty if bb bit is clear, else the piece in `data`
-            let before = if board_before.piece_bb.0 & (1u64 << sq) != 0 {
-                board_before.data[sq]
-
-            } else {
-                Piece::None
-
-            };
-
-            // AFTER state: simulate placements in order (later writes win for sq1==sq3)
-            let mut after = before;
-            if s1 == sq { after = mv.data[0].0; }
-            if s2 == sq { after = mv.data[1].0; }
-            if mv.flag == MoveType::Drop && s3 == sq { after = mv.data[2].0; }
-
-            if before == after { continue; }
-
-            let mq = MIRROR[sq] as usize;
-            let f_old_p1 = sq * 4 + piece_idx(before);
-            let f_new_p1 = sq * 4 + piece_idx(after);
-            let f_old_p2 = mq * 4 + piece_idx(before);
-            let f_new_p2 = mq * 4 + piece_idx(after);
-
-            let sub_p1 = &self.w1t[f_old_p1];
-            let add_p1 = &self.w1t[f_new_p1];
-            let sub_p2 = &self.w1t[f_old_p2];
-            let add_p2 = &self.w1t[f_new_p2];
-
-            for j in 0..L1_SIZE {
-                next.p1[j] += add_p1[j] - sub_p1[j];
-                next.p2[j] += add_p2[j] - sub_p2[j];
-
-            }
-
-        }
-
-    }
-
-    /// Layer 2 + tanh applied to a pre-built accumulator. Picks the perspective for `player`.
-    pub fn eval_from_accumulator(&self, acc: &Accumulator, player: Player) -> f64 {
-        let pre = match player {
-            Player::One => &acc.p1,
-            Player::Two => &acc.p2,
-
-        };
-
-        let mut out = self.b2;
-        for i in 0..L1_SIZE {
-            out += self.w2[i] * pre[i].max(0.0);
-
-        }
-
-        (out.tanh() as f64) * NETWORK_SCALE
-
-    }
-
 }
 
-/// Pre-ReLU layer-1 output, one per perspective.
-/// `p1` indexes by raw square, `p2` by `MIRROR[q]`. Eval reads whichever matches STM.
-#[derive(Clone, Copy)]
-pub struct Accumulator {
-    pub p1: [f32; L1_SIZE],
-    pub p2: [f32; L1_SIZE],
-
-}
-
-impl Accumulator {
-    /// All-zeros accumulator — used only to size the search stack. Real values
-    /// come from `accumulator_from_scratch` (root) and `patch_make` (children).
-    pub fn zero() -> Self {
-        Accumulator { p1: [0.0; L1_SIZE], p2: [0.0; L1_SIZE] }
-
-    }
-
-}
-
-/// 180° rotation: P1 square `q` maps to P2 square `35 - q`.
-const MIRROR: [u8; 36] = {
-    let mut m = [0u8; 36];
-    let mut q = 0;
-    while q < 36 {
-        m[q] = (35 - q) as u8;
-        q += 1;
-
+/// Unordered-pair index: PAIR_IDX[a][b] = PAIR_IDX[b][a] ∈ [0, 630) for a ≠ b.
+/// Diagonal is unused.
+const PAIR_IDX: [[u16; 36]; 36] = {
+    let mut m = [[0u16; 36]; 36];
+    let mut k: u16 = 0;
+    let mut a = 0usize;
+    while a < 36 {
+        let mut b = a + 1;
+        while b < 36 {
+            m[a][b] = k;
+            m[b][a] = k;
+            k += 1;
+            b += 1;
+        }
+        a += 1;
     }
     m
-
 };
 
-/// Maps a `Piece` to its one-hot feature index within a square's 4-element block.
-/// Matches the encoding in `GygesNet::eval`: empty=0, One=1, Two=2, Three=3.
+/// Feature index for a singleton piece of type `t` at (feature-space) square `sq`.
+/// `t` must be 1, 2, or 3.
 #[inline(always)]
-fn piece_idx(p: Piece) -> usize {
-    match p {
-        Piece::None => 0,
-        Piece::One => 1,
-        Piece::Two => 2,
-        Piece::Three => 3,
+#[allow(dead_code)]
+fn feature_singleton(sq: u32, t: u32) -> u32 {
+    sq * 3 + (t - 1)
+}
+
+/// Feature index for the pair {(sq_a, t_a), (sq_b, t_b)}, sq_a ≠ sq_b.
+/// Types are 1/2/3. Same-type is unordered; cross-type is ordered (lower type first).
+#[inline]
+#[allow(dead_code)]
+fn feature_pair(sq_a: u32, t_a: u32, sq_b: u32, t_b: u32) -> u32 {
+    if t_a == t_b {
+        let off = match t_a {
+            1 => PAIR_11_OFFSET,
+            2 => PAIR_22_OFFSET,
+            3 => PAIR_33_OFFSET,
+            _ => unreachable!(),
+        };
+        off + PAIR_IDX[sq_a as usize][sq_b as usize] as u32
+    } else if t_a < t_b {
+        let off = match (t_a, t_b) {
+            (1, 2) => PAIR_12_OFFSET,
+            (1, 3) => PAIR_13_OFFSET,
+            (2, 3) => PAIR_23_OFFSET,
+            _ => unreachable!(),
+        };
+        off + sq_a * 36 + sq_b
+    } else {
+        feature_pair(sq_b, t_b, sq_a, t_a)
+    }
+}
+
+/// Emit the active feature indices for `board` via `out`. When `mirror` is true,
+/// every square is transformed by `35 - sq` (P2 view: 180° rotation).
+///
+/// Order: singletons (in raw-square iteration order), then same-type pairs grouped
+/// by piece type, then cross-type pairs. Matches the Python encoder ordering.
+fn encode_position<F: FnMut(u32)>(board: &BoardState, mirror: bool, mut out: F) {
+    // Feature-space squares grouped by piece type. Index 0 = type 1, etc.
+    let mut grouped: [[u8; 12]; 3] = [[0; 12]; 3];
+    let mut counts = [0usize; 3];
+
+    for raw_sq in 0..36u8 {
+        if board.piece_bb.0 & (1u64 << raw_sq) == 0 { continue; }
+        let t = match board.data[raw_sq as usize] {
+            Piece::One => 1u32,
+            Piece::Two => 2u32,
+            Piece::Three => 3u32,
+            Piece::None => continue,
+        };
+        let feat_sq = if mirror { 35 - raw_sq } else { raw_sq } as u32;
+
+        out(feat_sq * 3 + (t - 1));
+
+        let g = (t - 1) as usize;
+        grouped[g][counts[g]] = feat_sq as u8;
+        counts[g] += 1;
+
+    }
+
+    // Same-type pairs (unordered)
+    let same_offsets = [PAIR_11_OFFSET, PAIR_22_OFFSET, PAIR_33_OFFSET];
+    for g in 0..3 {
+        let n = counts[g];
+        let off = same_offsets[g];
+        for i in 0..n {
+            for j in (i + 1)..n {
+                out(off + PAIR_IDX[grouped[g][i] as usize][grouped[g][j] as usize] as u32);
+
+            }
+
+        }
+
+    }
+
+    // Cross-type pairs (ordered: lower piece-type's square first)
+    let cross: [(usize, usize, u32); 3] = [
+        (0, 1, PAIR_12_OFFSET),
+        (0, 2, PAIR_13_OFFSET),
+        (1, 2, PAIR_23_OFFSET),
+    ];
+    for (lo, hi, off) in cross {
+        let nlo = counts[lo];
+        let nhi = counts[hi];
+        for i in 0..nlo {
+            for j in 0..nhi {
+                out(off + grouped[lo][i] as u32 * 36 + grouped[hi][j] as u32);
+
+            }
+
+        }
 
     }
 
@@ -388,139 +303,63 @@ fn piece_idx(p: Piece) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gyges::moves::movegen::*;
 
-    /// Build a deterministic synthetic GygesNet so tests don't depend on a weights file
-    /// being present. Uses a simple LCG to fill all weights with pseudo-random values
-    /// in roughly [-1, 1].
-    fn synth_net() -> GygesNet {
-        let mut state: u32 = 0xDEAD_BEEF;
-        let mut next = || -> f32 {
-            state = state.wrapping_mul(1_103_515_245).wrapping_add(12_345);
-            (state as f32 / u32::MAX as f32) * 2.0 - 1.0
-        };
-
-        let mut w1t = Box::new([[0f32; L1_SIZE]; 144]);
-        for j in 0..144 {
-            for i in 0..L1_SIZE {
-                w1t[j][i] = next();
-            }
-        }
-        let mut b1 = [0f32; L1_SIZE];
-        for v in b1.iter_mut() { *v = next(); }
-        let mut w2 = [0f32; L1_SIZE];
-        for v in w2.iter_mut() { *v = next(); }
-        let b2 = next();
-
-        GygesNet { w1t, b1, w2, b2 }
-    }
-
-    fn accs_close(a: &Accumulator, b: &Accumulator, tol: f32) -> bool {
-        (0..L1_SIZE).all(|i| (a.p1[i] - b.p1[i]).abs() <= tol && (a.p2[i] - b.p2[i]).abs() <= tol)
-    }
-
-    /// `eval_from_accumulator` is just layer 2 + tanh on a pre-built layer-1 output.
-    /// It must match the dense `eval` (which fuses layer 1 from features) to float precision.
+    /// Encoder self-consistency: emitted indices are unique, < FEATURE_COUNT, and
+    /// the total count matches the piece-group combinatorics.
     #[test]
-    fn accumulator_eval_matches_dense_eval() {
-        let net = synth_net();
-
+    fn encoder_emits_unique_valid_indices() {
         for board_arr in [STARTING_BOARD, BENCH_BOARD, TEST_BOARD] {
             let board = BoardState::from(board_arr);
-            let acc = net.accumulator_from_scratch(&board);
+            for mirror in [false, true] {
+                let mut indices: Vec<u32> = Vec::new();
+                encode_position(&board, mirror, |f| indices.push(f));
 
-            for player in [Player::One, Player::Two] {
-                let dense = net.eval(&board, player);
-                let from_acc = net.eval_from_accumulator(&acc, player);
+                let mut n = [0usize; 3];
+                for sq in 0..36 {
+                    if board.piece_bb.0 & (1u64 << sq) == 0 { continue; }
+                    match board.data[sq] {
+                        Piece::One => n[0] += 1,
+                        Piece::Two => n[1] += 1,
+                        Piece::Three => n[2] += 1,
+                        _ => {}
+                    }
+                }
+                let singles = n[0] + n[1] + n[2];
+                let same = n[0]*n[0].saturating_sub(1)/2
+                         + n[1]*n[1].saturating_sub(1)/2
+                         + n[2]*n[2].saturating_sub(1)/2;
+                let cross = n[0]*n[1] + n[0]*n[2] + n[1]*n[2];
+                assert_eq!(
+                    indices.len(), singles + same + cross,
+                    "feature count mismatch (mirror={})", mirror
+                );
+
+                let mut sorted = indices.clone();
+                sorted.sort();
+                sorted.dedup();
+                assert_eq!(sorted.len(), indices.len(), "duplicate features emitted");
+
                 assert!(
-                    (dense - from_acc).abs() < 1e-3,
-                    "{:?}: dense={} from_acc={}", player, dense, from_acc
+                    indices.iter().all(|&f| (f as usize) < FEATURE_COUNT),
+                    "feature index out of range"
                 );
             }
         }
     }
 
-    /// Walk a real game: at every step, the patched accumulator must agree with
-    /// a from-scratch rebuild of the post-move board, element-wise. This is the
-    /// oracle test for `patch_make` correctness.
+    /// `feature_pair` must canonicalize: same-type order-invariant, cross-type
+    /// reduces to (lower_type, higher_type) with lower-type's square first.
     #[test]
-    fn patch_matches_full_recomputation_over_random_walk() {
-        let net = synth_net();
+    fn feature_pair_canonicalizes() {
+        // Same-type: pair(a, t, b, t) == pair(b, t, a, t)
+        assert_eq!(feature_pair(3, 1, 17, 1), feature_pair(17, 1, 3, 1));
+        assert_eq!(feature_pair(0, 2, 35, 2), feature_pair(35, 2, 0, 2));
 
-        // Walk from several starting positions to exercise different piece layouts.
-        for board_arr in [STARTING_BOARD, BENCH_BOARD, TEST_BOARD] {
-            let mut board = BoardState::from(board_arr);
-            let mut acc = net.accumulator_from_scratch(&board);
-            let mut mg = MoveGen::default();
-            let mut player = Player::One;
-
-            for _step in 0..30 {
-                let mut data: GenResult = unsafe { mg.gen::<GenMoves, NoQuit>(&mut board, player) };
-                let moves = data.move_list.moves(&board);
-                if moves.is_empty() { break; }
-
-                // Use the first non-winning move so the walk stays inside the game.
-                let Some(&mv) = moves.iter().find(|m| !m.is_win()) else { break };
-
-                let mut patched = Accumulator::zero();
-                net.patch_make(&acc, &mut patched, &board, &mv);
-
-                board.make_move(&mv);
-
-                let expected = net.accumulator_from_scratch(&board);
-                assert!(
-                    accs_close(&expected, &patched, 1e-4),
-                    "patch_make diverged from from_scratch after {} (flag {:?})",
-                    mv, mv.flag
-                );
-
-                acc = patched;
-                player = player.other();
-            }
-        }
+        // Cross-type: pair(a, 1, b, 2) == pair(b, 2, a, 1), and lands in PAIR_12 range.
+        let idx = feature_pair(5, 1, 10, 2);
+        assert_eq!(idx, feature_pair(10, 2, 5, 1));
+        assert!(idx >= PAIR_12_OFFSET && idx < PAIR_13_OFFSET);
+        assert_eq!(idx, PAIR_12_OFFSET + 5 * 36 + 10);
     }
-
-    /// Exercises the rare drop case where the displaced piece bounces back to the
-    /// starting square (`sq3 == sq1`). The dedup logic in `patch_make` must handle
-    /// this without double-patching the square.
-    #[test]
-    fn patch_handles_drop_with_sq3_equals_sq1() {
-        let net = synth_net();
-        let board = BoardState::from(STARTING_BOARD);
-
-        // Construct a synthetic Drop move where sq3 == sq1: piece moves from a3 to a1
-        // (picking up whatever's at a1) and the displaced piece bounces back to a3.
-        // We don't care if this is a *legal* Gyges move — only that the patch
-        // bookkeeping handles the duplicate-square case.
-        let s1 = SQ(12); // a3 — has no piece in STARTING_BOARD, so we'll set one up
-        let s2 = SQ(0);  // a1 — has a 3
-        let s3 = SQ(12); // back to a3
-
-        let mut board = board;
-        // Put a piece at sq1 so the move makes sense
-        board.data[s1.0 as usize] = Piece::One;
-        board.piece_bb.set_bit(s1.0 as usize);
-        let acc = net.accumulator_from_scratch(&board);
-
-        let mv = Move {
-            data: [
-                (Piece::None, s1),         // sq1 emptied (then re-filled by step 3)
-                (Piece::One,  s2),         // moving piece lands at sq2 (replaces the 3)
-                (Piece::Three, s3),        // displaced 3 bounces back to sq1
-            ],
-            flag: MoveType::Drop,
-        };
-
-        let mut patched = Accumulator::zero();
-        net.patch_make(&acc, &mut patched, &board, &mv);
-
-        let mut after = board;
-        after.make_move(&mv);
-        let expected = net.accumulator_from_scratch(&after);
-
-        assert!(
-            accs_close(&expected, &patched, 1e-4),
-            "patch_make mishandled sq3==sq1 drop"
-        );
-    }
+    
 }

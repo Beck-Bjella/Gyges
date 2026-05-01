@@ -31,10 +31,7 @@ use gyges::tools::tt::*;
 use gyges::core::*;
 
 use crate::search::evaluation::*;
-use crate::search::network::{
-    get_evalulation_nn, network_loaded, Accumulator,
-    accumulator_from_scratch_active, eval_from_accumulator_active, patch_make_active,
-};
+use crate::search::network::{get_evalulation_nn, network_loaded};
 use crate::consts::*;
 use crate::ugi;
 
@@ -65,11 +62,6 @@ pub struct Searcher {
 
     pub path: Vec<u64>,
 
-    /// One accumulator per ply of search depth (Stockfish-style search stack).
-    /// Indexed by `depth = start_ply - ply` (0 at root, grows downward).
-    /// Only populated when NN + accumulator mode is active.
-    pub nn_acc_stack: Vec<Accumulator>,
-
 }
 
 impl Searcher {
@@ -90,17 +82,7 @@ impl Searcher {
 
             path: Vec::new(),
 
-            nn_acc_stack: Vec::new(),
-
         }
-
-    }
-
-    /// True when the incremental NN accumulator should be maintained for this search.
-    /// Gated on the `nn` option, the `nn_use_accumulator` toggle, and a loaded network.
-    #[inline]
-    fn acc_active(&self) -> bool {
-        self.options.nn && self.options.nn_use_accumulator && network_loaded()
 
     }
 
@@ -258,18 +240,6 @@ impl Searcher {
         
         self.path.clear();
 
-        // Seed the NN accumulator stack from the root board. The root accumulator
-        // is invariant across IDS iterations and aspiration re-searches, so we
-        // only seed once. Children fill stack[depth+1] via incremental patches.
-        if self.acc_active() {
-            // Generously sized so we never have to grow mid-search.
-            // 64 ply baseline; per-iteration grow below handles deeper searches.
-            let cap = self.options.maxply.unwrap_or(64).max(0) as usize + 4;
-            self.nn_acc_stack.resize(cap, Accumulator::zero());
-            self.nn_acc_stack[0] = accumulator_from_scratch_active(board);
-
-        }
-
         // Iterative deepening
         'iterative_deepening: loop {
             let mut ply_data: SearchData = SearchData::new(current_ply);
@@ -293,18 +263,8 @@ impl Searcher {
 
             };
 
-            // Grow the accumulator stack if this iteration's depth would exceed it.
-            if self.acc_active() {
-                let needed = current_ply as usize + 4;
-                if self.nn_acc_stack.len() < needed {
-                    self.nn_acc_stack.resize(needed, Accumulator::zero());
-
-                }
-
-            }
-
             'aspiration_windows: loop {
-                let score = self.search(board, alpha, beta, Player::One, current_ply, current_ply, 0);
+                let score = self.search(board, alpha, beta, Player::One, current_ply, current_ply);
 
                 if self.stop || score >= WIN_THRESHOLD || score <= LOSS_THRESHOLD {
                     break 'aspiration_windows;
@@ -351,7 +311,7 @@ impl Searcher {
 
         }
 
-        // Print eval breakdown of the final PV endpoint
+        // // Print eval breakdown of the final PV endpoint
         // if let Some(last) = self.completed_plys.last() {
         //     let mut board = self.options.board.clone();
         //     for rm in &last.pv.clone() { board.make_move(&rm.mv); }
@@ -364,11 +324,7 @@ impl Searcher {
     }
 
     /// Main search function.
-    ///
-    /// `depth` is plies-from-root and indexes the NN accumulator stack:
-    ///   - `nn_acc_stack[depth]` is the accumulator for the *current* board state
-    ///   - children write `nn_acc_stack[depth + 1]` via `patch_make` before recursing
-    fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: Player, ply: i8, start_ply: i8, depth: usize) -> f64 {
+    fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: Player, ply: i8, start_ply: i8) -> f64 {
         let is_root = ply == start_ply;
         let is_leaf = ply == 0;
         let board_hash = board.hash();
@@ -398,13 +354,7 @@ impl Searcher {
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
             if self.options.nn && network_loaded() {
-                if self.options.nn_use_accumulator {
-                    return eval_from_accumulator_active(&self.nn_acc_stack[depth], player);
-
-                } else {
-                    return get_evalulation_nn(board, player);
-
-                }
+                return get_evalulation_nn(board, player);
 
             } else {
                 // Classical evaluation fallback
@@ -469,41 +419,8 @@ impl Searcher {
         let original_alpha = alpha;
         let mut best_move = Move::new_null();
         let mut best_score: f64 = f64::NEG_INFINITY;
-        let acc_active = self.acc_active();
         for (i, mv) in current_player_moves.iter().enumerate() {
-            // Patch the child accumulator from the current one BEFORE the move.
-            // Cycles will discard this work — rare enough that the wasted patch
-            // is cheaper than re-reading pre-move pieces after make_move.
-            if acc_active {
-                let (lo, hi) = self.nn_acc_stack.split_at_mut(depth + 1);
-                patch_make_active(&lo[depth], &mut hi[0], board, mv);
-
-            }
-
             board.make_move(mv);
-
-            // Debug-only verification: every patched accumulator must equal a
-            // from-scratch rebuild of the post-move board. If this ever fires,
-            // patch_make has a bug — track it down, do not work around it.
-            #[cfg(debug_assertions)]
-            if acc_active {
-                let expected = accumulator_from_scratch_active(board);
-                let got = &self.nn_acc_stack[depth + 1];
-                for k in 0..crate::search::network::L1_SIZE {
-                    debug_assert!(
-                        (expected.p1[k] - got.p1[k]).abs() < 1e-3,
-                        "p1 accumulator drift at neuron {} after move {}: expected {}, got {}",
-                        k, mv, expected.p1[k], got.p1[k]
-                    );
-                    debug_assert!(
-                        (expected.p2[k] - got.p2[k]).abs() < 1e-3,
-                        "p2 accumulator drift at neuron {} after move {}: expected {}, got {}",
-                        k, mv, expected.p2[k], got.p2[k]
-                    );
-
-                }
-
-            }
 
             // Skip moves that cycle back to a position already on the path: cycle.
             if self.path.contains(&board.hash()) {
@@ -514,39 +431,18 @@ impl Searcher {
 
             // Principal Variation Search
             let score: f64 = if i < 5 {
-                -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply, depth + 1) // Full search
+                -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply) // Full search
 
             } else {
-                let mut score = -self.search(board, -alpha - 1.0, -alpha, player.other(), ply - 1, start_ply, depth + 1); // Null window search
+                let mut score = -self.search(board, -alpha - 1.0, -alpha, player.other(), ply - 1, start_ply); // Null window search
                 if score > alpha && score < beta {
-                    score = -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply, depth + 1);
+                    score = -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply);
                 }
                 score
 
             };
 
             board.unmake_move(mv);
-
-            // Debug-only: unmake should restore the parent accumulator we never touched.
-            #[cfg(debug_assertions)]
-            if acc_active {
-                let expected = accumulator_from_scratch_active(board);
-                let got = &self.nn_acc_stack[depth];
-                for k in 0..crate::search::network::L1_SIZE {
-                    debug_assert!(
-                        (expected.p1[k] - got.p1[k]).abs() < 1e-3,
-                        "parent p1 accumulator drift after unmake of {} at neuron {}",
-                        mv, k
-                    );
-                    debug_assert!(
-                        (expected.p2[k] - got.p2[k]).abs() < 1e-3,
-                        "parent p2 accumulator drift after unmake of {} at neuron {}",
-                        mv, k
-                    );
-
-                }
-
-            }
 
             // Update the score of the rootnode.
             if is_root {
@@ -665,8 +561,8 @@ impl Searcher {
 
             let a_hist = a.2;
             let b_hist = b.2;
-            
-            // If more than 10 % difference use that to sort
+
+            // If more than 3% difference use that to sort
             if (a_score - b_score).abs() > (0.03 * a_score.abs().max(b_score.abs())) {
                 if a_score > b_score {
                     Ordering::Less
@@ -943,7 +839,6 @@ pub struct SearchOptions {
     pub maxnodes: Option<usize>,
     pub randomize: bool,
     pub nn: bool, // Use NN if set, fallback to old evaluation if not loaded
-    pub nn_use_accumulator: bool, // When NN is active, use the incremental accumulator path. Off = slow per-leaf forward pass (A/B fallback).
 
 }
 
@@ -956,7 +851,6 @@ impl SearchOptions {
             maxnodes: Option::None,
             randomize: false,
             nn: true,
-            nn_use_accumulator: true,
 
         }
 

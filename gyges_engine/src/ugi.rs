@@ -41,7 +41,7 @@ impl Ugi {
         rayon::ThreadPoolBuilder::new().num_threads(4).build_global().unwrap();
 
         // Load default network
-        let _ = network::load_network("./weights/baseline_100n_e100_144x256.bin");
+        let _ = network::load_network("./weights/default.bin");
 
     }
 
@@ -73,7 +73,6 @@ impl Ugi {
                     println!("option maxNodes");
                     println!("option randomize");
                     println!("option nn");
-                    println!("option nnAcc");
                     println!("option weightsPath");
                     println!("ugiok");
 
@@ -177,20 +176,6 @@ impl Ugi {
                     match *value_str {
                         "true" | "1" | "on" => self.search_options.nn = true,
                         "false" | "0" | "off" => self.search_options.nn = false,
-                        _ => println!("Unknown Command: '{}'", trimmed),
-                    }
-
-                } else {
-                    println!("Unknown Command: '{}'", trimmed);
-
-                }
-
-            }
-            Some(&"nnAcc") => {
-                if let Some(value_str) = raw_commands.get(2) {
-                    match *value_str {
-                        "true" | "1" | "on" => self.search_options.nn_use_accumulator = true,
-                        "false" | "0" | "off" => self.search_options.nn_use_accumulator = false,
                         _ => println!("Unknown Command: '{}'", trimmed),
                     }
 
