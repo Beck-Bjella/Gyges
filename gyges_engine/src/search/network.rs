@@ -202,14 +202,6 @@ const PAIR_IDX: [[u16; 36]; 36] = {
     m
 };
 
-/// Feature index for a singleton piece of type `t` at (feature-space) square `sq`.
-/// `t` must be 1, 2, or 3.
-#[inline(always)]
-#[allow(dead_code)]
-fn feature_singleton(sq: u32, t: u32) -> u32 {
-    sq * 3 + (t - 1)
-}
-
 /// Feature index for the pair {(sq_a, t_a), (sq_b, t_b)}, sq_a ≠ sq_b.
 /// Types are 1/2/3. Same-type is unordered; cross-type is ordered (lower type first).
 #[inline]

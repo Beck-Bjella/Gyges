@@ -1,6 +1,5 @@
 // eval_display.rs
 
-use gyges::core::SQ;
 use crate::search::{EvaluationContext, PieceData, Piece};
 
 // ── Cell display config ───────────────────────────────────────────────────────
@@ -134,7 +133,6 @@ impl EvaluationContext {
         let legend_w = 32 * 2 + 6;
         let total_w  = legend_w.max(grid_w);
         let grid_off = (total_w - grid_w) / 2;
-        let leg_off  = (total_w - legend_w) / 2;
         let indent   = 4usize;
         let goal_x   = indent + grid_off + grid_w / 2;
 

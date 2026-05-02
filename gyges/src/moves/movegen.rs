@@ -1,7 +1,5 @@
-//! This module contains all of the components needed for generating moves. 
+//! This module contains all of the components needed for generating moves.
 //!
-
-use std::result;
 
 use crate::core::*;
 use crate::board::*;
