@@ -1,11 +1,6 @@
-//! Neural network evaluation — fast board eval without gen_all.
-//!
-//! Architecture: 180 → 64 (ReLU) → 1 (tanh)
-//! Weights loaded from `weights.bin` exported by the Python training script.
-//!
-//! The board is always encoded from the current player's perspective:
-//! their home rank maps to rank 0. Output in [-NETWORK_SCALE, +NETWORK_SCALE],
-//! positive = current player winning.
+//! NN evaluation. FEATURE_COUNT sparse pair-factored inputs → L1_SIZE (ReLU) → 1 (tanh).
+//! Board encoded from the side-to-move's perspective (home rank = rank 0).
+//! Output in [-NETWORK_SCALE, +NETWORK_SCALE], positive = side-to-move winning.
 
 use gyges::{board::*, core::*};
 use std::fs;
@@ -42,46 +37,48 @@ pub fn network_name() -> Option<&'static str> {
 }
 
 /// Returns the raw network score for both players (P1-relative), or None if not loaded.
-pub fn try_evalulation_nn(board: &BoardState, p1_control: u64, p2_control: u64) -> Option<(f64, f64)> {
+pub fn try_evalulation_nn(board: &BoardState) -> Option<(f64, f64)> {
     let net = unsafe { NETWORK.as_ref() }?;
     Some((
-        net.eval(board, Player::One, p1_control, p2_control),
-        -net.eval(board, Player::Two, p1_control, p2_control),
+        net.eval(board, Player::One),
+        -net.eval(board, Player::Two),
     ))
 }
 
-/// Drop-in replacement for `get_evalulation` — requires control bitboards.
+/// Drop-in replacement for `get_evalulation`.
 ///
 /// Returns a score from the current player's perspective (negamax-compatible).
 /// Panics if no network is loaded — gate with `network_loaded()` or a config flag.
-pub fn get_evalulation_nn(board: &BoardState, player: Player, p1_control: u64, p2_control: u64) -> f64 {
+pub fn get_evalulation_nn(board: &BoardState, player: Player) -> f64 {
     let net = unsafe { NETWORK.as_ref() }.expect("Network not loaded — call load_network first");
-    net.eval(board, player, p1_control, p2_control)
+    net.eval(board, player)
 }
 
-/// Scale the tanh output to match the hand-crafted eval's magnitude.
+/// Scales tanh output to match the hand-crafted eval's magnitude.
 pub const NETWORK_SCALE: f64 = 10000.0;
 
-/// Two-layer MLP: 180 → 64 (ReLU) → 1 (tanh)
-///
-/// Input encoding — 5 features per square × 36 squares = 180:
-///   Board is always oriented so the current player's home rank is at rank 0.
-///   features[sq*5 + 0..3] = one-hot piece type (empty, 1-ring, 2-ring, 3-ring)
-///   features[sq*5 + 4]    = control scalar (+1 my unique, 0 shared/empty, -1 opponent unique)
-///
-/// Weight layout in `weights.bin` (float32, little-endian):
-///   net.0.weight  [64 × 180]   11520 floats  offset 0
-///   net.0.bias    [64]             64 floats  offset 11520
-///   net.3.weight  [1  × 64]       64 floats  offset 11584
-///   net.3.bias    [1]               1 float   offset 11648
-///   Total: 11649 floats = 46596 bytes
+/// Layer 1 width.
+pub const L1_SIZE: usize = 1024;
+
+/// Total input features: 108 singletons + 3×630 same-type pairs + 3×1296 cross-type pairs.
+pub const FEATURE_COUNT: usize = 5886;
+
+// Offsets into the sparse feature index space (must match the Python encoder).
+const PAIR_11_OFFSET: u32 = 108;
+const PAIR_22_OFFSET: u32 = 738;
+const PAIR_33_OFFSET: u32 = 1368;
+const PAIR_12_OFFSET: u32 = 1998;
+const PAIR_13_OFFSET: u32 = 3294;
+const PAIR_23_OFFSET: u32 = 4590;
+
+/// FEATURE_COUNT → L1_SIZE (ReLU) → 1 (tanh).
+/// Sparse input: singletons + same-type pairs + cross-type pairs.
+/// Weights file (float32 LE): w1 [L1 × F], b1 [L1], w2 [1 × L1], b2 [1].
 pub struct GygesNet {
-    /// First-layer weights, transposed for cache-friendly access during sparse evaluation.
-    /// Layout: w1t[input_feature][neuron] — each column (all 64 neuron weights for one input)
-    /// is contiguous in memory, enabling vectorized addition in the fused forward pass.
-    w1t: Box<[[f32; 64]; 180]>,
-    b1: [f32; 64],
-    w2: [f32; 64],
+    /// Layer-1 weights, transposed: w1t[feature][neuron]. Column-major sparse adds.
+    w1t: Box<[[f32; L1_SIZE]; FEATURE_COUNT]>,
+    b1: [f32; L1_SIZE],
+    w2: [f32; L1_SIZE],
     b2: f32,
 
 }
@@ -92,13 +89,17 @@ impl GygesNet {
         let bytes = fs::read(path)
             .map_err(|e| format!("Cannot read weight file '{}': {}", path, e))?;
 
-        let expected_bytes = 11649 * 4;
+        let expected_floats = L1_SIZE * FEATURE_COUNT + L1_SIZE + L1_SIZE + 1;
+        let expected_bytes = expected_floats * 4;
         if bytes.len() != expected_bytes {
             return Err(format!(
-                "Weight file is {} bytes, expected {} (11649 × float32). \
-                 Check that the Python export matches the 180→64→1 architecture.",
+                "Weight file is {} bytes, expected {} ({} × float32). \
+                 Check the Python export matches {}→{}→1.",
                 bytes.len(),
-                expected_bytes
+                expected_bytes,
+                expected_floats,
+                FEATURE_COUNT,
+                L1_SIZE
             ));
 
         }
@@ -108,132 +109,249 @@ impl GygesNet {
             .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
             .collect();
 
-        // net.0.weight: [64, 180] row-major in the file — transpose to [180, 64] for
-        // cache-friendly sparse access: w1t[feature][neuron]
-        let mut w1t = Box::new([[0f32; 64]; 180]);
-        for i in 0..64 {
-            for j in 0..180 {
-                w1t[j][i] = floats[i * 180 + j];
+        // fc1.weight: [L1_SIZE, FEATURE_COUNT] row-major in the file — transpose to
+        // [FEATURE_COUNT, L1_SIZE] for cache-friendly sparse access: w1t[feature][neuron].
+        // Allocate via Vec to avoid blowing the stack on the multi-MB array literal.
+        let mut w1t_vec: Vec<[f32; L1_SIZE]> = vec![[0.0f32; L1_SIZE]; FEATURE_COUNT];
+        for i in 0..L1_SIZE {
+            for j in 0..FEATURE_COUNT {
+                w1t_vec[j][i] = floats[i * FEATURE_COUNT + j];
 
             }
 
         }
+        let w1t: Box<[[f32; L1_SIZE]; FEATURE_COUNT]> = w1t_vec
+            .into_boxed_slice()
+            .try_into()
+            .map_err(|_| "internal: w1t length mismatch".to_string())?;
 
-        // net.0.bias: [64] — offset 11520
-        let mut b1 = [0f32; 64];
-        for i in 0..64 {
-            b1[i] = floats[11520 + i];
+        let b1_off = L1_SIZE * FEATURE_COUNT;
+        let w2_off = b1_off + L1_SIZE;
+        let b2_off = w2_off + L1_SIZE;
+
+        // fc1.bias: [L1_SIZE]
+        let mut b1 = [0f32; L1_SIZE];
+        for i in 0..L1_SIZE {
+            b1[i] = floats[b1_off + i];
 
         }
 
-        // net.3.weight: [1, 64] — offset 11584
-        let mut w2 = [0f32; 64];
-        for i in 0..64 {
-            w2[i] = floats[11584 + i];
+        // fc2.weight: [1, L1_SIZE]
+        let mut w2 = [0f32; L1_SIZE];
+        for i in 0..L1_SIZE {
+            w2[i] = floats[w2_off + i];
 
         }
 
-        // net.3.bias: scalar — offset 11648
-        let b2 = floats[11648];
+        // fc2.bias: scalar
+        let b2 = floats[b2_off];
 
         Ok(Self { w1t, b1, w2, b2 })
 
     }
 
-    /// Fused encode + forward pass.
-    ///
-    /// The board is encoded from the active player's perspective (P2 rotated 180°).
-    /// For each square sq in 0..36:
-    ///   features[sq*5 + 0] = 1.0  →  empty
-    ///   features[sq*5 + 1] = 1.0  →  Piece::One
-    ///   features[sq*5 + 2] = 1.0  →  Piece::Two
-    ///   features[sq*5 + 3] = 1.0  →  Piece::Three
-    ///   features[sq*5 + 4] = control scalar (+1.0 my / 0.0 shared / -1.0 opponent)
-    ///
-    /// Instead of building this 180-element feature vector and then multiplying by the weight
-    /// matrix, we exploit the sparsity of the input: each square contributes exactly one
-    /// non-zero one-hot feature (+1.0) and optionally one control feature (+1.0 or -1.0).
-    /// That means only ~36-72 of the 180 inputs are non-zero.
-    ///
-    /// For each non-zero feature, we directly add (or subtract) the corresponding weight
-    /// column into the hidden accumulator. This replaces 64×180 = 11,520 multiply-adds
-    /// with ~36-72 vectorizable additions of 64-element arrays — no multiplies needed.
-    ///
-    /// The transposed weight layout (w1t[feature][neuron]) ensures each column is contiguous
-    /// in memory, enabling auto-vectorization of the inner loop.
-    pub fn eval(&self, board: &BoardState, player: Player, p1_control: u64, p2_control: u64) -> f64 {
-        // Start with bias — equivalent to the constant term in each neuron
+    /// Encode + forward pass from `player`'s perspective (P2 sees board mirrored 180°).
+    pub fn eval(&self, board: &BoardState, player: Player) -> f64 {
         let mut hidden = self.b1;
 
-        let (my_control, opp_control) = match player {
-            Player::One => (p1_control, p2_control),
-            Player::Two => (p2_control, p1_control),
-        };
-
-        for sq in 0..36usize {
-            // For P2, rotate the board 180° so active player's home rank is always rank 0
-            let board_sq = match player {
-                Player::One => sq,
-                Player::Two => 35 - sq,
-            };
-
-            let bit = 1u64 << board_sq;
-
-            // Determine which piece (if any) is on this square
-            let piece_idx = if board.piece_bb.0 & bit != 0 {
-                board.data[board_sq] as usize + 1
-
-            } else {
-                0
-
-            };
-
-            // One-hot piece feature: add the weight column for this feature
-            // (equivalent to multiplying by 1.0 — no multiply needed)
-            let piece_col = &self.w1t[sq * 5 + piece_idx];
-            for i in 0..64 {
-                hidden[i] += piece_col[i];
+        let mirror = matches!(player, Player::Two);
+        encode_position(board, mirror, |feat| {
+            let col = &self.w1t[feat as usize];
+            for i in 0..L1_SIZE {
+                hidden[i] += col[i];
 
             }
 
-            // Control feature: only applies to occupied squares
-            if piece_idx != 0 {
-                let ctrl_col = &self.w1t[sq * 5 + 4];
-                if my_control & bit != 0 {
-                    // +1.0 control — add the weight column
-                    for i in 0..64 {
-                        hidden[i] += ctrl_col[i];
+        });
 
-                    }
-                    
-                } else if opp_control & bit != 0 {
-                    // -1.0 control — subtract the weight column
-                    for i in 0..64 {
-                        hidden[i] -= ctrl_col[i];
-
-                    }
-
-                }
-                // 0.0 control (shared/no control) — skip entirely
-            }
-
-        }
-
-        // ReLU activation
-        for i in 0..64 {
+        // ReLU
+        for i in 0..L1_SIZE {
             hidden[i] = hidden[i].max(0.0);
 
         }
 
-        // Layer 2: out = tanh(w2 · hidden + b2) — dense, since hidden is fully populated
+        // Layer 2: out = tanh(w2 · hidden + b2)
         let mut out = self.b2;
-        for i in 0..64 {
+        for i in 0..L1_SIZE {
             out += self.w2[i] * hidden[i];
-            
+
         }
 
         (out.tanh() as f64) * NETWORK_SCALE
-        
+
     }
 
+}
+
+/// Unordered-pair index: PAIR_IDX[a][b] = PAIR_IDX[b][a] ∈ [0, 630) for a ≠ b.
+/// Diagonal is unused.
+const PAIR_IDX: [[u16; 36]; 36] = {
+    let mut m = [[0u16; 36]; 36];
+    let mut k: u16 = 0;
+    let mut a = 0usize;
+    while a < 36 {
+        let mut b = a + 1;
+        while b < 36 {
+            m[a][b] = k;
+            m[b][a] = k;
+            k += 1;
+            b += 1;
+        }
+        a += 1;
+    }
+    m
+};
+
+/// Feature index for the pair {(sq_a, t_a), (sq_b, t_b)}, sq_a ≠ sq_b.
+/// Types are 1/2/3. Same-type is unordered; cross-type is ordered (lower type first).
+#[inline]
+#[allow(dead_code)]
+fn feature_pair(sq_a: u32, t_a: u32, sq_b: u32, t_b: u32) -> u32 {
+    if t_a == t_b {
+        let off = match t_a {
+            1 => PAIR_11_OFFSET,
+            2 => PAIR_22_OFFSET,
+            3 => PAIR_33_OFFSET,
+            _ => unreachable!(),
+        };
+        off + PAIR_IDX[sq_a as usize][sq_b as usize] as u32
+    } else if t_a < t_b {
+        let off = match (t_a, t_b) {
+            (1, 2) => PAIR_12_OFFSET,
+            (1, 3) => PAIR_13_OFFSET,
+            (2, 3) => PAIR_23_OFFSET,
+            _ => unreachable!(),
+        };
+        off + sq_a * 36 + sq_b
+    } else {
+        feature_pair(sq_b, t_b, sq_a, t_a)
+    }
+}
+
+/// Emit the active feature indices for `board` via `out`. When `mirror` is true,
+/// every square is transformed by `35 - sq` (P2 view: 180° rotation).
+///
+/// Order: singletons (in raw-square iteration order), then same-type pairs grouped
+/// by piece type, then cross-type pairs. Matches the Python encoder ordering.
+fn encode_position<F: FnMut(u32)>(board: &BoardState, mirror: bool, mut out: F) {
+    // Feature-space squares grouped by piece type. Index 0 = type 1, etc.
+    let mut grouped: [[u8; 12]; 3] = [[0; 12]; 3];
+    let mut counts = [0usize; 3];
+
+    for raw_sq in 0..36u8 {
+        if board.piece_bb.0 & (1u64 << raw_sq) == 0 { continue; }
+        let t = match board.data[raw_sq as usize] {
+            Piece::One => 1u32,
+            Piece::Two => 2u32,
+            Piece::Three => 3u32,
+            Piece::None => continue,
+        };
+        let feat_sq = if mirror { 35 - raw_sq } else { raw_sq } as u32;
+
+        out(feat_sq * 3 + (t - 1));
+
+        let g = (t - 1) as usize;
+        grouped[g][counts[g]] = feat_sq as u8;
+        counts[g] += 1;
+
+    }
+
+    // Same-type pairs (unordered)
+    let same_offsets = [PAIR_11_OFFSET, PAIR_22_OFFSET, PAIR_33_OFFSET];
+    for g in 0..3 {
+        let n = counts[g];
+        let off = same_offsets[g];
+        for i in 0..n {
+            for j in (i + 1)..n {
+                out(off + PAIR_IDX[grouped[g][i] as usize][grouped[g][j] as usize] as u32);
+
+            }
+
+        }
+
+    }
+
+    // Cross-type pairs (ordered: lower piece-type's square first)
+    let cross: [(usize, usize, u32); 3] = [
+        (0, 1, PAIR_12_OFFSET),
+        (0, 2, PAIR_13_OFFSET),
+        (1, 2, PAIR_23_OFFSET),
+    ];
+    for (lo, hi, off) in cross {
+        let nlo = counts[lo];
+        let nhi = counts[hi];
+        for i in 0..nlo {
+            for j in 0..nhi {
+                out(off + grouped[lo][i] as u32 * 36 + grouped[hi][j] as u32);
+
+            }
+
+        }
+
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Encoder self-consistency: emitted indices are unique, < FEATURE_COUNT, and
+    /// the total count matches the piece-group combinatorics.
+    #[test]
+    fn encoder_emits_unique_valid_indices() {
+        for board_arr in [STARTING_BOARD, BENCH_BOARD, TEST_BOARD] {
+            let board = BoardState::from(board_arr);
+            for mirror in [false, true] {
+                let mut indices: Vec<u32> = Vec::new();
+                encode_position(&board, mirror, |f| indices.push(f));
+
+                let mut n = [0usize; 3];
+                for sq in 0..36 {
+                    if board.piece_bb.0 & (1u64 << sq) == 0 { continue; }
+                    match board.data[sq] {
+                        Piece::One => n[0] += 1,
+                        Piece::Two => n[1] += 1,
+                        Piece::Three => n[2] += 1,
+                        _ => {}
+                    }
+                }
+                let singles = n[0] + n[1] + n[2];
+                let same = n[0]*n[0].saturating_sub(1)/2
+                         + n[1]*n[1].saturating_sub(1)/2
+                         + n[2]*n[2].saturating_sub(1)/2;
+                let cross = n[0]*n[1] + n[0]*n[2] + n[1]*n[2];
+                assert_eq!(
+                    indices.len(), singles + same + cross,
+                    "feature count mismatch (mirror={})", mirror
+                );
+
+                let mut sorted = indices.clone();
+                sorted.sort();
+                sorted.dedup();
+                assert_eq!(sorted.len(), indices.len(), "duplicate features emitted");
+
+                assert!(
+                    indices.iter().all(|&f| (f as usize) < FEATURE_COUNT),
+                    "feature index out of range"
+                );
+            }
+        }
+    }
+
+    /// `feature_pair` must canonicalize: same-type order-invariant, cross-type
+    /// reduces to (lower_type, higher_type) with lower-type's square first.
+    #[test]
+    fn feature_pair_canonicalizes() {
+        // Same-type: pair(a, t, b, t) == pair(b, t, a, t)
+        assert_eq!(feature_pair(3, 1, 17, 1), feature_pair(17, 1, 3, 1));
+        assert_eq!(feature_pair(0, 2, 35, 2), feature_pair(35, 2, 0, 2));
+
+        // Cross-type: pair(a, 1, b, 2) == pair(b, 2, a, 1), and lands in PAIR_12 range.
+        let idx = feature_pair(5, 1, 10, 2);
+        assert_eq!(idx, feature_pair(10, 2, 5, 1));
+        assert!(idx >= PAIR_12_OFFSET && idx < PAIR_13_OFFSET);
+        assert_eq!(idx, PAIR_12_OFFSET + 5 * 36 + 10);
+    }
+    
 }

@@ -309,16 +309,6 @@ pub fn info_output(search_data: SearchData) {
 
 }
 
-pub fn currmove_output(mv: &impl std::fmt::Display, move_number: usize, ply: i8) {
-    println!("info ply {} currmove {} currmovenumber {}", ply, mv, move_number);
-
-}
-
-pub fn new_best_output(mv: &impl std::fmt::Display, score: f64, ply: i8, nodes: usize, elapsed: f64) {
-    println!("info ply {} currmove {} score {:.3} nodes {} time {:.3} ", ply, mv, score, nodes, elapsed);
-
-}
-
 pub fn best_move_output(search_data: SearchData) {
     if search_data.is_draw {
         println!("bestmove null score {:.3} time {:.3}", search_data.best_move.score, search_data.elapsed_time);

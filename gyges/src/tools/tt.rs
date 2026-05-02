@@ -32,12 +32,6 @@ const BYTES_PER_MB: f64 = BYTES_PER_KB * 1000.0;
 /// Bytes per gigabyte.
 const BYTES_PER_GB: f64 = BYTES_PER_MB * 1000.0;
 
-/// Counter for the number of safe inserts into the transposition table.
-pub static mut TT_SAFE_INSERTS: usize = 0;
-/// Counter for the number of unsafe inserts into the transposition table.
-pub static mut TT_UNSAFE_INSERTS: usize = 0;
-
-
 /// Defines the bound for a node.
 /// This is the same as the chess concept of a node type. [Chess Wiki](https://www.chessprogramming.org/Node_Types).
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -189,14 +183,12 @@ impl TranspositionTable {
             let entry = &mut (*entry_ptr);
 
             if !entry.used {
-                TT_SAFE_INSERTS += 1;
                 entry.replace(new_entry);
                 return true;
 
             }
 
             if entry.key == new_entry.key && new_entry.depth >= entry.depth {
-                TT_SAFE_INSERTS += 1;
                 entry.replace(new_entry);
                 return true;
 
@@ -217,7 +209,6 @@ impl TranspositionTable {
 
         let replacement_entry = &mut (*replacement_ptr);
 
-        TT_UNSAFE_INSERTS += 1;
         replacement_entry.replace(new_entry);
     
         false
