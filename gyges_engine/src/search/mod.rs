@@ -26,6 +26,7 @@ use movegen::NoQuit;
 use movegen::QuitOnThreat;
 
 use gyges::board::*;
+use gyges::board::bitboard::*;
 use gyges::moves::*;
 use gyges::moves::move_list::*;
 use gyges::tools::tt::*;
@@ -389,17 +390,42 @@ impl Searcher {
             };
 
             if crit_result.threat_count > 0 {
-                // Tactical: opp threatens our goal, restrict to blockers.
-                let critical = crit_result.critical_squares
-                    | active_line_shift_mask(board, player.other());
+                // DEBUG: dump critical heatmap.
+                // let h = &crit_result.critical_heatmap;
+                // println!("================ CRIT HEATMAP ================");
+                // println!("{}", board);
+                // println!("threats={}  goal37={}  goal36={}", crit_result.threat_count, h[37], h[36]);
+                // println!("----------------------------------------------");
+                // for y in (0..6).rev() {
+                //     for x in 0..6 {
+                //         let v = h[y * 6 + x];
+                //         if v == 0 { print!("   ."); } else { print!(" {:>3}", v); }
+                //     }
+                //     println!();
+                // }
+                // println!("==============================================");
 
-                let moves = move_list.moves_filtered(board, critical);
+                // Tactical: opp threatens our goal, restrict to blockers.
+                let crit_partial = crit_result.critical_squares;
+                let tc = crit_result.threat_count as u16;
+                let mut crit_full = BitBoard::EMPTY;
+                for sq in 0..38 {
+                    if crit_result.critical_heatmap[sq] == tc {
+                        crit_full |= BitBoard(1u64 << sq);
+
+                    }
+
+                }
+                let shift_mask = active_line_shift_mask(board, player.other());
+
+                let moves = move_list.moves_filtered(board, crit_partial, crit_full, shift_mask);
 
                 if moves.is_empty() {
                     return LOSS_SCORE + (start_ply - ply) as f64;
 
                 }
 
+                // self.order_moves_critical(moves, board, player, crit_partial, crit_full)
                 self.order_moves(moves, board, player)
 
             } else {
@@ -588,6 +614,91 @@ impl Searcher {
         out.extend(moves_to_sort.into_iter().map(|(mv, _, _)| mv));
 
         return out;
+
+    }
+
+    /// Tactical ordering: criticality tier first (full > partial > none), then our_threat, then sort_val/history.
+    pub fn order_moves_critical(&mut self, mut moves: Vec<Move>, board: &mut BoardState, player: Player, crit_partial: BitBoard, crit_full: BitBoard) -> Vec<Move> {
+        let mut out: Vec<Move> = Vec::with_capacity(moves.len());
+
+        let mut tt_move: Option<Move> = None;
+        let (valid, entry) = unsafe { tt().probe(board.hash()) };
+        if valid && entry.bestmove != Move::new_null() {
+            tt_move = Some(entry.bestmove);
+
+        }
+
+        if let Some(tt) = tt_move {
+            if let Some(idx) = moves.iter().position(|&m| m == tt) {
+                out.push(moves.remove(idx));
+
+            }
+
+        }
+
+        let mut moves_to_sort: Vec<(Move, u8, bool, f64, f64)> = moves.into_iter().filter_map(|mv| {
+            let mut sort_val: f64 = 0.0;
+            board.make_move(&mv);
+
+            let data = unsafe { self.mg.gen::<GenMoveCount, QuitOnThreat>(board, player.other()) };
+            if data.threat {
+                board.unmake_move(&mv);
+                return None;
+
+            }
+            let opp_movecount = data.move_count;
+
+            let our_threat = unsafe { self.mg.gen::<GenNone, QuitOnThreat>(board, player).threat };
+            if our_threat {
+                sort_val += 1000.0;
+
+            }
+            sort_val -= opp_movecount as f64;
+
+            board.unmake_move(&mv);
+
+            let mut touched_full = false;
+            let mut touched_partial = false;
+            for (_, sq) in mv.data.iter() {
+                if (sq.0 as usize) >= 38 { continue; }
+                let bit = BitBoard(sq.bit());
+                if (crit_full & bit).is_not_empty() { touched_full = true; }
+                if (crit_partial & bit).is_not_empty() { touched_partial = true; }
+
+            }
+            let tier: u8 = if touched_full { 2 } else if touched_partial { 1 } else { 0 };
+
+            Some((mv, tier, our_threat, sort_val, self.history.fetch(&mv)))
+
+        }).collect();
+
+        moves_to_sort.sort_by(|a, b| {
+            // Primary: tier.
+            let tier_cmp = b.1.cmp(&a.1);
+            if tier_cmp != Ordering::Equal { return tier_cmp; }
+
+            // Secondary: sort_val with 3% threshold to history.
+            let a_score = a.3;
+            let b_score = b.3;
+            let a_hist = a.4;
+            let b_hist = b.4;
+            if (a_score - b_score).abs() > (0.03 * a_score.abs().max(b_score.abs())) {
+                if a_score > b_score { return Ordering::Less; }
+                if a_score < b_score { return Ordering::Greater; }
+
+            }
+            if a_hist > b_hist { return Ordering::Less; }
+            if a_hist < b_hist { return Ordering::Greater; }
+
+            // Tertiary: our_threat.
+            if b.2 && !a.2 { Ordering::Greater }
+            else if !b.2 && a.2 { Ordering::Less }
+            else { Ordering::Equal }
+
+        });
+
+        out.extend(moves_to_sort.into_iter().map(|(mv, _, _, _, _)| mv));
+        out
 
     }
 

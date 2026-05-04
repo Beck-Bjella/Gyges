@@ -99,31 +99,35 @@ impl RawMoveList {
 
     }
 
-    /// Decode only moves whose start, end, pickup, or drop-destination touches `critical`.
-    pub fn moves_filtered(&mut self, board: &BoardState, critical: BitBoard) -> Vec<Move> {
-        if critical.is_empty() {
-            return self.moves(board);
-
-        }
-
+    /// Decode only moves matching the criticality-tiered blocker rules.
+    ///
+    /// `crit_partial` = squares on at least one threat path.
+    /// `crit_full` = squares on every threat path (chokepoints).
+    /// `shift_mask` = opp's back zone (only used to keep counter-threat bounces).
+    pub fn moves_filtered(&mut self, board: &BoardState, crit_partial: BitBoard, crit_full: BitBoard, shift_mask: BitBoard) -> Vec<Move> {
         let mut moves: Vec<Move> = Vec::with_capacity(64);
 
-        // Order matters — `get_data` consumes the bitboard.
-        let mut critical_drop_bb = self.drop_positions & critical;
-        let critical_drop_positions = critical_drop_bb.get_data();
+        let mut crit_drop_bb = self.drop_positions & crit_partial;
+        let crit_drop_positions = crit_drop_bb.get_data();
+        let mut full_drop_bb = self.drop_positions & crit_full;
+        let full_drop_positions = full_drop_bb.get_data();
         let all_drop_positions = self.drop_positions.get_data();
-        let any_critical_drops = !critical_drop_positions.is_empty();
 
         for idx in self.start_indexs.iter() {
             let start_position = self.start_positions[*idx];
-            let start_in_crit = (critical & start_position.1.bit()).is_not_empty();
+            let start_bit = BitBoard(start_position.1.bit());
+            let start_full = (crit_full & start_bit).is_not_empty();
+            let start_crit = (crit_partial & start_bit).is_not_empty();
 
-            // Bounce moves: keep iff start or end touches critical.
-            let mut bounce_ends = if start_in_crit {
+            // Bounce: depends on start state. Shift mask keeps counter-threat bounces.
+            let mut bounce_ends = if start_full {
                 self.end_positions[*idx]
 
+            } else if start_crit {
+                self.end_positions[*idx] & (crit_partial | shift_mask)
+
             } else {
-                self.end_positions[*idx] & critical
+                self.end_positions[*idx] & (crit_full | shift_mask)
 
             };
             while bounce_ends.is_not_empty() {
@@ -139,19 +143,20 @@ impl RawMoveList {
 
             }
 
-            // Drop moves: pickup-only emit iff start or pickup touches critical;
-            // elsewhere-drops add the drop_dest to that condition. Pickups
-            // iterate in natural bitboard order to preserve relative order
-            // with `moves()` (sort downstream is stable).
+            // Drop: shift mask not used (drops can't land in opp's back zone).
             let mut pickups = self.pickup_positions[*idx];
             while pickups.is_not_empty() {
                 let pick_up_pos = pickups.pop_lsb();
                 let pickup_sq = SQ(pick_up_pos as u8);
-                let pickup_in_crit = (critical & pickup_sq.bit()).is_not_empty();
-                let starts_or_picks = start_in_crit || pickup_in_crit;
+                let pickup_crit = (crit_partial & BitBoard(pickup_sq.bit())).is_not_empty();
+                let pickup_full = (crit_full & BitBoard(pickup_sq.bit())).is_not_empty();
                 let displaced = board.piece_at(pickup_sq);
 
-                if starts_or_picks {
+                // Pickup-only drop: drop_dest = start. Keep if pickup is crit
+                // OR start (= drop_dest) is crit.
+                let keep_pickup_only = pickup_crit || start_crit;
+
+                if keep_pickup_only {
                     moves.push(Move::new(
                         [
                             (Piece::None, start_position.1),
@@ -163,31 +168,30 @@ impl RawMoveList {
 
                 }
 
-                if starts_or_picks {
-                    for drop_pos in all_drop_positions.iter() {
-                        moves.push(Move::new(
-                            [
-                                (Piece::None, start_position.1),
-                                (start_position.0, pickup_sq),
-                                (displaced, SQ(*drop_pos as u8)),
-                            ],
-                            MoveType::Drop,
-                        ));
+                // Drop-elsewhere: full crit on start or pickup frees drop_dest.
+                let drops: &Vec<usize> = if start_full || pickup_full {
+                    &all_drop_positions
 
-                    }
+                } else if start_crit {
+                    if pickup_crit { &all_drop_positions } else { &crit_drop_positions }
 
-                } else if any_critical_drops {
-                    for drop_pos in critical_drop_positions.iter() {
-                        moves.push(Move::new(
-                            [
-                                (Piece::None, start_position.1),
-                                (start_position.0, pickup_sq),
-                                (displaced, SQ(*drop_pos as u8)),
-                            ],
-                            MoveType::Drop,
-                        ));
+                } else if pickup_crit {
+                    &crit_drop_positions
 
-                    }
+                } else {
+                    &full_drop_positions
+
+                };
+
+                for drop_pos in drops.iter() {
+                    moves.push(Move::new(
+                        [
+                            (Piece::None, start_position.1),
+                            (start_position.0, pickup_sq),
+                            (displaced, SQ(*drop_pos as u8)),
+                        ],
+                        MoveType::Drop,
+                    ));
 
                 }
 

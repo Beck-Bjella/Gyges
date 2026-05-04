@@ -730,6 +730,11 @@ impl GenType for GenCriticalSquares {
     fn store_goal(result: &mut GenResult, _: usize, _: u64, path_squares: BitBoard) {
         result.critical_squares |= path_squares;
         result.threat_count += 1;
+        let mut bits = path_squares;
+        while bits.is_not_empty() {
+            let sq = bits.pop_lsb();
+            result.critical_heatmap[sq] += 1;
+        }
     }
     fn exit(_: &mut GenResult, _: &mut BoardState) {}
 
@@ -935,10 +940,10 @@ pub struct GenResult {
     pub move_list: RawMoveList,
     pub controlled_squares: BitBoard,
     pub controlled_pieces: BitBoard,
-    /// Set by `GenCriticalSquares`: union of board squares on any path that
-    /// reached the goal. Empty for all other generation types.
+    /// Union of squares on any goal-reaching path.
     pub critical_squares: BitBoard,
-
+    /// Path-count per square — how many threats each square participates in.
+    pub critical_heatmap: [u16; 38],
 
 }
 
@@ -952,6 +957,7 @@ impl GenResult {
             controlled_squares: BitBoard::EMPTY,
             controlled_pieces: BitBoard::EMPTY,
             critical_squares: BitBoard::EMPTY,
+            critical_heatmap: [0; 38],
 
         }
 
