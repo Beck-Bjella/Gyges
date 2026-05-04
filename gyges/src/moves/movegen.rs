@@ -42,9 +42,11 @@ impl MoveGen {
 
                 G::init(&mut result, x, starting_sq, starting_piece);
 
-                self.stack.push(StackData::new(Action::End, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
-                self.stack.push(StackData::new(Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
-                self.stack.push(StackData::new(Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+                let initial_path_squares = BitBoard(starting_sq.bit());
+
+                self.stack.push(StackData::new(Action::End, BitBoard::EMPTY, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
+                self.stack.push(StackData::new(Action::Gen, BitBoard::EMPTY, BitBoard::EMPTY, initial_path_squares, starting_sq, starting_piece, starting_sq, starting_piece, x, player));
+                self.stack.push(StackData::new(Action::Start, BitBoard::EMPTY, BitBoard::EMPTY, BitBoard::EMPTY, SQ::NONE, Piece::None, starting_sq, starting_piece, 0, player));
 
             }
 
@@ -56,6 +58,7 @@ impl MoveGen {
             let action = data.action;
             let backtrack_board = data.backtrack_board;
             let banned_positions = data.banned_positions;
+            let path_squares = data.path_squares;
             let current_sq = data.current_sq;
             let current_piece = data.current_piece;
             let starting_sq = data.starting_sq;
@@ -82,29 +85,30 @@ impl MoveGen {
                             let path_list = ONE_PATH_LISTS.get_unchecked(current_sq.0 as usize);
                             for i in 0..(path_list.count as usize) {
                                 let path = &path_list.paths[i];
-                
+
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
-                    
+
                                 }
-                
+
                                 let end = SQ(path.0[1]);
                                 let end_bit = end.bit();
 
                                 if (board.piece_bb & end_bit).is_not_empty() {
                                     if (banned_positions & end_bit).is_not_empty() {
                                         continue;
-    
+
                                     }
-                                    
+
                                     G::store_bounce(&mut result, active_line_idx, end_bit);
 
                                     let end_piece = board.piece_at(end);
                                     let new_banned_positions = banned_positions ^ end_bit;
                                     let new_backtrack_board = backtrack_board ^ path.1;
-                                    
-                                    self.stack.push(StackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-                                    
+                                    let new_path_squares = path_squares | BitBoard(end_bit);
+
+                                    self.stack.push(StackData::new(Action::Gen, new_backtrack_board, new_banned_positions, new_path_squares, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+
                                     continue;
 
                                 }
@@ -116,12 +120,12 @@ impl MoveGen {
 
                                     }
 
-                                    G::store_goal(&mut result, active_line_idx, end_bit);
+                                    G::store_goal(&mut result, active_line_idx, end_bit, path_squares | BitBoard(end_bit));
 
                                     if Q::check_quit() {
                                         board.place(starting_piece, starting_sq);
                                         board.piece_bb ^= starting_sq.bit();
-                                        
+
                                         result.threat = true;
 
                                         return result;
@@ -141,7 +145,7 @@ impl MoveGen {
                             let intercepts = ALL_TWO_INTERCEPTS[current_sq.0 as usize];
                             let intercept_bb = board.piece_bb & intercepts;
 
-                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };            
+                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };
                             let valid_paths_idx = TWO_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
 
                             let path_list = TWO_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
@@ -150,8 +154,10 @@ impl MoveGen {
 
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
-                    
+
                                 }
+
+                                let path_squares = path_squares | (1 << path.0[1]);
 
                                 let end = SQ(path.0[2]);
                                 let end_bit = end.bit();
@@ -159,7 +165,7 @@ impl MoveGen {
                                 if (board.piece_bb & end_bit).is_not_empty() {
                                     if (banned_positions & end_bit).is_not_empty() {
                                         continue;
-    
+
                                     }
 
                                     G::store_bounce(&mut result, active_line_idx, end_bit);
@@ -167,11 +173,12 @@ impl MoveGen {
                                     let end_piece = board.piece_at(end);
                                     let new_banned_positions = banned_positions ^ end_bit;
                                     let new_backtrack_board = backtrack_board ^ path.1;
-                                    
-                                    self.stack.push(StackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-                                    
+                                    let new_path_squares = path_squares | BitBoard(end_bit);
+
+                                    self.stack.push(StackData::new(Action::Gen, new_backtrack_board, new_banned_positions, new_path_squares, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+
                                     continue;
-                                
+
                                 }
 
                                 let goal_bit = end_bit >> 36;
@@ -181,7 +188,7 @@ impl MoveGen {
 
                                     }
 
-                                    G::store_goal(&mut result, active_line_idx, end_bit);
+                                    G::store_goal(&mut result, active_line_idx, end_bit, path_squares | BitBoard(end_bit));
 
                                     if Q::check_quit() {
                                         board.place(starting_piece, starting_sq);
@@ -197,7 +204,7 @@ impl MoveGen {
 
                                 }
 
-                                G::store_end(&mut result, active_line_idx, end_bit);        
+                                G::store_end(&mut result, active_line_idx, end_bit);
 
                             }
 
@@ -205,18 +212,20 @@ impl MoveGen {
                         Piece::Three => {
                             let intercepts = ALL_THREE_INTERCEPTS[current_sq.0 as usize];
                             let intercept_bb = board.piece_bb & intercepts;
-                            
-                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };            
+
+                            let key = unsafe { compress_pext(intercepts, intercept_bb.0) };
                             let valid_paths_idx: &u16 = THREE_MAP.get_unchecked(current_sq.0 as usize).get_unchecked(key as usize);
-        
+
                             let path_list = THREE_PATH_LISTS.get_unchecked(*valid_paths_idx as usize);
                             for i in 0..(path_list.count as usize) {
                                 let path = &path_list.paths[i];
 
                                 if (backtrack_board & path.1).is_not_empty() {
                                     continue;
-                    
+
                                 }
+
+                                let path_squares = path_squares | (1 << path.0[1]) | (1 << path.0[2]);
 
                                 let end = SQ(path.0[3]);
                                 let end_bit = end.bit();
@@ -224,7 +233,7 @@ impl MoveGen {
                                 if (board.piece_bb & end_bit).is_not_empty() {
                                     if (banned_positions & end_bit).is_not_empty() {
                                         continue;
-    
+
                                     }
 
                                     G::store_bounce(&mut result, active_line_idx, end_bit);
@@ -232,9 +241,10 @@ impl MoveGen {
                                     let end_piece = board.piece_at(end);
                                     let new_banned_positions = banned_positions ^ end_bit;
                                     let new_backtrack_board = backtrack_board ^ path.1;
-                                    
-                                    self.stack.push(StackData::new(Action::Gen, new_backtrack_board, new_banned_positions, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
-                                    
+                                    let new_path_squares = path_squares | BitBoard(end_bit);
+
+                                    self.stack.push(StackData::new(Action::Gen, new_backtrack_board, new_banned_positions, new_path_squares, end, end_piece, starting_sq, starting_piece, active_line_idx, player));
+
                                     continue;
 
                                 }
@@ -246,7 +256,7 @@ impl MoveGen {
 
                                     }
 
-                                    G::store_goal(&mut result, active_line_idx, end_bit);
+                                    G::store_goal(&mut result, active_line_idx, end_bit, path_squares | BitBoard(end_bit));
 
                                     if Q::check_quit() {
                                         board.place(starting_piece, starting_sq);
@@ -596,7 +606,7 @@ pub trait GenType {
     fn init(result: &mut GenResult, x: usize, starting_sq: SQ, starting_piece: Piece); // Initializes the generation
     fn store_bounce(result: &mut GenResult, active_line_idx: usize, end_bit: u64); // Stores relevant data for bounce
     fn store_end(result: &mut GenResult, active_line_idx: usize, end_bit: u64);    // Stores relevant data for the end of a path
-    fn store_goal(result: &mut GenResult, active_line_idx: usize, end_bit: u64);   // Stores relevant data for a goal
+    fn store_goal(result: &mut GenResult, active_line_idx: usize, end_bit: u64, path_squares: BitBoard);   // Stores relevant data for a goal
     fn exit(result: &mut GenResult, board: &mut BoardState); // Exits the generation
 
 }
@@ -613,7 +623,7 @@ impl GenType for GenMoves {
     fn store_end(result: &mut GenResult, active_line_idx: usize, end_bit: u64) {
         result.move_list.set_end_position(active_line_idx, end_bit);
     }
-    fn store_goal(result: &mut GenResult, active_line_idx: usize, end_bit: u64) {
+    fn store_goal(result: &mut GenResult, active_line_idx: usize, end_bit: u64, _: BitBoard) {
         result.move_list.set_end_position(active_line_idx, end_bit);
     }
     fn exit(_: &mut GenResult, _: &mut BoardState) {}
@@ -630,7 +640,7 @@ impl GenType for GenMoveCount {
     fn store_end(result: &mut GenResult, _: usize, _: u64) {
         result.move_count += 1;
     }
-    fn store_goal(result: &mut GenResult, _: usize, _: u64) {
+    fn store_goal(result: &mut GenResult, _: usize, _: u64, _: BitBoard) {
         result.move_count += 1;
     }
     fn exit(_: &mut GenResult, _: &mut BoardState) {}
@@ -642,7 +652,7 @@ impl GenType for GenThreatCount {
     fn init(_: &mut GenResult, _: usize, _: SQ, _: Piece) {}
     fn store_bounce(_: &mut GenResult, _: usize, _: u64) {}
     fn store_end(_: &mut GenResult, _: usize, _: u64) {}
-    fn store_goal(result: &mut GenResult, _: usize, _: u64) {
+    fn store_goal(result: &mut GenResult, _: usize, _: u64, _: BitBoard) {
         result.threat_count += 1;
     }
     fn exit(_: &mut GenResult, _: &mut BoardState) {}
@@ -664,7 +674,7 @@ impl GenType for GenControlMoveCount {
         result.move_count += 1;
         result.controlled_squares |= end_bit;
     }
-    fn store_goal(result: &mut GenResult, _: usize, _: u64) {
+    fn store_goal(result: &mut GenResult, _: usize, _: u64, _: BitBoard) {
         result.move_count += 1;
     }
     fn exit(result: &mut GenResult, board: &mut BoardState) {
@@ -679,7 +689,48 @@ impl GenType for GenNone {
     fn init(_: &mut GenResult, _: usize, _: SQ, _: Piece) {}
     fn store_bounce(_: &mut GenResult, _: usize, _: u64) {}
     fn store_end(_: &mut GenResult, _: usize, _: u64) {}
-    fn store_goal(_: &mut GenResult, _: usize, _: u64) {}
+    fn store_goal(_: &mut GenResult, _: usize, _: u64, _: BitBoard) {}
+    fn exit(_: &mut GenResult, _: &mut BoardState) {}
+
+}
+
+/// Squares whose flip can shift `opp`'s active line — opp's back zone.
+pub fn active_line_shift_mask(board: &BoardState, opp: Player) -> BitBoard {
+    let active_lines = board.get_active_lines();
+    let opp_active = active_lines[opp as usize];
+
+    const BOARD_MASK: u64 = (1u64 << 36) - 1;
+
+    let mask: u64 = match opp {
+        Player::One => {
+            if opp_active == 0 {
+                0
+            } else {
+                (1u64 << (6 * opp_active)) - 1
+            }
+        }
+        Player::Two => {
+            if opp_active >= 5 {
+                0
+            } else {
+                (!((1u64 << (6 * (opp_active + 1))) - 1)) & BOARD_MASK
+            }
+        }
+    };
+
+    BitBoard(mask)
+}
+
+/// Collects squares on goal-reaching paths into `critical_squares`.
+pub struct GenCriticalSquares;
+impl GenType for GenCriticalSquares {
+    fn init(_: &mut GenResult, _: usize, _: SQ, _: Piece) {}
+    fn store_bounce(_: &mut GenResult, _: usize, _: u64) {}
+    fn store_end(_: &mut GenResult, _: usize, _: u64) {}
+    fn store_goal(result: &mut GenResult, _: usize, _: u64, path_squares: BitBoard) {
+        result.critical_squares |= path_squares;
+        result.threat_count += 1;
+    }
     fn exit(_: &mut GenResult, _: &mut BoardState) {}
 
 }
@@ -731,6 +782,7 @@ struct StackData {
     pub action: Action,
     pub backtrack_board: BitBoard,
     pub banned_positions: BitBoard,
+    pub path_squares: BitBoard,
     pub current_sq: SQ,
     pub current_piece: Piece,
     pub starting_sq: SQ,
@@ -740,11 +792,12 @@ struct StackData {
 }
 
 impl StackData {
-    pub fn new(action: Action, backtrack_board: BitBoard, banned_positions: BitBoard, current_sq: SQ, current_piece: Piece, starting_sq: SQ, starting_piece: Piece, active_line_idx: usize, player: Player) -> Self {
+    pub fn new(action: Action, backtrack_board: BitBoard, banned_positions: BitBoard, path_squares: BitBoard, current_sq: SQ, current_piece: Piece, starting_sq: SQ, starting_piece: Piece, active_line_idx: usize, player: Player) -> Self {
         Self {
             action,
             backtrack_board,
             banned_positions,
+            path_squares,
             current_sq,
             current_piece,
             starting_sq,
@@ -872,7 +925,7 @@ pub unsafe fn compress_pext(mask: u64, val: u64) -> u16 {
 }
 
 /// The result of a move generation.
-/// 
+///
 /// Threat is mututally exclusive with all other fields.
 #[derive(Debug, Clone)]
 pub struct GenResult {
@@ -881,7 +934,11 @@ pub struct GenResult {
     pub move_count: usize,
     pub move_list: RawMoveList,
     pub controlled_squares: BitBoard,
-    pub controlled_pieces: BitBoard
+    pub controlled_pieces: BitBoard,
+    /// Set by `GenCriticalSquares`: union of board squares on any path that
+    /// reached the goal. Empty for all other generation types.
+    pub critical_squares: BitBoard,
+
 
 }
 
@@ -893,7 +950,8 @@ impl GenResult {
             move_count: 0,
             move_list: RawMoveList::new(drop_bb),
             controlled_squares: BitBoard::EMPTY,
-            controlled_pieces: BitBoard::EMPTY
+            controlled_pieces: BitBoard::EMPTY,
+            critical_squares: BitBoard::EMPTY,
 
         }
 

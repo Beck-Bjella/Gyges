@@ -14,6 +14,8 @@ use std::time::Instant;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 
+use movegen::active_line_shift_mask;
+use movegen::GenCriticalSquares;
 use movegen::GenMoveCount;
 use movegen::GenMoves;
 use movegen::GenNone;
@@ -382,15 +384,36 @@ impl Searcher {
             self.root_moves.clone().into()
 
         } else {
-            let moves = move_list.moves(board);
-        
-            // No raw moves at all means the current player has no legal moves: draw.
-            if moves.is_empty() {
-                return DRAW_SCORE;
+            let crit_result = unsafe {
+                self.mg.gen::<GenCriticalSquares, NoQuit>(board, player.other())
+            };
+
+            if crit_result.threat_count > 0 {
+                // Tactical: opp threatens our goal, restrict to blockers.
+                let critical = crit_result.critical_squares
+                    | active_line_shift_mask(board, player.other());
+
+                let moves = move_list.moves_filtered(board, critical);
+
+                if moves.is_empty() {
+                    return LOSS_SCORE + (start_ply - ply) as f64;
+
+                }
+
+                self.order_moves(moves, board, player)
+
+            } else {
+                // Calm: no threat, all moves.
+                let moves = move_list.moves(board);
+
+                if moves.is_empty() {
+                    return DRAW_SCORE;
+
+                }
+
+                self.order_moves(moves, board, player)
 
             }
-
-            self.order_moves(moves, board, player)
 
         };
 
@@ -490,10 +513,10 @@ impl Searcher {
 
         }
 
-        // Store TT move first
+        // Store TT move first. `remove` (not `swap_remove`) — preserves order.
         if let Some(tt) = tt_move {
             if let Some(idx) = moves.iter().position(|&m| m == tt) {
-                out.push(moves.swap_remove(idx));
+                out.push(moves.remove(idx));
 
             }
 
