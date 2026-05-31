@@ -94,12 +94,19 @@ pub struct Cluster {
 /// Structure representing a transposition table.
 /// A transposition table is a type of HashTable that maps Zobrist keys to the data about that position.
 /// Data is stored in [Clusters](crate::tools::tt::Cluster), which are groups of [Entrys](crate::tools::tt::Entry) that are mapped to the same key.
-/// 
+///
 pub struct TranspositionTable {
     pub clusters: UnsafeCell<NonNull<Cluster>>,
     pub cap: UnsafeCell<usize>,
-    
+
 }
+
+// Lazy SMP: multiple search threads concurrently probe/insert.
+// Reads are returned by value (Copy), and writes race in the documented
+// lockless way — torn moves are caught by the legal-move-list check on the
+// reader side, so concurrent access is safe in the engine's sense.
+unsafe impl Send for TranspositionTable {}
+unsafe impl Sync for TranspositionTable {}
 
 impl TranspositionTable {
     /// Creates a new TranspostionTable with a specific size.
@@ -149,23 +156,25 @@ impl TranspositionTable {
     }
 
     /// Probes the transposition table for the data corosponding to a specific key.
-    pub unsafe fn probe(&self, key: u64) -> (bool, &mut Entry) {
+    ///
+    /// Returns an owned copy of the entry so callers don't hold an aliased
+    /// `&mut` into shared TT memory under Lazy SMP. A torn read of `bestmove`
+    /// is harmless: the caller validates it against the current legal move list.
+    pub unsafe fn probe(&self, key: u64) -> Option<Entry> {
         let index = key as usize % self.num_clusters();
 
         let cluster = self.get_cluster(index);
         for entry_idx in 0..CLUSTER_SIZE {
             let entry_ptr = get_entry(cluster, entry_idx);
 
-            let entry = &mut (*entry_ptr);
-
-            if entry.key == key {
-                return (true, entry);
+            if (*entry_ptr).key == key {
+                return Some(*entry_ptr);
 
             }
 
         }
 
-        (false, &mut (*cluster_first_entry(cluster)))
+        None
 
     }
 

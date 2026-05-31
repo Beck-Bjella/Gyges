@@ -2,7 +2,8 @@
 //! 
 
 use std::io;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::thread;
 
 use rayon;
@@ -13,21 +14,25 @@ use crate::search::*;
 use crate::consts::*;
 
 pub struct Ugi {
-    searching_thread: Option<thread::JoinHandle<()>>,
-    searcher_stop: Option<Sender<bool>>,
+    /// The orchestrator thread that owns the searcher pool and runs
+    /// cooperative-root IDS. Set when a search is running, joined on stop.
+    main_thread: Option<thread::JoinHandle<()>>,
+    /// Shared stop flag — flipped by `stop` UGI command (or by the
+    /// orchestrator when IDS exits) and polled by every searcher.
+    stop_signal: Option<Arc<AtomicBool>>,
     searching: bool,
     search_options: SearchOptions,
-   
+
 }
 
 impl Ugi {
     pub fn new() -> Ugi {
         Ugi {
-            searching_thread: Option::None,
-            searcher_stop: Option::None,
-            searching: false, 
+            main_thread: Option::None,
+            stop_signal: Option::None,
+            searching: false,
             search_options: SearchOptions::new(),
-            
+
         }
 
     }
@@ -74,6 +79,7 @@ impl Ugi {
                     println!("option randomize");
                     println!("option nn");
                     println!("option weightsPath");
+                    println!("option threads");
                     println!("ugiok");
 
                 },
@@ -185,6 +191,19 @@ impl Ugi {
                 }
 
             }
+            Some(&"threads") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    match value_str.parse::<usize>() {
+                        Ok(n) if n >= 1 => self.search_options.threads = n,
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
             Some(&"weightsPath") => {
                 if let Some(path) = raw_commands.get(2) {
                     if let Err(e) = network::load_network(path) {
@@ -251,35 +270,53 @@ impl Ugi {
         match (self.search_options.nn, network::network_name()) {
             (true, Some(name)) => println!("info string NN evaluation using {} enabled", name),
             _ => println!("info string classical evaluation enabled"),
-        
+
         }
 
         self.searching = true;
 
-        let (ss, sr): (Sender<bool>, Receiver<bool>) = mpsc::channel();
-        self.searcher_stop = Some(ss);
+        let stop_signal = Arc::new(AtomicBool::new(false));
+        self.stop_signal = Some(stop_signal.clone());
 
-        let search_options = self.search_options.clone();
+        // Build the searcher pool. searchers[0] is Main; the rest are Helpers.
+        // Helpers don't have their own IDS — they participate in cooperative
+        // root iterations driven by the orchestrator.
+        let thread_count = self.search_options.threads.max(1);
+        let options = self.search_options.clone();
+        let signal = stop_signal.clone();
+        self.main_thread = Some(thread::spawn(move || {
+            let mut searchers: Vec<Searcher> = (0..thread_count)
+                .map(|i| {
+                    let role = if i == 0 { SearcherRole::Main } else { SearcherRole::Helper };
+                    Searcher::new(signal.clone(), options.clone(), role)
+                })
+                .collect();
+            parallel_iterative_deepening_search(&mut searchers);
+            // Orchestrator finished — wake any consumer waiting on stop().
+            signal.store(true, AtomicOrdering::Relaxed);
 
-        self.searching_thread = Some(thread::spawn(move || {
-            let mut searcher: Searcher = Searcher::new(sr, search_options);
-            searcher.iterative_deepening_search();
-            
         }));
-    
+
     }
 
     pub fn stop(&mut self) {
         if self.searching {
-            _ = self.searcher_stop.clone().unwrap().send(true);
-            self.searching_thread.take().unwrap().join().unwrap();
-            
+            if let Some(signal) = &self.stop_signal {
+                signal.store(true, AtomicOrdering::Relaxed);
+
+            }
+
+            if let Some(handle) = self.main_thread.take() {
+                handle.join().unwrap();
+
+            }
+
         }
 
-        self.searcher_stop = Option::None;
-        self.searching_thread = Option::None;
+        self.stop_signal = Option::None;
+        self.main_thread = Option::None;
         self.searching = false;
-    
+
     }
 
 }
