@@ -3,7 +3,7 @@
 
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
 use std::thread;
 
 use rayon;
@@ -278,21 +278,16 @@ impl Ugi {
         let stop_signal = Arc::new(AtomicBool::new(false));
         self.stop_signal = Some(stop_signal.clone());
 
-        // Build the searcher pool. searchers[0] is Main; the rest are Helpers.
-        // Helpers don't have their own IDS — they participate in cooperative
-        // root iterations driven by the orchestrator.
+        // searchers[0] is "Main" — owns root_moves / completed_plys / output. shared_nodes drives maxnodes across the pool.
         let thread_count = self.search_options.threads.max(1);
         let options = self.search_options.clone();
         let signal = stop_signal.clone();
+        let shared_nodes = Arc::new(AtomicUsize::new(0));
         self.main_thread = Some(thread::spawn(move || {
             let mut searchers: Vec<Searcher> = (0..thread_count)
-                .map(|i| {
-                    let role = if i == 0 { SearcherRole::Main } else { SearcherRole::Helper };
-                    Searcher::new(signal.clone(), options.clone(), role)
-                })
+                .map(|_| Searcher::new(signal.clone(), shared_nodes.clone(), options.clone()))
                 .collect();
             parallel_iterative_deepening_search(&mut searchers);
-            // Orchestrator finished — wake any consumer waiting on stop().
             signal.store(true, AtomicOrdering::Relaxed);
 
         }));
