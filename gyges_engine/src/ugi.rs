@@ -5,8 +5,6 @@ use std::io;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-use rayon;
-
 use gyges::{MoveGen, board::*};
 
 use crate::search::*;
@@ -36,9 +34,6 @@ impl Ugi {
     pub fn init(&self) {
         // Initialize transposition table
         init_tt(2usize.pow(22)); // 400 MB
-
-        // Configure rayon
-        rayon::ThreadPoolBuilder::new().num_threads(4).build_global().unwrap();
 
         // Load default network
         let _ = network::load_network("./weights/default.bin");
