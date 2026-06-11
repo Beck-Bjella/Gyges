@@ -460,7 +460,6 @@ impl Searcher {
 
             }
             if best_score > alpha {
-                // self.history.log_alpha_increase(mv, ply);
                 alpha = best_score;
 
             }
@@ -1162,33 +1161,6 @@ impl HistoryTable {
 
         // Standard depth weighting: deeper cutoffs matter more
         let bonus = depth as f64 * depth as f64;
-
-        if mv.flag != MoveType::Drop {
-            let s = step1.1.0 as usize;
-            let e = step2.1.0 as usize;
-
-            self.h_bounce[s][e] = self.h_bounce[s][e].add(bonus);
-
-        } else {
-            let s = step1.1.0 as usize;
-            let p = step2.1.0 as usize;
-            let d = step3.1.0 as usize;
-
-            self.h_drop[s][p][d] = self.h_drop[s][p][d].add(bonus);
-
-        }
-
-    }
-    
-    /// Update history on a alpha increase
-    #[inline(always)]
-    pub fn log_alpha_increase(&mut self, mv: &Move, depth: i8) {
-        let step1 = mv.data[0];
-        let step2 = mv.data[1];
-        let step3 = mv.data[2];
-
-        // Standard depth weighting: deeper cutoffs matter more
-        let bonus = depth as f64 * 0.5;
 
         if mv.flag != MoveType::Drop {
             let s = step1.1.0 as usize;
