@@ -3,7 +3,7 @@
 
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::thread;
 
 use gyges::{MoveGen, board::*};
@@ -12,8 +12,8 @@ use crate::search::*;
 use crate::consts::*;
 
 pub struct Ugi {
-    /// The orchestrator thread that owns the searcher pool and runs the
-    /// YBWC search. Set when a search is running, joined on stop.
+    /// The orchestrator thread that owns the [Searcher] and runs it.
+    /// Set when a search is running, joined on stop.
     main_thread: Option<thread::JoinHandle<()>>,
     /// Shared stop flag — flipped by `stop` UGI command (or by the
     /// orchestrator when IDS exits) and polled by every searcher.
@@ -276,16 +276,11 @@ impl Ugi {
         let stop_signal = Arc::new(AtomicBool::new(false));
         self.stop_signal = Some(stop_signal.clone());
 
-        // searchers[0] is the master — owns root_moves / completed_plys / output. shared_nodes drives maxnodes across the pool.
-        let thread_count = self.search_options.threads.max(1);
         let options = self.search_options.clone();
         let signal = stop_signal.clone();
-        let shared_nodes = Arc::new(AtomicUsize::new(0));
         self.main_thread = Some(thread::spawn(move || {
-            let mut searchers: Vec<Searcher> = (0..thread_count)
-                .map(|_| Searcher::new(signal.clone(), shared_nodes.clone(), options.clone()))
-                .collect();
-            ybwc_iterative_deepening_search(&mut searchers);
+            let mut searcher = Searcher::new(options, signal.clone());
+            searcher.run();
             signal.store(true, AtomicOrdering::Relaxed);
 
         }));

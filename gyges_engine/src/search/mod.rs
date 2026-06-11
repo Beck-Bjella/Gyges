@@ -72,6 +72,7 @@ struct SplitOut {
 
 }
 
+
 impl SplitPoint {
     #[allow(clippy::too_many_arguments)]
     fn new(board: BoardState, path: Vec<u64>, moves: Vec<Move>, alpha: f64, beta: f64, ply: i8, start_ply: i8, player: Player) -> Self {
@@ -192,8 +193,9 @@ impl YbwcCtx {
 
 }
 
-/// Structure that holds all needed information to perform a search, and conatains all of the main searching functions.
-pub struct Searcher {
+/// Per-thread search state and logic. `workers[0]` of a [Searcher] is the
+/// master (runs iterative deepening and owns the output); the rest are helpers.
+pub struct Worker {
     pub options: SearchOptions,
     pub stop_signal: Arc<AtomicBool>,
     pub stop: bool,
@@ -201,7 +203,7 @@ pub struct Searcher {
     pub shared_nodes: Arc<AtomicUsize>,
 
     pub completed_plys: Vec<SearchData>,
-    pub search_stats: SearchStats,
+    pub start_time: Instant,
     pub root_moves: RootMoveList,
 
     pub mg: MoveGen,
@@ -215,17 +217,17 @@ pub struct Searcher {
 
 }
 
-impl Searcher {
-    /// Creates a new searcher.
-    pub fn new(stop_signal: Arc<AtomicBool>, shared_nodes: Arc<AtomicUsize>, options: SearchOptions) -> Searcher {
-        Searcher {
+impl Worker {
+    /// Creates a new worker.
+    pub fn new(stop_signal: Arc<AtomicBool>, shared_nodes: Arc<AtomicUsize>, options: SearchOptions) -> Worker {
+        Worker {
             options,
             stop_signal,
             stop: false,
             shared_nodes,
 
             completed_plys: vec![],
-            search_stats: SearchStats::new(),
+            start_time: Instant::now(),
             root_moves: RootMoveList::new(),
 
             mg: MoveGen::default(),
@@ -250,7 +252,7 @@ impl Searcher {
 
         // Check if the max time has been reached.
         if let Some(maxtime) = self.options.maxtime {
-            if self.search_stats.start_time.elapsed().as_secs_f64() >= maxtime {
+            if self.start_time.elapsed().as_secs_f64() >= maxtime {
                 self.stop = true;
 
             }
@@ -270,9 +272,9 @@ impl Searcher {
 
     /// Update search data based on the current search stats and results.
     pub fn update_search_data(&mut self, ply_data: &mut SearchData) {
-        // Gather current search stats
-        ply_data.elapsed_time = self.search_stats.start_time.elapsed().as_secs_f64();
-        ply_data.nodes = self.search_stats.nodes;
+        // Gather current search stats — node total is shared across all workers.
+        ply_data.elapsed_time = self.start_time.elapsed().as_secs_f64();
+        ply_data.nodes = self.shared_nodes.load(AtomicOrdering::Relaxed);
         ply_data.nps = (ply_data.nodes as f64 / ply_data.elapsed_time) as usize;
         
         // Results
@@ -329,25 +331,22 @@ impl Searcher {
         }
 
         // Update final time
-        best_search_data.elapsed_time = self.search_stats.start_time.elapsed().as_secs_f64();
+        best_search_data.elapsed_time = self.start_time.elapsed().as_secs_f64();
 
         ugi::best_move_output(best_search_data);
 
     }
 
 
-    /// Main search function. Root moves are handled by `ybwc_root_iteration`,
+    /// Main search function. Root moves are handled by `root_iteration`,
     /// so this is only ever called below the root.
     fn search(&mut self, board: &mut BoardState, mut alpha: f64, mut beta: f64, player: Player, ply: i8, start_ply: i8) -> f64 {
         let is_leaf = ply == 0;
         let board_hash = board.hash();
 
-        // Check if the search should stop.
+        // Bail out instantly once this worker has stopped.
         if self.stop {
             return 0.0;
-    
-        } else if self.search_stats.nodes % 1000 == 0 {
-            self.check_stop();
 
         }
 
@@ -362,8 +361,11 @@ impl Searcher {
 
         }
 
-        self.search_stats.nodes += 1;
-        self.shared_nodes.fetch_add(1, AtomicOrdering::Relaxed);
+        // Count this node, and pace the stop check off the shared total.
+        if self.shared_nodes.fetch_add(1, AtomicOrdering::Relaxed) % 1000 == 0 {
+            self.check_stop();
+
+        }
 
         // Base case, if the node is a leaf node, return the evaluation.
         if is_leaf {
@@ -728,7 +730,7 @@ impl Searcher {
     }
 
     /// Helper thread loop: claim split points until the stop signal fires.
-    pub fn ybwc_helper_loop(&mut self) {
+    pub fn helper_loop(&mut self) {
         let ctx = self.ybwc.as_ref().unwrap().clone();
         let mut last_generation = 0usize;
         let mut spins = 0u32;
@@ -780,7 +782,7 @@ impl Searcher {
 
     /// One root iteration: young brothers wait — move 0 gets a serial full-window
     /// search to seed alpha, the rest go through a root split point.
-    fn ybwc_root_iteration(&mut self, moves: &[Move], alpha: f64, beta: f64, start_ply: i8) -> (f64, Move) {
+    fn root_iteration(&mut self, moves: &[Move], alpha: f64, beta: f64, start_ply: i8) -> (f64, Move) {
         let mut board = self.options.board.clone();
         let player = Player::One;
 
@@ -850,7 +852,7 @@ impl Searcher {
 
     /// Master IDS loop for YBWC — aspiration windows around the previous score,
     /// with full info/output bookkeeping per completed iteration.
-    fn ybwc_root_loop(&mut self, maxply: Option<i8>) {
+    fn iterative_deepening(&mut self, maxply: Option<i8>) {
         let root_hash = self.options.board.hash();
         let mut current_ply: i8 = 1;
 
@@ -879,7 +881,7 @@ impl Searcher {
 
                 }
 
-                let (best_score, best_move) = self.ybwc_root_iteration(&moves_snapshot, alpha, beta, current_ply);
+                let (best_score, best_move) = self.root_iteration(&moves_snapshot, alpha, beta, current_ply);
 
                 // Root TT entry so future iterations can use the best move and bound.
                 if !best_move.is_null() && best_score.is_finite() {
@@ -930,10 +932,6 @@ impl Searcher {
             let mut ply_data: SearchData = SearchData::new(current_ply);
             self.update_search_data(&mut ply_data);
 
-            // Report the cross-thread node total.
-            ply_data.nodes = self.shared_nodes.load(AtomicOrdering::Relaxed);
-            ply_data.nps = (ply_data.nodes as f64 / ply_data.elapsed_time) as usize;
-
             ugi::info_output(ply_data.clone());
             self.completed_plys.push(ply_data);
 
@@ -963,126 +961,160 @@ impl Searcher {
 
 }
 
-/// YBWC iterative deepening across N searcher threads.
+/// Structure that holds all needed information to perform a search, and contains all of the main searching functions.
+/// Owns one [Worker] per thread and runs YBWC iterative deepening across them.
 ///
-/// `searchers[0]` is the master: it runs the IDS loop and always searches the
+/// `workers[0]` is the master: it runs the IDS loop and always searches the
 /// first child of a node serially (young brothers wait) before publishing the
-/// remaining children as a `SplitPoint`. Helper threads (and masters waiting on
+/// remaining children as a [SplitPoint]. Helper threads (and masters waiting on
 /// stragglers) claim split points from a shared registry and search children
 /// against the split's CAS-shared alpha — so every score stays calibrated
 /// against one common bound, at the root and at internal nodes alike.
 ///
-/// Works for `searchers.len() >= 1`. At N=1 no splits are ever opened and the
-/// master runs the plain serial search.
-pub fn ybwc_iterative_deepening_search(searchers: &mut [Searcher]) {
-    assert!(!searchers.is_empty(), "ybwc search requires at least one Searcher");
+/// Works for any `options.threads >= 1`. At one thread no splits are ever
+/// opened and the master runs the plain serial search.
+pub struct Searcher {
+    pub workers: Vec<Worker>,
+    pub stop_signal: Arc<AtomicBool>,
 
-    // ---- Setup phase: validate, no-move/win/loss checks, root move setup. ----
+}
 
-    for s in searchers.iter_mut() {
-        s.stop = false;
-        s.completed_plys.clear();
-        s.search_stats = SearchStats::new();
+impl Searcher {
+    /// Creates a searcher and its worker pool from `options.threads`.
+    pub fn new(options: SearchOptions, stop_signal: Arc<AtomicBool>) -> Searcher {
+        let shared_nodes = Arc::new(AtomicUsize::new(0));
+        let workers: Vec<Worker> = (0..options.threads.max(1))
+            .map(|_| Worker::new(stop_signal.clone(), shared_nodes.clone(), options.clone()))
+            .collect();
 
-    }
-    let start_time = Instant::now();
-    for s in searchers.iter_mut() {
-        s.search_stats.start_time = start_time;
-
-    }
-
-    let initial_board = searchers[0].options.board.clone();
-    let maxply = searchers[0].options.maxply;
-
-    if initial_board.piece_bb.pop_count() != 12 {
-        panic!("SEARCH ERROR: INVALID BOARD. Board must have exactly 12 pieces to start a search.");
+        Searcher { workers, stop_signal }
 
     }
 
-    // Generate the raw legal move list for the initial position.
-    let mut working_board = initial_board.clone();
-    let mut move_list: GenResult = unsafe { searchers[0].mg.gen::<GenMoves, NoQuit>(&mut working_board, Player::One) };
-    let initial_moves = move_list.move_list.moves(&working_board);
+    /// Runs the search and outputs the best move.
+    pub fn run(&mut self) {
+        self.reset();
 
-    if initial_moves.is_empty() {
-        let mut ply_data = SearchData::new(1);
-        ply_data.elapsed_time = start_time.elapsed().as_secs_f64();
-        ply_data.best_move.score = DRAW_SCORE;
-        ply_data.game_over = true;
-        ply_data.is_draw = true;
-        searchers[0].completed_plys.push(ply_data);
-        searchers[0].final_output();
-        return;
-
-    }
-
-    for mv in initial_moves.iter() {
-        if mv.is_win() {
-            let mut ply_data = SearchData::new(1);
-            ply_data.best_move = RootMove::new(*mv, WIN_SCORE, 1, 0);
-            searchers[0].completed_plys.push(ply_data.clone());
-            searchers[0].final_output();
+        // Positions decided before any search (draw / immediate win / forced loss).
+        if self.check_immediate_result() {
             return;
 
         }
 
-    }
+        self.parallel_search();
 
-    // Setup root moves on the master; this seeds threats and order_moves ordering.
-    searchers[0].root_moves = RootMoveList::new();
-    {
-        let mut board_for_setup = initial_board.clone();
-        searchers[0].setup_rootmoves(&mut board_for_setup);
+        self.workers[0].final_output();
 
     }
 
-    if searchers[0].root_moves.moves.is_empty() {
-        let mut ply_data = SearchData::new(1);
-        ply_data.best_move = RootMove::new(initial_moves[0].clone(), LOSS_SCORE, 1, 0);
-        ply_data.game_over = true;
-        ply_data.winner = 2;
-        searchers[0].completed_plys.push(ply_data.clone());
-        searchers[0].final_output();
-        return;
-
-    }
-
-    for s in searchers.iter_mut() {
-        s.path.clear();
-
-    }
-
-    // ---- Attach the shared YBWC context, spawn helpers, run the master IDS. ----
-
-    let ctx = Arc::new(YbwcCtx::new(searchers.len().saturating_sub(1)));
-    for s in searchers.iter_mut() {
-        s.ybwc = Some(ctx.clone());
-
-    }
-
-    let (master, helpers) = searchers.split_at_mut(1);
-    let master = &mut master[0];
-    let signal = master.stop_signal.clone();
-
-    thread::scope(|sc| {
-        for h in helpers.iter_mut() {
-            sc.spawn(move || h.ybwc_helper_loop());
+    /// Resets all workers and stamps a common start time.
+    fn reset(&mut self) {
+        let start_time = Instant::now();
+        for w in self.workers.iter_mut() {
+            w.stop = false;
+            w.completed_plys.clear();
+            w.start_time = start_time;
+            w.path.clear();
 
         }
 
-        master.ybwc_root_loop(maxply);
+    }
 
-        // Master is done — release the helpers so the scope can join.
-        signal.store(true, AtomicOrdering::Relaxed);
+    /// Handles root positions with a trivial result — no legal moves (draw), an
+    /// immediate winning move, or only losing moves. Also seeds the master's
+    /// root move list. Returns true if the result was already output.
+    fn check_immediate_result(&mut self) -> bool {
+        let master = &mut self.workers[0];
+        let mut board = master.options.board.clone();
 
-    });
+        if board.piece_bb.pop_count() != 12 {
+            panic!("SEARCH ERROR: INVALID BOARD. Board must have exactly 12 pieces to start a search.");
 
-    for s in searchers.iter_mut() {
-        s.ybwc = None;
+        }
+
+        // Generate the raw legal move list for the initial position.
+        let mut gen: GenResult = unsafe { master.mg.gen::<GenMoves, NoQuit>(&mut board, Player::One) };
+        let initial_moves = gen.move_list.moves(&board);
+
+        // No legal moves: draw.
+        if initial_moves.is_empty() {
+            let mut ply_data = SearchData::new(1);
+            ply_data.elapsed_time = master.start_time.elapsed().as_secs_f64();
+            ply_data.best_move.score = DRAW_SCORE;
+            ply_data.game_over = true;
+            ply_data.is_draw = true;
+            master.completed_plys.push(ply_data);
+            master.final_output();
+            return true;
+
+        }
+
+        // Immediate win.
+        for mv in initial_moves.iter() {
+            if mv.is_win() {
+                let mut ply_data = SearchData::new(1);
+                ply_data.best_move = RootMove::new(*mv, WIN_SCORE, 1, 0);
+                master.completed_plys.push(ply_data.clone());
+                master.final_output();
+                return true;
+
+            }
+
+        }
+
+        // Setup root moves; losing moves get filtered out, so none left means loss.
+        master.root_moves = RootMoveList::new();
+        let mut board_for_setup = master.options.board.clone();
+        master.setup_rootmoves(&mut board_for_setup);
+
+        if master.root_moves.moves.is_empty() {
+            let mut ply_data = SearchData::new(1);
+            ply_data.best_move = RootMove::new(initial_moves[0].clone(), LOSS_SCORE, 1, 0);
+            ply_data.game_over = true;
+            ply_data.winner = 2;
+            master.completed_plys.push(ply_data.clone());
+            master.final_output();
+            return true;
+
+        }
+
+        false
 
     }
 
-    searchers[0].final_output();
+    /// Attaches the shared YBWC context, spawns the helpers, and runs the
+    /// master's iterative deepening until completion or stop.
+    fn parallel_search(&mut self) {
+        let ctx = Arc::new(YbwcCtx::new(self.workers.len().saturating_sub(1)));
+        for w in self.workers.iter_mut() {
+            w.ybwc = Some(ctx.clone());
+
+        }
+
+        let maxply = self.workers[0].options.maxply;
+        let (master, helpers) = self.workers.split_at_mut(1);
+        let master = &mut master[0];
+        let signal = master.stop_signal.clone();
+
+        thread::scope(|sc| {
+            for h in helpers.iter_mut() {
+                sc.spawn(move || h.helper_loop());
+
+            }
+
+            master.iterative_deepening(maxply);
+
+            // Master is done — release the helpers so the scope can join.
+            signal.store(true, AtomicOrdering::Relaxed);
+
+        });
+
+        for w in self.workers.iter_mut() {
+            w.ybwc = None;
+
+        }
+
+    }
 
 }
 
@@ -1241,31 +1273,6 @@ impl SearchData {
 
 }
 
-/// Structure that holds real time stats during a search. This data is stored into a [SearchData] object whenever a ply is completed.
-#[derive(Debug, Clone)]
-pub struct SearchStats {
-    pub nodes: usize,
-    pub nps: usize,
-
-    pub start_time: Instant,
-
-}
-
-impl SearchStats {
-    pub fn new() -> SearchStats {
-        SearchStats {
-            nodes: 0,
-            nps: 0,
-
-            start_time: Instant::now(),
-
-        }
-
-    }
-
-}
-
-
 /// Holds all of the settings for a spsific search.
 #[derive(Clone)]
 pub struct SearchOptions {
@@ -1289,7 +1296,7 @@ impl SearchOptions {
             maxnodes: Option::None,
             randomize: false,
             nn: true,
-            threads: 4,
+            threads: 1,
 
         }
 
