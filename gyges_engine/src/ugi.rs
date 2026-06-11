@@ -6,16 +6,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
 use std::thread;
 
-use rayon;
-
 use gyges::{MoveGen, board::*};
 
 use crate::search::*;
 use crate::consts::*;
 
 pub struct Ugi {
-    /// The orchestrator thread that owns the searcher pool and runs
-    /// cooperative-root IDS. Set when a search is running, joined on stop.
+    /// The orchestrator thread that owns the searcher pool and runs the
+    /// YBWC search. Set when a search is running, joined on stop.
     main_thread: Option<thread::JoinHandle<()>>,
     /// Shared stop flag — flipped by `stop` UGI command (or by the
     /// orchestrator when IDS exits) and polled by every searcher.
@@ -41,9 +39,6 @@ impl Ugi {
     pub fn init(&self) {
         // Initialize transposition table
         init_tt(2usize.pow(22)); // 400 MB
-
-        // Configure rayon
-        rayon::ThreadPoolBuilder::new().num_threads(4).build_global().unwrap();
 
         // Load default network
         let _ = network::load_network("./weights/default.bin");
@@ -264,6 +259,9 @@ impl Ugi {
     }
 
     pub fn go(&mut self) {
+        // Join any previous search before touching the TT — threads from the
+        // last `go` may still be unwinding when the next command arrives.
+        self.stop();
         unsafe { tt().reset() }; // Reset tt before new search
 
         // Display eval type
@@ -278,7 +276,7 @@ impl Ugi {
         let stop_signal = Arc::new(AtomicBool::new(false));
         self.stop_signal = Some(stop_signal.clone());
 
-        // searchers[0] is "Main" — owns root_moves / completed_plys / output. shared_nodes drives maxnodes across the pool.
+        // searchers[0] is the master — owns root_moves / completed_plys / output. shared_nodes drives maxnodes across the pool.
         let thread_count = self.search_options.threads.max(1);
         let options = self.search_options.clone();
         let signal = stop_signal.clone();
@@ -287,7 +285,7 @@ impl Ugi {
             let mut searchers: Vec<Searcher> = (0..thread_count)
                 .map(|_| Searcher::new(signal.clone(), shared_nodes.clone(), options.clone()))
                 .collect();
-            parallel_iterative_deepening_search(&mut searchers);
+            ybwc_iterative_deepening_search(&mut searchers);
             signal.store(true, AtomicOrdering::Relaxed);
 
         }));

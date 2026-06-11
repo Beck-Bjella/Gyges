@@ -1,0 +1,3 @@
+[build]
+# Target x86-64-v3 — guarantees AVX2 + FMA + BMI2 (CPUs from ~2015+).
+rustflags = ["-C", "target-cpu=x86-64-v3"]

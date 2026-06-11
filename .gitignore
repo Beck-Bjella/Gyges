@@ -5,3 +5,4 @@ Cargo.lock
 .vscode/
 Notes.txt
 gyges_engine/src/search/eval_display.rs
+scripts/
