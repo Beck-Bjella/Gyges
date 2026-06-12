@@ -280,7 +280,7 @@ impl Ugi {
         let signal = stop_signal.clone();
         self.main_thread = Some(thread::spawn(move || {
             let mut searcher = Searcher::new(options, signal.clone());
-            searcher.run();
+            searcher.go();
             signal.store(true, AtomicOrdering::Relaxed);
 
         }));

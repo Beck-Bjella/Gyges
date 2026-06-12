@@ -47,6 +47,9 @@ pub const DRAW_SCORE: f64 = 0.0;
 const MIN_SPLIT_PLY: i8 = 2;
 const MAX_SPLITS: usize = 32;
 
+// The first N moves of a node get a full-window PVS search
+const PVS_FULL_WINDOW: usize = 5;
+
 /// Structure that owns all workers and runs a parallel search across them.
 pub struct Searcher {
     pub master: Worker,
@@ -68,8 +71,8 @@ impl Searcher {
 
     }
 
-    /// Runs the search and outputs the best move.
-    pub fn run(&mut self) {
+    /// Entry point for the search.
+    pub fn go(&mut self) {
         // Initialize master and workers
         let start_time = Instant::now();
         for w in std::iter::once(&mut self.master).chain(self.helpers.iter_mut()) {
@@ -158,9 +161,9 @@ impl Searcher {
 
             }
 
-            self.master.iterative_deepening(maxply);
+            self.master.iterative_deepening_search(maxply);
 
-            // Master is done — release the helpers so the scope can join.
+            // Set stop signal forcing helpers exit
             signal.store(true, AtomicOrdering::Relaxed);
 
         });
@@ -223,8 +226,11 @@ impl Worker {
     }
 
     /// Master IDS loop for YBWC — aspiration windows around the previous score,
-    /// with full info/output bookkeeping per completed iteration. (master only)
-    fn iterative_deepening(&mut self, maxply: Option<i8>) {
+    /// with full info/output bookkeeping per completed iteration.
+    ///  
+    /// Master worker only
+    /// 
+    fn iterative_deepening_search(&mut self, maxply: Option<i8>) {
         let root_hash = self.options.board.hash();
         let mut current_ply: i8 = 1;
 
@@ -253,7 +259,7 @@ impl Worker {
 
                 }
 
-                let (best_score, best_move) = self.root_iteration(&moves_snapshot, alpha, beta, current_ply);
+                let (best_score, best_move) = self.root_search(&moves_snapshot, alpha, beta, current_ply);
 
                 // Root TT entry so future iterations can use the best move and bound.
                 if !best_move.is_null() && best_score.is_finite() {
@@ -309,16 +315,14 @@ impl Worker {
 
             // Filter losing moves from the root list before the next iteration.
             self.root_moves.sort();
-            self.root_moves.moves = self
-                .root_moves
-                .moves
-                .iter()
+            self.root_moves.moves = self.root_moves.moves.iter()
                 .filter(|mv| mv.score > LOSS_THRESHOLD)
                 .cloned()
                 .collect();
 
             current_ply += 2;
 
+            // Max ply check
             if let Some(maxply) = maxply {
                 if current_ply > maxply {
                     break 'iterative_deepening;
@@ -333,7 +337,7 @@ impl Worker {
 
     /// One root iteration: young brothers wait — move 0 gets a serial full-window
     /// search to seed alpha, the rest go through a root split point. (master only)
-    fn root_iteration(&mut self, moves: &[Move], alpha: f64, beta: f64, start_ply: i8) -> (f64, Move) {
+    fn root_search(&mut self, moves: &[Move], alpha: f64, beta: f64, start_ply: i8) -> (f64, Move) {
         let mut board = self.options.board.clone();
         let player = Player::One;
 
@@ -505,7 +509,7 @@ impl Worker {
             }
 
             // Principal Variation Search
-            let score: f64 = if i < 5 {
+            let score: f64 = if i < PVS_FULL_WINDOW {
                 -self.search(board, -beta, -alpha, player.other(), ply - 1, start_ply) // Full search
 
             } else {
@@ -627,13 +631,22 @@ impl Worker {
 
             }
 
-            // Null-window against the shared alpha, re-search on a fail-high inside the window.
+            // The leading children get a full window (move 0 was the serial seed, so the
+            // first PVS_FULL_WINDOW - 1 split children mirror the serial node's first few).
+            // The rest use a null window against the live shared alpha.
             let alpha = sp.current_alpha();
-            let mut score = -self.search(board, -alpha - 1.0, -alpha, sp.player.other(), sp.ply - 1, sp.start_ply);
-            if score > alpha && score < sp.beta && !self.stop {
-                score = -self.search(board, -sp.beta, -alpha, sp.player.other(), sp.ply - 1, sp.start_ply);
+            let score: f64 = if i < PVS_FULL_WINDOW - 1 {
+                -self.search(board, -sp.beta, -alpha, sp.player.other(), sp.ply - 1, sp.start_ply)
 
-            }
+            } else {
+                let mut score = -self.search(board, -alpha - 1.0, -alpha, sp.player.other(), sp.ply - 1, sp.start_ply);
+                if score > alpha && score < sp.beta && !self.stop {
+                    score = -self.search(board, -sp.beta, -alpha, sp.player.other(), sp.ply - 1, sp.start_ply);
+
+                }
+                score
+
+            };
 
             board.unmake_move(&mv);
 
