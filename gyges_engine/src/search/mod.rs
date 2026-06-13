@@ -137,7 +137,7 @@ impl Searcher {
 
         }
 
-        self.parallel_search();
+        self.start_threads();
 
         self.master.final_output();
 
@@ -145,10 +145,11 @@ impl Searcher {
 
     /// Attaches the shared YBWC context, spawns the helpers, and runs the
     /// master's iterative deepening until completion or stop.
-    fn parallel_search(&mut self) {
-        let ctx = Arc::new(YbwcCtx::new(self.helpers.len()));
+    fn start_threads(&mut self) {
+        // Create shared YBWC context
+        let ctx = Arc::new(YbwcPool::new(self.helpers.len()));
         for w in std::iter::once(&mut self.master).chain(self.helpers.iter_mut()) {
-            w.ybwc = Some(ctx.clone());
+            w.pool = Some(ctx.clone());
 
         }
 
@@ -156,6 +157,7 @@ impl Searcher {
         let signal = self.stop_signal.clone();
 
         thread::scope(|sc| {
+            // Spawn helpers into threads
             for h in self.helpers.iter_mut() {
                 sc.spawn(move || h.helper_loop());
 
@@ -169,7 +171,7 @@ impl Searcher {
         });
 
         for w in std::iter::once(&mut self.master).chain(self.helpers.iter_mut()) {
-            w.ybwc = None;
+            w.pool = None;
 
         }
 
@@ -182,7 +184,7 @@ pub struct Worker {
     pub options: SearchOptions,
     pub stop_signal: Arc<AtomicBool>,
     pub stop: bool,
-    /// Cross-worker node total — drives `maxnodes` honestly across the pool.
+    
     pub shared_nodes: Arc<AtomicUsize>,
 
     pub completed_plys: Vec<SearchData>,
@@ -195,8 +197,7 @@ pub struct Worker {
 
     pub path: Vec<u64>,
 
-    /// YBWC context — set by the orchestrator while a parallel search runs.
-    pub ybwc: Option<Arc<YbwcCtx>>,
+    pub pool: Option<Arc<YbwcPool>>,
 
 }
 
@@ -219,19 +220,17 @@ impl Worker {
 
             path: Vec::new(),
 
-            ybwc: None,
+            pool: None,
 
         }
 
     }
 
-    /// Master IDS loop for YBWC — aspiration windows around the previous score,
-    /// with full info/output bookkeeping per completed iteration.
-    ///  
-    /// Master worker only
+    /// Starts a Iterative deepening Search
+    /// 
+    /// Master Thread Only
     /// 
     fn iterative_deepening_search(&mut self, maxply: Option<i8>) {
-        let root_hash = self.options.board.hash();
         let mut current_ply: i8 = 1;
 
         'iterative_deepening: loop {
@@ -241,65 +240,18 @@ impl Worker {
             }
 
             self.history.decay();
-            if let Some(ctx) = self.ybwc.as_ref() {
-                ctx.generation.fetch_add(1, AtomicOrdering::Relaxed);
+            if let Some(pool) = self.pool.as_ref() {
+                pool.generation.fetch_add(1, AtomicOrdering::Relaxed);
 
             }
 
             let prev_score = self.completed_plys.last().map(|p| p.best_move.score);
-            let (mut alpha, mut beta) = match prev_score {
+            let (alpha, beta) = match prev_score {
                 Some(sc) => (sc - 1000.0, sc + 1000.0),
                 None => (f64::NEG_INFINITY, f64::INFINITY),
             };
 
-            'aspiration_windows: loop {
-                let moves_snapshot: Vec<Move> = self.root_moves.clone().into();
-                if moves_snapshot.is_empty() {
-                    break 'aspiration_windows;
-
-                }
-
-                let (best_score, best_move) = self.root_search(&moves_snapshot, alpha, beta, current_ply);
-
-                // Root TT entry so future iterations can use the best move and bound.
-                if !best_move.is_null() && best_score.is_finite() {
-                    let bound = if best_score >= beta {
-                        NodeBound::LowerBound
-
-                    } else if best_score <= alpha {
-                        NodeBound::UpperBound
-
-                    } else {
-                        NodeBound::ExactValue
-
-                    };
-                    let entry = Entry::new(root_hash, best_score, current_ply, best_move, bound);
-                    unsafe { tt().insert(entry) };
-
-                }
-
-                self.check_stop();
-                if self.stop
-                    || best_score == f64::NEG_INFINITY
-                    || best_score >= WIN_THRESHOLD
-                    || best_score <= LOSS_THRESHOLD
-                {
-                    break 'aspiration_windows;
-
-                }
-
-                if best_score <= alpha {
-                    alpha -= 1000.0;
-
-                } else if best_score >= beta {
-                    beta += 1000.0;
-
-                } else {
-                    break 'aspiration_windows;
-
-                }
-
-            }
+            self.root_search(alpha, beta, current_ply);
 
             self.check_stop();
             if self.stop {
@@ -335,73 +287,122 @@ impl Worker {
 
     }
 
-    /// One root iteration: young brothers wait — move 0 gets a serial full-window
-    /// search to seed alpha, the rest go through a root split point. (master only)
-    fn root_search(&mut self, moves: &[Move], alpha: f64, beta: f64, start_ply: i8) -> (f64, Move) {
-        let mut board = self.options.board.clone();
+    /// Starts a singular search to a specific ply. Handles the aspiration window and caches final result to the TT.
+    /// 
+    /// Master Thread Only
+    /// 
+    fn root_search(&mut self, mut alpha: f64, mut beta: f64, start_ply: i8) {
         let player = Player::One;
+        let root_hash = self.options.board.hash();
 
-        self.path.clear();
-        self.path.push(board.hash());
-
-        let mv0 = moves[0];
-        let mut best_score = f64::NEG_INFINITY;
-        let mut best_move = mv0;
-
-        board.make_move(&mv0);
-        if !self.path.contains(&board.hash()) {
-            let score = -self.search(&mut board, -beta, -alpha, player.other(), start_ply - 1, start_ply);
-            board.unmake_move(&mv0);
-            if self.stop {
-                self.path.pop();
-                return (best_score, best_move);
+        'aspiration_windows: loop {
+            let moves: Vec<Move> = self.root_moves.clone().into();
+            if moves.is_empty() {
+                break 'aspiration_windows;
 
             }
-            self.root_moves.update_move(mv0, score, start_ply);
-            best_score = score;
 
-        } else {
-            board.unmake_move(&mv0);
+            let mut board = self.options.board.clone();
+            
+            self.path.clear();
+            self.path.push(board.hash());
 
-        }
+            let mv0 = moves[0];
+            let mut best_score = f64::NEG_INFINITY;
+            let mut best_move = mv0;
 
-        // Fail-high or decisive: siblings are pointless in this window.
-        if moves.len() == 1 || best_score >= beta || best_score >= WIN_THRESHOLD {
+            // Move 0 gets the full-window serial search to seed alpha.
+            board.make_move(&mv0);
+            if !self.path.contains(&board.hash()) {
+                let score = -self.search(&mut board, -beta, -alpha, player.other(), start_ply - 1, start_ply);
+                board.unmake_move(&mv0);
+
+                if self.stop {
+                    self.path.pop();
+                    return;
+
+                }
+
+                self.root_moves.update_move(mv0, score, start_ply);
+                best_score = score;
+
+            } else {
+                board.unmake_move(&mv0);
+
+            }
+
+            // Search the siblings through a split, unless move 0 already failed
+            // high / found a win / is the only move (siblings pointless then).
+            if !(moves.len() == 1 || best_score >= beta || best_score >= WIN_THRESHOLD) {
+                let pool = self.pool.as_ref().unwrap().clone();
+                let sp = Arc::new(SplitPoint::new(
+                    board.clone(),
+                    self.path.clone(),
+                    moves[1..].to_vec(),
+                    alpha.max(best_score),
+                    beta,
+                    start_ply,
+                    start_ply,
+                    player,
+                ));
+
+                pool.add(sp.clone());
+                self.search_split(&sp, &mut board);
+                self.close_split(&pool, &sp);
+
+                let shared = sp.shared.lock().unwrap();
+                for (mv, score) in shared.results.iter() {
+                    self.root_moves.update_move(*mv, *score, start_ply);
+                    if *score > best_score {
+                        best_score = *score;
+                        best_move = *mv;
+
+                    }
+
+                }
+                drop(shared);
+
+            }
+
             self.path.pop();
-            return (best_score, best_move);
 
-        }
+            // Root TT entry so future iterations can use the best move and bound.
+            if !best_move.is_null() && best_score.is_finite() {
+                let bound = if best_score >= beta {
+                    NodeBound::LowerBound
 
-        let ctx = self.ybwc.as_ref().unwrap().clone();
-        let sp = Arc::new(SplitPoint::new(
-            board.clone(),
-            self.path.clone(),
-            moves[1..].to_vec(),
-            alpha.max(best_score),
-            beta,
-            start_ply,
-            start_ply,
-            player,
-        ));
+                } else if best_score <= alpha {
+                    NodeBound::UpperBound
 
-        ctx.register(sp.clone());
-        self.work_split(&sp, &mut board);
-        self.close_split(&ctx, &sp);
+                } else {
+                    NodeBound::ExactValue
 
-        let shared = sp.shared.lock().unwrap();
-        for (mv, score) in shared.results.iter() {
-            self.root_moves.update_move(*mv, *score, start_ply);
-            if *score > best_score {
-                best_score = *score;
-                best_move = *mv;
+                };
+                let entry = Entry::new(root_hash, best_score, start_ply, best_move, bound);
+                unsafe { tt().insert(entry) };
+
+            }
+
+            // Stop / decisive result: no point widening.
+            self.check_stop();
+            if self.stop || best_score == f64::NEG_INFINITY || best_score >= WIN_THRESHOLD || best_score <= LOSS_THRESHOLD {
+                break 'aspiration_windows;
+
+            }
+
+            // Widen on a fail, otherwise the window held — done.
+            if best_score <= alpha {
+                alpha -= 1000.0;
+
+            } else if best_score >= beta {
+                beta += 1000.0;
+
+            } else {
+                break 'aspiration_windows;
 
             }
 
         }
-        drop(shared);
-
-        self.path.pop();
-        (best_score, best_move)
 
     }
 
@@ -541,10 +542,10 @@ impl Worker {
 
             // YBWC: with an idle helper and â‰¥2 children left, split the rest of this node.
             if ply >= MIN_SPLIT_PLY && i + 2 < current_player_moves.len() && !self.stop {
-                if let Some(ctx) = self.ybwc.clone() {
-                    if ctx.can_split() {
+                if let Some(pool) = self.pool.clone() {
+                    if pool.can_split() {
                         let (split_score, split_move) =
-                            self.split_search(board, &current_player_moves[i + 1..], alpha, beta, ply, start_ply, player);
+                            self.open_split(board, &current_player_moves[i + 1..], alpha, beta, ply, start_ply, player);
 
                         if split_score > best_score {
                             best_score = split_score;
@@ -591,30 +592,17 @@ impl Worker {
 
     }
 
-    /// Open a split for the remaining children of the current node and run it to completion.
-    /// Returns the best (score, move) found across all workers.
-    fn split_search(&mut self, board: &mut BoardState, rest: &[Move], alpha: f64, beta: f64, ply: i8, start_ply: i8, player: Player) -> (f64, Move) {
-        let ctx = self.ybwc.as_ref().unwrap().clone();
-        let sp = Arc::new(SplitPoint::new(board.clone(), self.path.clone(), rest.to_vec(), alpha, beta, ply, start_ply, player));
-
-        ctx.register(sp.clone());
-        self.work_split(&sp, board);
-        self.close_split(&ctx, &sp);
-
-        let shared = sp.shared.lock().unwrap();
-        (shared.best_score, shared.best_move)
-
-    }
-
-    /// Pull and search children from a split point until it drains, cuts off, or we stop.
-    /// `board` must be at the split node; `self.path` must end with its hash.
-    fn work_split(&mut self, sp: &SplitPoint, board: &mut BoardState) {
+    /// Allows for multiple threads to search a split point by pulling children until it drains, cuts off, or is stoped.
+    /// The `board` must be at the split node; `self.path` must end with its hash.
+    fn search_split(&mut self, sp: &SplitPoint, board: &mut BoardState) {
         loop {
+            // Check stop
             if self.stop || sp.cutoff.load(AtomicOrdering::Acquire) || self.stop_signal.load(AtomicOrdering::Relaxed) {
                 break;
 
             }
 
+            // Grab next open move
             let i = sp.next.fetch_add(1, AtomicOrdering::AcqRel);
             if i >= sp.moves.len() {
                 break;
@@ -631,9 +619,7 @@ impl Worker {
 
             }
 
-            // The leading children get a full window (move 0 was the serial seed, so the
-            // first PVS_FULL_WINDOW - 1 split children mirror the serial node's first few).
-            // The rest use a null window against the live shared alpha.
+            // Principal Variation Search
             let alpha = sp.current_alpha();
             let score: f64 = if i < PVS_FULL_WINDOW - 1 {
                 -self.search(board, -sp.beta, -alpha, sp.player.other(), sp.ply - 1, sp.start_ply)
@@ -655,7 +641,7 @@ impl Worker {
 
             }
 
-            sp.record(mv, score);
+            sp.store(mv, score);
 
             if score >= sp.beta {
                 sp.cutoff.store(true, AtomicOrdering::Release);
@@ -667,19 +653,38 @@ impl Worker {
 
     }
 
+    /// Open a split for the remaining children of the current node and run it to completion.
+    /// Returns the best (score, move) found across all workers.
+    fn open_split(&mut self, board: &mut BoardState, rest: &[Move], alpha: f64, beta: f64, ply: i8, start_ply: i8, player: Player) -> (f64, Move) {
+        let pool = self.pool.as_ref().unwrap().clone();
+        let sp = Arc::new(SplitPoint::new(board.clone(), self.path.clone(), rest.to_vec(), alpha, beta, ply, start_ply, player));
+
+        pool.add(sp.clone());
+        self.search_split(&sp, board);
+        self.close_split(&pool, &sp);
+
+        let shared = sp.shared.lock().unwrap();
+        (shared.best_score, shared.best_move)
+
+    }
+
     /// Deregister `sp`, help other split points while its stragglers finish.
-    fn close_split(&mut self, ctx: &YbwcCtx, sp: &Arc<SplitPoint>) {
-        ctx.deregister(sp);
+    fn close_split(&mut self, pool: &YbwcPool, sp: &Arc<SplitPoint>) {
+        pool.remove(sp);
+
         while sp.active.load(AtomicOrdering::Acquire) > 0 {
-            if let Some(other) = ctx.try_claim() {
+            if let Some(other) = pool.try_claim() { // Help another split with work remaining
                 let saved_path = std::mem::take(&mut self.path);
                 self.path.extend_from_slice(&other.path);
+
                 let mut board = other.board.clone();
-                self.work_split(&other, &mut board);
+                self.search_split(&other, &mut board);
+
                 other.active.fetch_sub(1, AtomicOrdering::AcqRel);
+
                 self.path = saved_path;
 
-            } else {
+            } else { // No splits to help: wait
                 thread::yield_now();
 
             }
@@ -690,34 +695,38 @@ impl Worker {
 
     /// Helper thread loop: claim split points until the stop signal fires.
     pub fn helper_loop(&mut self) {
-        let ctx = self.ybwc.as_ref().unwrap().clone();
+        let pool = self.pool.as_ref().unwrap().clone();
         let mut last_generation = 0usize;
         let mut spins = 0u32;
         loop {
+            // Stop check
             if self.stop_signal.load(AtomicOrdering::Relaxed) {
                 break;
 
             }
 
             // Decay history in step with the master's IDS iterations.
-            let generation = ctx.generation.load(AtomicOrdering::Relaxed);
+            let generation = pool.generation.load(AtomicOrdering::Relaxed);
             if generation != last_generation {
                 last_generation = generation;
                 self.history.decay();
 
             }
 
-            match ctx.try_claim() {
+            match pool.try_claim() {
                 Some(sp) => {
                     spins = 0;
-                    ctx.idle.fetch_sub(1, AtomicOrdering::AcqRel);
+                    pool.idle.fetch_sub(1, AtomicOrdering::AcqRel);
+
                     self.stop = false;
                     self.path.clear();
                     self.path.extend_from_slice(&sp.path);
                     let mut board = sp.board.clone();
-                    self.work_split(&sp, &mut board);
+
+                    self.search_split(&sp, &mut board);
+
                     sp.active.fetch_sub(1, AtomicOrdering::AcqRel);
-                    ctx.idle.fetch_add(1, AtomicOrdering::AcqRel);
+                    pool.idle.fetch_add(1, AtomicOrdering::AcqRel);
 
                 }
                 None => {
@@ -854,9 +863,9 @@ impl Worker {
 
     }
 
-    // Checks to see if the engine should stop the search.
+    /// Checks to see if the engine should stop the search.
     pub fn check_stop(&mut self) {
-        // Shared atomic stop — set by UGI `stop` or by the orchestrator on IDS exit.
+        // Stop signal from UGI
         if self.stop_signal.load(AtomicOrdering::Relaxed) {
             self.stop = true;
 
@@ -964,12 +973,14 @@ pub struct SplitPoint {
     player: Player,
     active: AtomicUsize,
     cutoff: AtomicBool,
+    
+    // Live shared state for split
     shared: Mutex<SplitShared>,
 
 }
 
-/// The split's live results, guarded by one lock: the shared alpha bound plus
-/// the best child and the per-child scores found so far.
+/// The split's live results.
+/// Contains the shared alpha bound, the best child, and the per-child scores found so far.
 struct SplitShared {
     alpha: f64,
     best_score: f64,
@@ -979,7 +990,7 @@ struct SplitShared {
 }
 
 impl SplitPoint {
-    #[allow(clippy::too_many_arguments)]
+    /// Creates a new split point
     fn new(board: BoardState, path: Vec<u64>, moves: Vec<Move>, alpha: f64, beta: f64, ply: i8, start_ply: i8, player: Player) -> Self {
         Self {
             board,
@@ -992,19 +1003,25 @@ impl SplitPoint {
             player,
             active: AtomicUsize::new(0),
             cutoff: AtomicBool::new(false),
-            shared: Mutex::new(SplitShared { alpha, best_score: f64::NEG_INFINITY, best_move: Move::new_null(), results: Vec::new() }),
+            shared: Mutex::new(SplitShared { 
+                alpha, 
+                best_score: f64::NEG_INFINITY, 
+                best_move: Move::new_null(), 
+                results: Vec::new() 
+            }),
 
         }
 
     }
 
+    /// Fetches the current best alpha for the split
     fn current_alpha(&self) -> f64 {
         self.shared.lock().unwrap().alpha
 
     }
 
-    /// Record a finished child: raise the shared alpha and track the best move.
-    fn record(&self, mv: Move, score: f64) {
+    /// Stores a finished child's result to the shared split state
+    fn store(&self, mv: Move, score: f64) {
         let mut shared = self.shared.lock().unwrap();
         if score > shared.alpha {
             shared.alpha = score;
@@ -1022,19 +1039,19 @@ impl SplitPoint {
 }
 
 /// Shared YBWC state: the active split points plus an idle-helper count.
-pub struct YbwcCtx {
-    registry: Mutex<Vec<Arc<SplitPoint>>>,
+pub struct YbwcPool {
+    pool: Mutex<Vec<Arc<SplitPoint>>>,
     idle: AtomicUsize,
     splits: AtomicUsize,
-    /// IDS iteration counter — helpers decay their history when it advances.
     generation: AtomicUsize,
 
 }
 
-impl YbwcCtx {
+impl YbwcPool {
+    /// Creates a new YBWC pool with the given number of helpers.
     fn new(helper_count: usize) -> Self {
         Self {
-            registry: Mutex::new(Vec::new()),
+            pool: Mutex::new(Vec::new()),
             idle: AtomicUsize::new(helper_count),
             splits: AtomicUsize::new(0),
             generation: AtomicUsize::new(0),
@@ -1043,28 +1060,30 @@ impl YbwcCtx {
 
     }
 
-    /// Cheap pre-check: only split when a helper is idle and the registry has room.
+    /// Checks if there are idle helpers and the pool has room.
     fn can_split(&self) -> bool {
         self.idle.load(AtomicOrdering::Relaxed) > 0 && self.splits.load(AtomicOrdering::Relaxed) < MAX_SPLITS
 
     }
-
-    fn register(&self, sp: Arc<SplitPoint>) {
+    
+    /// Adds a split point to the pool.
+    fn add(&self, sp: Arc<SplitPoint>) {
         self.splits.fetch_add(1, AtomicOrdering::AcqRel);
-        self.registry.lock().unwrap().push(sp);
+        self.pool.lock().unwrap().push(sp);
 
     }
 
-    fn deregister(&self, sp: &Arc<SplitPoint>) {
-        self.registry.lock().unwrap().retain(|x| !Arc::ptr_eq(x, sp));
+    /// Removes a split point from the pool.
+    fn remove(&self, sp: &Arc<SplitPoint>) {
+        self.pool.lock().unwrap().retain(|x| !Arc::ptr_eq(x, sp));
         self.splits.fetch_sub(1, AtomicOrdering::AcqRel);
 
     }
 
-    /// Claim a split point with work remaining; increments its active count under the lock.
+    /// Claim a split point with work remaining. Increments the active count if successfully claimed.
     fn try_claim(&self) -> Option<Arc<SplitPoint>> {
-        let registry = self.registry.lock().unwrap();
-        for sp in registry.iter() {
+        let pool = self.pool.lock().unwrap();
+        for sp in pool.iter() {
             if !sp.cutoff.load(AtomicOrdering::Acquire) && sp.next.load(AtomicOrdering::Acquire) < sp.moves.len() {
                 sp.active.fetch_add(1, AtomicOrdering::AcqRel);
                 return Some(sp.clone());
