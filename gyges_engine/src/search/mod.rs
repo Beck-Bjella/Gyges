@@ -199,6 +199,11 @@ pub struct Worker {
 
     pub pool: Option<Arc<YbwcPool>>,
 
+    /// Cutoff flag of the split this worker is currently draining, if any.
+    /// Checked per-node in `search` so an in-flight subtree bails the moment
+    /// a sibling fails high, instead of finishing wasted work.
+    pub active_cutoff: Option<Arc<AtomicBool>>,
+
 }
 
 impl Worker {
@@ -221,6 +226,8 @@ impl Worker {
             path: Vec::new(),
 
             pool: None,
+
+            active_cutoff: None,
 
         }
 
@@ -347,8 +354,10 @@ impl Worker {
                 ));
 
                 pool.add(sp.clone());
+                let saved_cutoff = self.active_cutoff.replace(sp.cutoff.clone());
                 self.search_split(&sp, &mut board);
                 self.close_split(&pool, &sp);
+                self.active_cutoff = saved_cutoff;
 
                 let shared = sp.shared.lock().unwrap();
                 for (mv, score) in shared.results.iter() {
@@ -432,6 +441,18 @@ impl Worker {
         // Count this node, and pace the stop check off the shared total.
         if self.shared_nodes.fetch_add(1, AtomicOrdering::Relaxed) % 1000 == 0 {
             self.check_stop();
+
+            // Bail the in-flight subtree if our split has been cut off by a
+            // sibling. Sets `self.stop` so the existing discard-points (TT
+            // insert, sp.store) drop this node's garbage score; the worker
+            // un-stops when it picks up its next split.
+            if let Some(cutoff) = &self.active_cutoff {
+                if cutoff.load(AtomicOrdering::Acquire) {
+                    self.stop = true;
+
+                }
+
+            }
 
         }
 
@@ -660,8 +681,10 @@ impl Worker {
         let sp = Arc::new(SplitPoint::new(board.clone(), self.path.clone(), rest.to_vec(), alpha, beta, ply, start_ply, player));
 
         pool.add(sp.clone());
+        let saved_cutoff = self.active_cutoff.replace(sp.cutoff.clone());
         self.search_split(&sp, board);
         self.close_split(&pool, &sp);
+        self.active_cutoff = saved_cutoff;
 
         let shared = sp.shared.lock().unwrap();
         (shared.best_score, shared.best_move)
@@ -676,13 +699,20 @@ impl Worker {
             if let Some(other) = pool.try_claim() { // Help another split with work remaining
                 let saved_path = std::mem::take(&mut self.path);
                 self.path.extend_from_slice(&other.path);
+                let saved_cutoff = self.active_cutoff.replace(other.cutoff.clone());
+                // Helping a different split — our own split's cutoff/stop must
+                // not abort it. Clear, then restore our state afterward.
+                let saved_stop = self.stop;
+                self.stop = false;
 
                 let mut board = other.board.clone();
                 self.search_split(&other, &mut board);
 
                 other.active.fetch_sub(1, AtomicOrdering::AcqRel);
 
+                self.stop = saved_stop;
                 self.path = saved_path;
+                self.active_cutoff = saved_cutoff;
 
             } else { // No splits to help: wait
                 thread::yield_now();
@@ -721,10 +751,12 @@ impl Worker {
                     self.stop = false;
                     self.path.clear();
                     self.path.extend_from_slice(&sp.path);
+                    self.active_cutoff = Some(sp.cutoff.clone());
                     let mut board = sp.board.clone();
 
                     self.search_split(&sp, &mut board);
 
+                    self.active_cutoff = None;
                     sp.active.fetch_sub(1, AtomicOrdering::AcqRel);
                     pool.idle.fetch_add(1, AtomicOrdering::AcqRel);
 
@@ -972,8 +1004,8 @@ pub struct SplitPoint {
     start_ply: i8,
     player: Player,
     active: AtomicUsize,
-    cutoff: AtomicBool,
-    
+    cutoff: Arc<AtomicBool>,
+
     // Live shared state for split
     shared: Mutex<SplitShared>,
 
@@ -1002,7 +1034,7 @@ impl SplitPoint {
             start_ply,
             player,
             active: AtomicUsize::new(0),
-            cutoff: AtomicBool::new(false),
+            cutoff: Arc::new(AtomicBool::new(false)),
             shared: Mutex::new(SplitShared { 
                 alpha, 
                 best_score: f64::NEG_INFINITY, 
