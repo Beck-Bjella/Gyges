@@ -49,7 +49,7 @@ impl Ugi {
     pub fn start(&mut self) {
         self.init();
 
-        println!("Gyges UGI Engine v1.2.0");
+        println!("Gyges UGI Engine v2.0.0");
 
         let stdin = io::stdin();
         loop {

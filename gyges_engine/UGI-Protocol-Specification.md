@@ -198,7 +198,7 @@ This section details the messages the engine sends back via the command line, ex
 A GUI initializes the engine, sets a custom board layout, and requests a move. A '*' indicates the engine's response.
 
 ```bash
-* Gyges UGI Engine v1.1.0
+* Gyges UGI Engine v2.0.0
 
 ugi
 * id name Helios

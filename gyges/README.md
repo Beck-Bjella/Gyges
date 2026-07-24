@@ -46,7 +46,7 @@ To add this crate to your project, include the following in your `Cargo.toml` fi
 
 ```toml
 [dependencies]
-gyges = "1.1.0"
+gyges = "2.0.0"
 ```
 
 ### Setting up a Starting Board Position
