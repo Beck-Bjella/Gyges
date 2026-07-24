@@ -204,6 +204,12 @@ pub struct Worker {
     /// a sibling fails high, instead of finishing wasted work.
     pub active_cutoff: Option<Arc<AtomicBool>>,
 
+    /// Set when the current split cut off, to abandon the in-flight subtree.
+    /// Separate from `stop` (which means the whole search is over) so a cutoff
+    /// can never leak into the IDS/aspiration termination checks. Cleared when
+    /// the worker leaves the split.
+    pub bail: bool,
+
 }
 
 impl Worker {
@@ -228,6 +234,8 @@ impl Worker {
             pool: None,
 
             active_cutoff: None,
+
+            bail: false,
 
         }
 
@@ -421,8 +429,8 @@ impl Worker {
         let is_leaf = ply == 0;
         let board_hash = board.hash();
 
-        // Bail out instantly once this worker has stopped.
-        if self.stop {
+        // Bail out instantly once this worker has stopped or its split cut off.
+        if self.stop || self.bail {
             return 0.0;
 
         }
@@ -443,12 +451,12 @@ impl Worker {
             self.check_stop();
 
             // Bail the in-flight subtree if our split has been cut off by a
-            // sibling. Sets `self.stop` so the existing discard-points (TT
-            // insert, sp.store) drop this node's garbage score; the worker
-            // un-stops when it picks up its next split.
+            // sibling. Sets `self.bail` (NOT `self.stop`) so the garbage score
+            // is discarded without ending the whole search; cleared when the
+            // worker leaves the split.
             if let Some(cutoff) = &self.active_cutoff {
                 if cutoff.load(AtomicOrdering::Acquire) {
-                    self.stop = true;
+                    self.bail = true;
 
                 }
 
@@ -545,6 +553,14 @@ impl Worker {
 
             board.unmake_move(mv);
 
+            // Bail/stop hit mid-search: `score` is garbage, abandon the loop.
+            // The caller discards our return (entry guard / split-store guard).
+            if self.stop || self.bail {
+                self.path.pop();
+                return best_score;
+
+            }
+
             if score > best_score {
                 best_score = score;
                 best_move = *mv;
@@ -591,7 +607,7 @@ impl Worker {
 
         }
 
-        if !self.stop {
+        if !self.stop && !self.bail {
             let node_bound: NodeBound = if best_score >= beta {
                 NodeBound::LowerBound
 
@@ -617,8 +633,8 @@ impl Worker {
     /// The `board` must be at the split node; `self.path` must end with its hash.
     fn search_split(&mut self, sp: &SplitPoint, board: &mut BoardState) {
         loop {
-            // Check stop
-            if self.stop || sp.cutoff.load(AtomicOrdering::Acquire) || self.stop_signal.load(AtomicOrdering::Relaxed) {
+            // Check stop / cutoff
+            if self.stop || self.bail || sp.cutoff.load(AtomicOrdering::Acquire) || self.stop_signal.load(AtomicOrdering::Relaxed) {
                 break;
 
             }
@@ -647,7 +663,7 @@ impl Worker {
 
             } else {
                 let mut score = -self.search(board, -alpha - 1.0, -alpha, sp.player.other(), sp.ply - 1, sp.start_ply);
-                if score > alpha && score < sp.beta && !self.stop {
+                if score > alpha && score < sp.beta && !self.stop && !self.bail {
                     score = -self.search(board, -sp.beta, -alpha, sp.player.other(), sp.ply - 1, sp.start_ply);
 
                 }
@@ -657,7 +673,8 @@ impl Worker {
 
             board.unmake_move(&mv);
 
-            if self.stop {
+            // Don't store a garbage score from a stopped or bailed search.
+            if self.stop || self.bail {
                 break;
 
             }
@@ -671,6 +688,9 @@ impl Worker {
             }
 
         }
+
+        // Leaving this split: clear the bail flag so the next split starts clean.
+        self.bail = false;
 
     }
 
@@ -700,17 +720,12 @@ impl Worker {
                 let saved_path = std::mem::take(&mut self.path);
                 self.path.extend_from_slice(&other.path);
                 let saved_cutoff = self.active_cutoff.replace(other.cutoff.clone());
-                // Helping a different split — our own split's cutoff/stop must
-                // not abort it. Clear, then restore our state afterward.
-                let saved_stop = self.stop;
-                self.stop = false;
 
                 let mut board = other.board.clone();
                 self.search_split(&other, &mut board);
 
                 other.active.fetch_sub(1, AtomicOrdering::AcqRel);
 
-                self.stop = saved_stop;
                 self.path = saved_path;
                 self.active_cutoff = saved_cutoff;
 
