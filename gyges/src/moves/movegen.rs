@@ -865,9 +865,33 @@ impl<T> Drop for FixedStack<T> {
 }
 
 /// Extracts specific bits from a 64-bit integer using a mask. 
+#[cfg(all(target_arch = "x86_64", target_feature = "bmi2"))]
 #[inline(always)]
 pub unsafe fn compress_pext(mask: u64, val: u64) -> u16 {
     core::arch::x86_64::_pext_u64(val, mask) as u16
+
+}
+
+/// Extracts specific bits from a 64-bit integer using a mask. 
+/// 
+/// For targets without BMI2 (wasm32 in particular)
+#[cfg(not(all(target_arch = "x86_64", target_feature = "bmi2")))]
+#[inline(always)]
+pub unsafe fn compress_pext(mask: u64, val: u64) -> u16 {
+    let mut res: u64 = 0;
+    let mut bit: u32 = 0;
+    let mut m = mask;
+    while m != 0 {
+        let low = m & m.wrapping_neg();
+        if val & low != 0 {
+            res |= 1u64 << bit;
+
+        }
+        bit += 1;
+        m ^= low;
+
+    }
+    res as u16
 
 }
 

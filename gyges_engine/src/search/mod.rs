@@ -51,6 +51,9 @@ const MAX_SPLITS: usize = 32;
 const PVS_FULL_WINDOW: usize = 5;
 
 /// Structure that owns all workers and runs a parallel search across them.
+///     
+/// Clamped to 1 thread on wasm32 targets.
+/// 
 pub struct Searcher {
     pub master: Worker,
     pub helpers: Vec<Worker>,
@@ -63,7 +66,8 @@ impl Searcher {
     pub fn new(options: SearchOptions, stop_signal: Arc<AtomicBool>) -> Searcher {
         let shared_nodes = Arc::new(AtomicUsize::new(0));
         let master = Worker::new(stop_signal.clone(), shared_nodes.clone(), options.clone());
-        let helpers: Vec<Worker> = (1..options.threads.max(1))
+        let threads = if cfg!(target_arch = "wasm32") { 1 } else { options.threads.max(1) }; // wasm32 has no threads, so force 1
+        let helpers: Vec<Worker> = (1..threads)
             .map(|_| Worker::new(stop_signal.clone(), shared_nodes.clone(), options.clone()))
             .collect();
 

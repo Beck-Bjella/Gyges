@@ -3,6 +3,7 @@
 //! Output in [-NETWORK_SCALE, +NETWORK_SCALE], positive = side-to-move winning.
 
 use gyges::{board::*, core::*};
+#[cfg(not(target_arch = "wasm32"))]
 use std::fs;
 
 /// Global network instance — loaded via `load_network`, read during search.
@@ -10,9 +11,25 @@ use std::fs;
 static mut NETWORK: Option<GygesNet> = None;
 static mut NETWORK_NAME: Option<String> = None;
 
+/// The default weights, compiled into the binary on every target.
+const DEFAULT_WEIGHTS: &[u8] = include_bytes!("../../../weights/default.bin");
+
+/// Install the compiled-in default weights. Available on every target.
+pub fn load_default_network() -> Result<(), String> {
+    let net = GygesNet::load_from_bytes(DEFAULT_WEIGHTS)?;
+    unsafe {
+        NETWORK = Some(net);
+        NETWORK_NAME = Some("default.bin (embedded)".to_string());
+
+    }
+    Ok(())
+
+}
+
 /// Load weights from `path` and install them as the active network.
 /// Can be called multiple times to swap weights — must only be called when no
 /// search is running.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn load_network(path: &str) -> Result<(), String> {
     let net = GygesNet::load(path)?;
     let name = std::path::Path::new(path)
@@ -24,6 +41,13 @@ pub fn load_network(path: &str) -> Result<(), String> {
         NETWORK_NAME = Some(name);
     }
     Ok(())
+    
+}
+/// On wasm32 targets custom weights cannot be loaded.
+#[cfg(target_arch = "wasm32")]
+pub fn load_network(path: &str) -> Result<(), String> {
+    Err(format!("cannot read '{}': no filesystem on wasm", path))
+
 }
 
 /// Returns true if a network is currently loaded.
@@ -84,11 +108,17 @@ pub struct GygesNet {
 }
 
 impl GygesNet {
-    /// Load weights from the binary file produced by the Python training script.
+    /// Load weights from a binary file. The file should be produced by the Python training script.
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn load(path: &str) -> Result<Self, String> {
         let bytes = fs::read(path)
             .map_err(|e| format!("Cannot read weight file '{}': {}", path, e))?;
+        Self::load_from_bytes(&bytes)
 
+    }
+
+    /// Parse weights from loaded byte string.
+    pub fn load_from_bytes(bytes: &[u8]) -> Result<Self, String> {
         let expected_floats = L1_SIZE * FEATURE_COUNT + L1_SIZE + L1_SIZE + 1;
         let expected_bytes = expected_floats * 4;
         if bytes.len() != expected_bytes {

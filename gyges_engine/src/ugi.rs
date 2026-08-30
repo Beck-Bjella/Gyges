@@ -38,10 +38,17 @@ impl Ugi {
     /// Initializes the engine
     pub fn init(&self) {
         // Initialize transposition table
-        init_tt(2usize.pow(22)); // 400 MB
-
+        // The transposition table.
+        #[cfg(target_arch = "wasm32")]
+        init_tt(2usize.pow(18)); // ~25 MB : wasm32 targets
+        #[cfg(not(target_arch = "wasm32"))] 
+        init_tt(2usize.pow(22)); // 400 MB : x86-64 or other targets
+        
         // Load default network
-        let _ = network::load_network("./weights/default.bin");
+        if let Err(e) = network::load_default_network() {
+            println!("info string default weight load failed: {}", e);
+
+        }
 
     }
 
@@ -278,12 +285,26 @@ impl Ugi {
 
         let options = self.search_options.clone();
         let signal = stop_signal.clone();
-        self.main_thread = Some(thread::spawn(move || {
+
+        // wasm32 has no threads so single-threaded inline search
+        #[cfg(target_arch = "wasm32")]
+        {
             let mut searcher = Searcher::new(options, signal.clone());
             searcher.go();
             signal.store(true, AtomicOrdering::Relaxed);
+            self.searching = false;
 
-        }));
+        }
+        #[cfg(not(target_arch = "wasm32"))] // x86-64 or other targets
+        {
+            self.main_thread = Some(thread::spawn(move || {
+                let mut searcher = Searcher::new(options, signal.clone());
+                searcher.go();
+                signal.store(true, AtomicOrdering::Relaxed);
+
+            }));
+
+        }
 
     }
 
