@@ -75,15 +75,22 @@ impl RawMoveList {
         for idx in self.start_indexs.iter() {
             let start_position = self.start_positions[*idx];
             
-            for end_pos in self.end_positions[*idx].get_data() {
+            // A move must change the board, so a piece can't end on its own start square.
+            let mut ends = self.end_positions[*idx] & !start_position.1.bit();
+            for end_pos in ends.get_data() {
                 let data = [(Piece::None, start_position.1), (start_position.0, SQ(end_pos as u8)), (Piece::None, SQ::NONE)];
                 moves.push(Move::new(data, MoveType::Bounce));
 
             }
 
             for pick_up_pos in self.pickup_positions[*idx].get_data() {
-                let data = [(Piece::None, start_position.1), (start_position.0, SQ(pick_up_pos as u8)), (board.piece_at(SQ(pick_up_pos as u8)), start_position.1)];
-                moves.push(Move::new(data, MoveType::Drop));
+                // Dropping back on the start square only changes the board if the pieces differ.
+                let picked_up = board.piece_at(SQ(pick_up_pos as u8));
+                if picked_up != start_position.0 {
+                    let data = [(Piece::None, start_position.1), (start_position.0, SQ(pick_up_pos as u8)), (picked_up, start_position.1)];
+                    moves.push(Move::new(data, MoveType::Drop));
+
+                }
 
                 for drop_pos in drop_positions.iter() {
                     let data = [(Piece::None, start_position.1), (start_position.0, SQ(pick_up_pos as u8)), (board.piece_at(SQ(pick_up_pos as u8)), SQ(*drop_pos as u8))];
