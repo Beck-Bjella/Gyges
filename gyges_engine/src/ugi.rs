@@ -79,6 +79,9 @@ impl Ugi {
                     println!("option maxTime");
                     println!("option maxNodes");
                     println!("option randomize");
+                    println!("option skill-weakness");
+                    println!("option skill-reach");
+                    println!("option skill-allowLosing");
                     println!("option nn");
                     println!("option weightsPath");
                     println!("option threads");
@@ -170,6 +173,46 @@ impl Ugi {
                     match *value_str {
                         "true" | "1" | "on" => self.search_options.randomize = true,
                         "false" | "0" | "off" => self.search_options.randomize = false,
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"skill-weakness") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    match value_str.parse::<u8>() {
+                        Ok(n) if n <= 100 => self.search_options.skill_weakness = n,
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"skill-reach") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    match value_str.parse::<u8>() {
+                        Ok(n) if n <= 100 => self.search_options.skill_reach = n,
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"skill-allowLosing") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    match *value_str {
+                        "true" | "1" | "on" => self.search_options.skill_allow_losing = true,
+                        "false" | "0" | "off" => self.search_options.skill_allow_losing = false,
                         _ => println!("Unknown Command: '{}'", trimmed),
                     }
 

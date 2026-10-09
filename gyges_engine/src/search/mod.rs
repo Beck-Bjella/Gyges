@@ -37,6 +37,9 @@ use crate::consts::*;
 use crate::ugi;
 
 // Win/loss score constants.
+/// Sort value for a move that loses outright, kept only for a skill slip.
+const LOSING_SORT_VAL: f64 = -1.0e9;
+
 pub const WIN_SCORE: f64 = 100_000_000.0;
 pub const LOSS_SCORE: f64 = -WIN_SCORE;
 pub const WIN_THRESHOLD: f64 = WIN_SCORE - 10_000.0;
@@ -284,12 +287,16 @@ impl Worker {
             ugi::info_output(ply_data.clone());
             self.completed_plys.push(ply_data);
 
-            // Filter losing moves from the root list before the next iteration.
             self.root_moves.sort();
-            self.root_moves.moves = self.root_moves.moves.iter()
-                .filter(|mv| mv.score > LOSS_THRESHOLD)
-                .cloned()
-                .collect();
+
+            // Filter losing moves from the root list before the next iteration, unless a slip may take one.
+            if !self.options.skill_allow_losing {
+                self.root_moves.moves = self.root_moves.moves.iter()
+                    .filter(|mv| mv.score > LOSS_THRESHOLD)
+                    .cloned()
+                    .collect();
+
+            }
 
             current_ply += 2;
 
@@ -829,6 +836,13 @@ impl Worker {
             let data = unsafe { self.mg.gen::<GenMoveCount, QuitOnThreat>(board, player.other()) };
             if data.threat {
                 board.unmake_move(&mv);
+
+                // Keep the move for a slip to reach, sorted last.
+                if self.options.skill_allow_losing {
+                    return Some((mv, LOSING_SORT_VAL, 0.0));
+
+                }
+
                 return None;
 
             }
@@ -993,6 +1007,37 @@ impl Worker {
 
             }
         };
+
+        // Skill level: pick a weaker move by forgiving part of its gap to the best (Stockfish-style).
+        if !best_search_data.game_over && self.options.skill_weakness > 0 {
+            let pool = &self.root_moves.moves;
+            if !pool.is_empty() {
+                let top = pool[0].score;
+
+                // Only the top `reach` percent of moves can be picked
+                let reach = (pool.len() * self.options.skill_reach as usize / 100).clamp(1, pool.len());
+                let delta = top - pool[reach - 1].score;
+                let weakness = self.options.skill_weakness as f64 * 1.28;
+
+                let hash = self.options.board.hash();
+                let mut chosen = 0;
+                let mut best_val = f64::NEG_INFINITY;
+                for i in 0..reach {
+                    let gap = top - pool[i].score;
+                    let r = ((hash.wrapping_mul(i as u64 * 2 + 1) >> 16) % 1024) as f64 / 1024.0;
+                    let val = pool[i].score + (weakness * gap + delta * r * weakness) / 128.0;
+                    if val >= best_val {
+                        best_val = val;
+                        chosen = i;
+
+                    }
+
+                }
+                best_search_data.best_move = pool[chosen].clone();
+
+            }
+
+        }
 
         // When randomize is on, pick a random move from all root moves.
         if self.options.randomize && !best_search_data.game_over && !self.root_moves.moves.is_empty() {
@@ -1311,6 +1356,12 @@ pub struct SearchOptions {
     pub maxtime: Option<f64>,
     pub maxnodes: Option<usize>,
     pub randomize: bool,
+    /// How much of the gap to the best move is forgiven, 0-100. 0 always plays the best.
+    pub skill_weakness: u8,
+    /// How far down the ranked list the handicap is measured against, as a percent.
+    pub skill_reach: u8,
+    /// Whether moves that lose outright are left in for a slip to reach.
+    pub skill_allow_losing: bool,
     pub nn: bool, // Use NN if set, fallback to old evaluation if not loaded
     /// Total search thread count (1 = serial). Helper count is `threads - 1`.
     pub threads: usize,
@@ -1325,6 +1376,9 @@ impl SearchOptions {
             maxtime: Option::None,
             maxnodes: Option::None,
             randomize: false,
+            skill_weakness: 0,
+            skill_reach: 25,
+            skill_allow_losing: false,
             nn: true,
             threads: 1,
 
