@@ -61,8 +61,12 @@ impl Ugi {
         let stdin = io::stdin();
         loop {
             let mut input = String::new();
-            stdin.read_line(&mut input).expect("Failed to read line from stdin");
-            
+            // Stop on EOF
+            if stdin.read_line(&mut input).expect("Failed to read line from stdin") == 0 {
+                break;
+
+            }
+
             let trimmed = input.trim();
             
             let raw_commands: Vec<&str> = trimmed.split_whitespace().collect();

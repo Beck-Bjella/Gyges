@@ -91,7 +91,7 @@
 //! 
 //! ### Making a Move
 //! 
-//! Use the `make_move` method on the `BoardState` struct to make a move. This method takes a `Move` struct as an argument and returns a new `BoardState` with the move applied:
+//! Use the `make_move` method on the `BoardState` struct to make a move. It applies the move to the board in place, and `unmake_move` reverses it:
 //! 
 //! ```rust
 //! use gyges::*;
@@ -112,9 +112,12 @@
 //! println!("Original board: {}", board);
 //! println!("Move: {:?}", moves[0]);
 //! 
-//! let mut new_board: BoardState = board.make_move(&moves[0]);
-//! 
+//! board.make_move(&moves[0]);
 //! println!("New board: {}", board);
+//!
+//! // Undo it
+//! board.unmake_move(&moves[0]);
+//! println!("Restored board: {}", board);
 //! ```
 //! 
 //! 

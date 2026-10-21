@@ -150,10 +150,10 @@ impl Searcher {
 
     }
 
-    /// Attaches the shared YBWC context, spawns the helpers, and runs the
+    /// Attaches the shared YBWC pool, spawns the helpers, and runs the
     /// master's iterative deepening until completion or stop.
     fn start_threads(&mut self) {
-        // Create shared YBWC context
+        // Create shared YBWC pool
         let ctx = Arc::new(YbwcPool::new(self.helpers.len()));
         for w in std::iter::once(&mut self.master).chain(self.helpers.iter_mut()) {
             w.pool = Some(ctx.clone());
@@ -248,7 +248,7 @@ impl Worker {
 
     }
 
-    /// Starts a Iterative deepening Search
+    /// Starts an iterative deepening search
     /// 
     /// Master Thread Only
     /// 
