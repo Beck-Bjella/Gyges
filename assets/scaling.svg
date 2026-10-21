@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="400" font-family="sans-serif" font-size="12">
+<rect width="100%" height="100%" fill="white"/>
+<line x1="60.0" y1="40" x2="60.0" y2="350" stroke="#eee"/>
+<text x="60.0" y="368" text-anchor="middle">1</text>
+<line x1="60" y1="350.0" x2="530" y2="350.0" stroke="#eee"/>
+<text x="54" y="354.0" text-anchor="end">1x</text>
+<line x1="131.4" y1="40" x2="131.4" y2="350" stroke="#eee"/>
+<text x="131.4" y="368" text-anchor="middle">2</text>
+<line x1="60" y1="302.9" x2="530" y2="302.9" stroke="#eee"/>
+<text x="54" y="306.9" text-anchor="end">2x</text>
+<line x1="202.7" y1="40" x2="202.7" y2="350" stroke="#eee"/>
+<text x="202.7" y="368" text-anchor="middle">4</text>
+<line x1="60" y1="255.8" x2="530" y2="255.8" stroke="#eee"/>
+<text x="54" y="259.8" text-anchor="end">4x</text>
+<line x1="274.1" y1="40" x2="274.1" y2="350" stroke="#eee"/>
+<text x="274.1" y="368" text-anchor="middle">8</text>
+<line x1="60" y1="208.8" x2="530" y2="208.8" stroke="#eee"/>
+<text x="54" y="212.8" text-anchor="end">8x</text>
+<line x1="345.5" y1="40" x2="345.5" y2="350" stroke="#eee"/>
+<text x="345.5" y="368" text-anchor="middle">16</text>
+<line x1="60" y1="161.7" x2="530" y2="161.7" stroke="#eee"/>
+<text x="54" y="165.7" text-anchor="end">16x</text>
+<line x1="416.9" y1="40" x2="416.9" y2="350" stroke="#eee"/>
+<text x="416.9" y="368" text-anchor="middle">32</text>
+<line x1="60" y1="114.6" x2="530" y2="114.6" stroke="#eee"/>
+<text x="54" y="118.6" text-anchor="end">32x</text>
+<line x1="488.2" y1="40" x2="488.2" y2="350" stroke="#eee"/>
+<text x="488.2" y="368" text-anchor="middle">64</text>
+<line x1="60" y1="67.5" x2="530" y2="67.5" stroke="#eee"/>
+<text x="54" y="71.5" text-anchor="end">64x</text>
+<line x1="530.0" y1="40" x2="530.0" y2="350" stroke="#eee"/>
+<text x="530.0" y="368" text-anchor="middle">96</text>
+<line x1="60" y1="40.0" x2="530" y2="40.0" stroke="#eee"/>
+<text x="54" y="44.0" text-anchor="end">96x</text>
+<line x1="60.0" y1="350.0" x2="530.0" y2="40.0" stroke="#999" stroke-dasharray="5,4"/>
+<text x="536.0" y="44.0" fill="#777">ideal</text>
+<polyline points="60.0,350.0 131.4,307.3 202.7,263.2 274.1,204.3 345.5,157.3 387.3,133.0 416.9,116.0 458.6,98.8 488.2,90.1 530.0,83.6" fill="none" stroke="#2563eb" stroke-width="2.5"/>
+<circle cx="60.0" cy="350.0" r="3.5" fill="#2563eb"/>
+<circle cx="131.4" cy="307.3" r="3.5" fill="#2563eb"/>
+<circle cx="202.7" cy="263.2" r="3.5" fill="#2563eb"/>
+<circle cx="274.1" cy="204.3" r="3.5" fill="#2563eb"/>
+<circle cx="345.5" cy="157.3" r="3.5" fill="#2563eb"/>
+<circle cx="387.3" cy="133.0" r="3.5" fill="#2563eb"/>
+<circle cx="416.9" cy="116.0" r="3.5" fill="#2563eb"/>
+<circle cx="458.6" cy="98.8" r="3.5" fill="#2563eb"/>
+<circle cx="488.2" cy="90.1" r="3.5" fill="#2563eb"/>
+<circle cx="530.0" cy="83.6" r="3.5" fill="#2563eb"/>
+<text x="536.0" y="87.6" fill="#2563eb">start 50.5x</text>
+<polyline points="60.0,350.0 131.4,320.9 202.7,276.5 274.1,248.6 345.5,224.9 387.3,212.9 416.9,187.3 458.6,177.0 488.2,173.5 530.0,184.1" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+<circle cx="60.0" cy="350.0" r="3.5" fill="#dc2626"/>
+<circle cx="131.4" cy="320.9" r="3.5" fill="#dc2626"/>
+<circle cx="202.7" cy="276.5" r="3.5" fill="#dc2626"/>
+<circle cx="274.1" cy="248.6" r="3.5" fill="#dc2626"/>
+<circle cx="345.5" cy="224.9" r="3.5" fill="#dc2626"/>
+<circle cx="387.3" cy="212.9" r="3.5" fill="#dc2626"/>
+<circle cx="416.9" cy="187.3" r="3.5" fill="#dc2626"/>
+<circle cx="458.6" cy="177.0" r="3.5" fill="#dc2626"/>
+<circle cx="488.2" cy="173.5" r="3.5" fill="#dc2626"/>
+<circle cx="530.0" cy="184.1" r="3.5" fill="#dc2626"/>
+<text x="536.0" y="188.1" fill="#dc2626">bench 11.5x</text>
+<text x="295.0" y="390" text-anchor="middle">Threads</text>
+<text x="16" y="195.0" text-anchor="middle" transform="rotate(-90 16 195.0)">Speedup (time to depth)</text>
+<text x="295.0" y="22" text-anchor="middle" font-size="14">Gyges YBWC thread scaling, 96-core AWS EPYC 9R45</text>
+</svg>

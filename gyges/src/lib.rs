@@ -7,7 +7,7 @@
 //! It can also displace that piece to any open space. 
 //! 
 //! # Platforms
-//! This library will only run on an x86_64 architecture. It is not currently compatible with other architectures.
+//! The library builds for any target Rust supports, including WebAssembly. On x86-64 CPUs with BMI2 (enabled with `-C target-cpu=x86-64-v3` or `-C target-feature=+bmi2`), move generation uses the hardware `pext` instruction. Every other target uses a portable fallback that gives identical results.
 //! 
 //! # Basic Library Usage
 //! 

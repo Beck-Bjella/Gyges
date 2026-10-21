@@ -1,169 +1,136 @@
 # Overview
 
-A library for the board game **Gygès**.
+A performance-oriented Rust library implementing the board game Gygès: board representation, move generation, and supporting types. It is the foundation of the [Gygès engine](https://github.com/Beck-Bjella/Gyges/tree/main/gyges_engine).
 
-Gygès is an abstract strategy game for two players. The object of Gygès is to move a piece to your opponent's last row. The catch is that no one owns the pieces. You can only move a piece in the row nearest you. Pieces are made up of 1, 2, or 3 rings; this number is also the number of spaces they must move. If a piece lands on another piece, it can move the number of spaces equal to that piece's number of rings. It can also displace that piece to any open space.
+[Documentation](https://docs.rs/gyges) · [crates.io](https://crates.io/crates/gyges)
 
-Check out the game on Board Game Arena: [Gygès](https://boardgamearena.com/gamepanel?game=gyges).
+## The Game
+Gygès is a two-player strategy game on a 6×6 board. Each player starts with six pieces on their home row: two each with one, two, and three rings. The pieces belong to neither player. On each turn, a player moves one piece from the occupied row closest to them.
 
-This library is specifically for implementing **Gygès**, not a tool for playing the game directly. To see an implemented game engine using this library, visit the [gyges_engine](https://github.com/Beck-Bjella/Gyges/tree/main/gyges_engine) repository.
+- A piece moves exactly as many squares as it has rings, one orthogonal step at a time, without passing through other pieces.
+- A piece that ends its move on another piece either continues moving by that piece's ring count, or takes that piece's square and places the displaced piece on any empty square not behind the opponent's closest occupied row.
+- Every move must change the board.
+- A player wins by moving a piece into the goal behind the opponent's home row.
 
-- [Documentation](https://docs.rs/gyges)
-- [Crates.io](https://crates.io/crates/gyges)
+<p align="center">
+  <a href="https://gyges.app"><img src="../assets/gyges-app.png" alt="A Gygès game in progress on gyges.app" width="300"></a>
+</p>
 
-# Library Features
-- **Board representation**:
-  - Efficient game board representation with Zobrist hashing for state tracking.
+# Features
 
-- **BitBoards**:
-  - Fast board analysis using optimized operations and precomputed masks.
-
-- **Move generation**:
-  - Generate and calculate move-related data.
-  - Optimized for speed with flexible generic configurations.
-
-- **Move representation**:
-  - Structures for representing and processing moves.
-  
-- **Custom move lists**:
-  - Create and manage tailored lists of moves.
-
-- **Core components**:
-  - **Pieces**: Represent game pieces.
-  - **Squares**: Define board locations.
-  - **Player**: Track players and turns.
-
-- **Transposition table**:
-  - Efficient caching of previously computed board states.
+- **Hyper-efficient move generation:** a full legal move list in about 1 µs and a move count in about 120 ns (median over 60 varied positions on a laptop CPU).
+  - **Table lookups instead of path walking.** For 2- and 3-ring pieces, the BMI2 `pext` instruction compresses the pieces that could block a move into an index, which selects a precomputed list of exactly the unblocked paths (365 lists for 2-ring pieces, 8,389 for 3-ring pieces).
+  - **Bitboard bookkeeping.** Bounces are followed on an explicit stack, with bitboards tracking used path segments and already-bounced pieces; the board itself is never copied.
+  - **Generic implementation.** Generation is generic over the data it collects (moves, move counts, threat counts, or reachable squares), so each caller computes only what it needs, for maximum performance with minimal code duplication.
+- **Optimized move representation:** move lists are stored as encoded bitboards and decoded into full move objects only on demand.
+- **Board representation** with in-place make/unmake and incrementally updated Zobrist hashes.
+- **A lockless, clustered transposition table** for multithreaded search.
+- **Core types** for pieces, squares, players, moves, and move lists.
 
 # Platforms
 
-This library will only run on an x86_64 architecture. It is not currently compatible with other architectures.
+The library builds for any target Rust supports, including WebAssembly. On x86-64 CPUs with BMI2 (enabled with `-C target-cpu=x86-64-v3` or `-C target-feature=+bmi2`), move generation uses the hardware `pext` instruction; other targets use a portable fallback with identical results.
 
 # Basic Library Usage
 
-To add this crate to your project, include the following in your `Cargo.toml` file:
+Add the library to `Cargo.toml`:
 
 ```toml
 [dependencies]
 gyges = "2.0.0"
 ```
 
-### Setting up a Starting Board Position
+### Setting Up a Board
 
-The library provides predefined starting board positions. Use the following code to load the default board:
+Load the standard starting position:
 
 ```rust
 use gyges::*;
 
-// Load the starting board position
 let board: BoardState = BoardState::from(STARTING_BOARD);
 ```
 
-### Loading a Specific Board Configuration
-
-To load a custom board configuration, provide a string where each row is represented by a series of numbers. Rows are inputted from your side of the board to the opponent's, and pieces are numbered based on their ring count:
+Or load a custom position. Each row is six digits, where `0` is an empty square and `1` to `3` is a piece's ring count. Rows run from your home row to the opponent's, separated by `/`:
 
 ```rust
 use gyges::*;
 
-// Load a custom board configuration
 let board: BoardState = BoardState::from("321123/000000/000000/000000/000000/321123");
 ```
 
 ### Generating Moves
 
-The `MoveGen` structure is the core for generating moves in Gygès. It provides a flexible interface for generating and calculating move-related data tailored to specific needs using generic parameters.
+`MoveGen` generates moves and move-related data. It takes two generic parameters:
 
-#### How It Works
+- **`GenType`**, what to generate:
+  - `GenMoves`: all legal moves.
+  - `GenMoveCount`: the number of legal moves.
+  - `GenThreatCount`: the number of threats, moves that reach the goal.
+  - `GenControlMoveCount`: the move count, plus the squares and pieces the player can reach.
+- **`QuitType`**, when to stop:
+  - `NoQuit`: run the full generation.
+  - `QuitOnThreat`: stop as soon as a threat is found, which saves work when only the absence of threats matters.
 
-`MoveGen` uses two key generic parameters:
-
-- **`GenType`**: Specifies the type of data to generate:
-  - `GenMoves`: Generates all possible legal moves.
-  - `GenMoveCount`: Counts the total number of possible moves.
-  - `GenThreatCount`: Counts the number of threats on the board.
-  - `GenControlMoveCount`: Combines control analysis and move counting.
-- **`QuitType`**: Controls when generation stops:
-  - `NoQuit`: Completes the full generation process.
-  - `QuitOnThreat`: Stops generation immediately if a threat is found. This is particularly useful for saving computation in scenarios where you need both the data and the guarantee that no threats exist. If a threat is found, you can handle it separately.
-
-#### Examples
-
-##### 1. Generate All Moves
+Generate all moves:
 
 ```rust
 use gyges::*;
 
-// Setup
 let mut board: BoardState = BoardState::from(STARTING_BOARD);
-let player: Player = Player::One;
 let mut move_gen: MoveGen = MoveGen::default();
 
-// Generate
-let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, player) };
+let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, Player::One) };
 let mut movelist: RawMoveList = data.move_list;
-
 let moves: Vec<Move> = movelist.moves(&mut board);
 println!("Generated moves: {:?}", moves);
 ```
 
-##### 2. Generate Move Count, Stopping if a Threat is Found
+Count moves, stopping early if a threat is found:
 
 ```rust
 use gyges::*;
 
-// Setup
 let mut board: BoardState = BoardState::from(STARTING_BOARD);
-let player: Player = Player::One;
 let mut move_gen: MoveGen = MoveGen::default();
 
-// Generate
-let data: GenResult = unsafe { move_gen.gen::<GenMoveCount, QuitOnThreat>(&mut board, player) };
-let move_count: usize = data.move_count;
-println!("Move count: {}", move_count);
+let data: GenResult = unsafe { move_gen.gen::<GenMoveCount, QuitOnThreat>(&mut board, Player::One) };
+println!("Move count: {}", data.move_count);
 ```
 
 ### Making a Move
 
-Use the `make_move` method on the `BoardState` struct to make a move. This method takes a `Move` struct as an argument and returns a new `BoardState` with the move applied:
+`make_move` applies a move to the board in place, and `unmake_move` reverses it:
 
 ```rust
 use gyges::*;
- 
-// Setup
-let mut board: BoardState = BoardState::from(STARTING_BOARD);
-let player: Player = Player::One;
 
+let mut board: BoardState = BoardState::from(STARTING_BOARD);
 let mut move_gen: MoveGen = MoveGen::default();
 
-// Generate moves
-let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, player) };
+let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, Player::One) };
 let mut movelist: RawMoveList = data.move_list;
-
 let moves: Vec<Move> = movelist.moves(&mut board);
 
-// Make a move
-println!("Original board: {}", board);
-println!("Move: {:?}", moves[0]);
+board.make_move(&moves[0]);
+println!("After the move: {}", board);
 
-let mut new_board: BoardState = board.make_move(&moves[0]);
-
-println!("New board: {}", board);
+board.unmake_move(&moves[0]);
+println!("Restored: {}", board);
 ```
+
+# Upgrading from 1.x
+
+- `make_move` now changes the board in place instead of returning a new `BoardState`. Use `unmake_move` to reverse a move, or `make_move_clone` to get a new board and keep the original.
+- Move generation no longer produces moves that leave the board unchanged.
 
 # Acknowledgements
 
-This project and its formatting were inspired by the incredible Rust chess program [Pleco](https://github.com/pleco-rs/Pleco).
+The project structure and formatting were inspired by the Rust chess engine [Pleco](https://github.com/pleco-rs/Pleco).
 
 # Contributions
 
-Contributions are welcome! If you'd like to contribute:
-
-1. Open a pull request.
-2. Provide detailed feedback or suggestions.
-3. Report issues or propose new features.
+Contributions are welcome. Open a pull request, or open an issue to report a bug or suggest an improvement.
 
 # License
 
-This project is released under the [GNU General Public License v3.0](https://github.com/Beck-Bjella/Gyges/blob/main/LICENSE). Please review and comply with the terms of the license when using or distributing the project.
+Released under the [GNU General Public License v3.0](https://github.com/Beck-Bjella/Gyges/blob/main/LICENSE).

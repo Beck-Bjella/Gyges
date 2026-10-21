@@ -8,3 +8,6 @@ gyges_engine/src/search/eval_display.rs
 scripts/
 
 scaling_results.csv
+
+# Local benchmark harness and results
+benchmarks/

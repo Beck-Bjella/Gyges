@@ -1,137 +1,142 @@
-# Overview 
-This project was created to take a deep dive into the world of Gygès.
+# Overview
 
-Gygès is an abstract strategy game for two players. The object of Gygès is to move a piece to your opponent's last row. The catch is that no one owns the pieces. You can only move a piece in the row nearest you. Pieces are made up of 1, 2, or 3 rings; this number is also the number of spaces they must move. If a piece lands on another piece, it can move the number of spaces equal to that piece's number of rings. It can also displace that piece to any open space. 
+A Rust engine and library for the board game Gygès. The engine evaluates positions with a trained neural network, searches with a parallel alpha-beta search, and runs natively or in a web browser through WebAssembly. Technical details are in the [engine README](gyges_engine/README.md). You can also play against the computer on my website [gyges.app](https://gyges.app).
 
-Check out the game on Board Game Arena: [Gygès](https://boardgamearena.com/gamepanel?game=gyges). 
+<p align="center">
+  <a href="https://gyges.app"><img src="assets/gyges-app.png" alt="A Gygès game in progress on gyges.app" width="300"></a>
+</p>
 
-This project is made up of two main components.
-The:
-- [Gyges crate](https://github.com/Beck-Bjella/Gyges/tree/main/gyges). 
-- [Gyges-engine crate](https://github.com/Beck-Bjella/Gyges/tree/main/gyges_engine).
+Gygès is a two-player strategy game on a 6×6 board with 12 pieces of 1, 2, or 3 rings. No piece belongs to either player: each turn, a player moves a piece from the occupied row closest to them, exactly as many squares as it has rings. A piece that lands on another can continue moving or displace it, and a player wins by moving a piece into the goal behind the opponent's home row. The full rules are in the [library README](gyges/README.md#the-game).
 
-The Gyges crate is a library that provides all the game's core functionality. It is intended to be used as a dependency in other projects.
+The latest release (V2.0.0) is a major update: in self-play matches, it wins **97%** of [decisive sets](gyges_engine/README.md#results) against the previous version (V1.1.0).
 
-The Gyges-engine crate is a fully functional engine for playing the game.
+The project is made up of two crates:
+- [`gyges_engine`](gyges_engine): the engine, and the core of the project. It contains the neural network and search described below, and communicates over the [UGI protocol](gyges_engine/UGI-Protocol-Specification.md), a UCI-style text protocol designed for it.
+- [`gyges`](gyges): the performance-oriented library the engine is built on, producing all legal moves for a board in ~1 µs.
 
-Both of these crates are written in Rust and are found in the `gyges` and `gyges_engine` directories, respectively. The respective READMEs provide more information about each crate and its usage.
+# Engine Search Overview
+
+The engine uses a Negamax alpha-beta with principal variation search, driven by iterative deepening over odd depths with aspiration windows. A lockless, clustered transposition table keyed by Zobrist hashes is shared across all threads. Strict move ordering, which prunes losing candidates early, mitigates Gygès' branching factor of hundreds of moves.
+
+The search is parallelized with the Young Brothers Wait Concept (YBWC), with split points anywhere in the tree. On a 96-core server it reaches a **50.5x** speedup, scaling near-linearly to 32 threads:
+
+![Thread scaling](assets/scaling.svg)
+
+# Engine Neural Network Overview
+
+Game positions are evaluated by a small feedforward neural network, specifically an MLP (multi-layer perceptron). Its format is as follows:
+
+```
+5,886 sparse binary inputs  ->  1,024 hidden (ReLU)  ->  1 output (tanh)
+```
+
+The 5886 inputs encode positional piece pairings, capturing their complex relationships that determine who is winning in the game. With only 12 pieces on the board, only 78 inputs are ever active, allowing microsecond-level inference that makes it practical inside an alpha-beta search.
+
+**Training.** It was trained on ~28 million board positions (after augmentation) from games the V1.1.0 engine played against itself, generated on an AWS EC2 Linux server. Each position is labeled with its corresponding game's final result, scaled to ±0.75, allowing the network to learn, from game outcomes alone, which positional patterns lead to winning. Trained in PyTorch with MSE loss, Adam (learning rate 0.001), batch size 4,096, 0.5 dropout, and an 80/20 train/validation split; the shipped weights are from epoch 9, at the validation plateau.
+
+**Result.** With identical search on both sides, the network wins **97%** of decisive sets against the V1.1.0 evaluation it replaced, across multiple search parameters.
 
 # Engine Usage
-For the easiest and most intuitive experience, start with the [GygesUI](https://github.com/Beck-Bjella/GygesUI), which provides a graphical interface for running the engine. If you prefer to use the engine directly, check out the [Gyges-engine](https://github.com/Beck-Bjella/Gyges/tree/main/gyges_engine) crate README for more information.
+
+Play against the engine at [gyges.app](https://gyges.app), download a prebuilt binary from the [releases page](https://github.com/Beck-Bjella/Gyges/releases), or build from source:
+
+```bash
+cargo build --release -p gyges_engine
+```
+
+The engine communicates over UGI; see the [engine README](gyges_engine/README.md) for commands and options.
 
 # Basic Library Usage
-To add this crate to your project, include the following in your `Cargo.toml` file:
+
+Add the library to `Cargo.toml`:
 
 ```toml
 [dependencies]
 gyges = "2.0.0"
 ```
 
-### Setting up a Starting Board Position
+### Setting Up a Board
 
-The library provides predefined starting board positions. Use the following code to load the default board:
+Load the standard starting position:
 
 ```rust
 use gyges::*;
 
-// Load the starting board position
 let board: BoardState = BoardState::from(STARTING_BOARD);
 ```
 
-### Loading a Specific Board Configuration
-
-To load a custom board configuration, provide a string where each row is represented by a series of numbers. Rows are inputted from your side of the board to the opponent's, and pieces are numbered based on their ring count:
+Or load a custom position. Each row is six digits, where `0` is an empty square and `1` to `3` is a piece's ring count. Rows run from your home row to the opponent's, separated by `/`:
 
 ```rust
 use gyges::*;
 
-// Load a custom board configuration
 let board: BoardState = BoardState::from("321123/000000/000000/000000/000000/321123");
 ```
 
 ### Generating Moves
 
-The `MoveGen` structure is the core for generating moves in Gygès. It provides a flexible interface for generating and calculating move-related data tailored to specific needs using generic parameters.
+`MoveGen` generates moves and move-related data. It takes two generic parameters:
 
-#### How It Works
+- **`GenType`**, what to generate:
+  - `GenMoves`: all legal moves.
+  - `GenMoveCount`: the number of legal moves.
+  - `GenThreatCount`: the number of threats, moves that reach the goal.
+  - `GenControlMoveCount`: the move count, plus the squares and pieces the player can reach.
+- **`QuitType`**, when to stop:
+  - `NoQuit`: run the full generation.
+  - `QuitOnThreat`: stop as soon as a threat is found, which saves work when only the absence of threats matters.
 
-`MoveGen` uses two key generic parameters:
-
-- **`GenType`**: Specifies the type of data to generate:
-  - `GenMoves`: Generates all possible legal moves.
-  - `GenMoveCount`: Counts the total number of possible moves.
-  - `GenThreatCount`: Counts the number of threats on the board.
-  - `GenControlMoveCount`: Combines control analysis and move counting.
-- **`QuitType`**: Controls when generation stops:
-  - `NoQuit`: Completes the full generation process.
-  - `QuitOnThreat`: Stops generation immediately if a threat is found. This is particularly useful for saving computation in scenarios where you need both the data and the guarantee that no threats exist. If a threat is found, you can handle it separately.
-
-#### Examples
-
-##### 1. Generate All Moves
+Generate all moves:
 
 ```rust
 use gyges::*;
 
-// Setup
 let mut board: BoardState = BoardState::from(STARTING_BOARD);
-let player: Player = Player::One;
 let mut move_gen: MoveGen = MoveGen::default();
 
-// Generate
-let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, player) };
+let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, Player::One) };
 let mut movelist: RawMoveList = data.move_list;
-
 let moves: Vec<Move> = movelist.moves(&mut board);
 println!("Generated moves: {:?}", moves);
 ```
 
-##### 2. Generate Move Count, Stopping if a Threat is Found
+Count moves, stopping early if a threat is found:
 
 ```rust
 use gyges::*;
 
-// Setup
 let mut board: BoardState = BoardState::from(STARTING_BOARD);
-let player: Player = Player::One;
 let mut move_gen: MoveGen = MoveGen::default();
 
-// Generate
-let data: GenResult = unsafe { move_gen.gen::<GenMoveCount, QuitOnThreat>(&mut board, player) };
-let move_count: usize = data.move_count;
-println!("Move count: {}", move_count);
+let data: GenResult = unsafe { move_gen.gen::<GenMoveCount, QuitOnThreat>(&mut board, Player::One) };
+println!("Move count: {}", data.move_count);
 ```
 
 ### Making a Move
 
-Use the `make_move` method on the `BoardState` struct to make a move. This method takes a `Move` struct as an argument and returns a new `BoardState` with the move applied:
+`make_move` applies a move to the board in place, and `unmake_move` reverses it:
 
 ```rust
 use gyges::*;
- 
-// Setup
-let mut board: BoardState = BoardState::from(STARTING_BOARD);
-let player: Player = Player::One;
 
+let mut board: BoardState = BoardState::from(STARTING_BOARD);
 let mut move_gen: MoveGen = MoveGen::default();
 
-// Generate moves
-let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, player) };
+let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, Player::One) };
 let mut movelist: RawMoveList = data.move_list;
-
 let moves: Vec<Move> = movelist.moves(&mut board);
 
-// Make a move
-println!("Original board: {}", board);
-println!("Move: {:?}", moves[0]);
+board.make_move(&moves[0]);
+println!("After the move: {}", board);
 
-let mut new_board: BoardState = board.make_move(&moves[0]);
-
-println!("New board: {}", board);
+board.unmake_move(&moves[0]);
+println!("Restored: {}", board);
 ```
 
-# Contributions 
-Contributions welcome! If you'd like to contribute, please open a pull request. Feedback is greatly appreciated, along with reporting issues or suggesting improvements.
+# Contributions
 
-# Lisence
-This project is released under the [GNU General Public License v3.0](https://github.com/Beck-Bjella/Gyges/blob/main/LICENSE). Please review and comply with the terms of the license when using or distributing the project.
+Contributions are welcome. Open a pull request, or open an issue to report a bug or suggest an improvement.
+
+# License
+
+Released under the [GNU General Public License v3.0](LICENSE).
