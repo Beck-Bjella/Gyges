@@ -1,6 +1,41 @@
-# Universal Gyges Interface (UGI) Documentation [Jan 2025]
+# Universal Gyges Interface (UGI) Documentation [Oct 2026]
 
 This document describes the Universal Gyges Interface (UGI) for interacting with the Gyges engine. The interface is designed for communication over the command line and facilitates board state management, settings, and engine execution.
+
+---
+
+## Board Format
+
+### Overview:
+
+The board has 36 squares in 6 rows of 6, numbered 0 to 35. Row 0 (positions 0-5) is the home row of the side to move, and row 5 (positions 30-35) is the opponent's home row. The engine always plays as the side to move.
+
+The two goals are positions `36` (behind row 0) and `37` (behind row 5). A move that ends on `37` wins the game.
+
+```
+            37
+30 31 32 33 34 35
+24 25 26 27 28 29
+18 19 20 21 22 23
+12 13 14 15 16 17
+ 6  7  8  9 10 11
+ 0  1  2  3  4  5
+            36
+```
+
+### Layout:
+
+A board is written as one digit per position, starting at position 0. `0` is an empty position, and `1`, `2`, and `3` are pieces with that many rings. Rows may be separated by a `/`, and a layout can be up to 38 digits long. Digits for positions 36 and 37 are accepted but ignored, and any positions left off the end are empty. A search requires all 12 pieces on the board.
+
+**Example** (the starting layout):
+
+```
+321123/000000/000000/000000/000000/321123
+```
+
+- Positions 0-5 (row 0) hold `3 2 1 1 2 3`.
+- Rows 1-4 are empty.
+- Positions 30-35 (row 5) hold `3 2 1 1 2 3`.
 
 ---
 
@@ -8,7 +43,7 @@ This document describes the Universal Gyges Interface (UGI) for interacting with
 
 ### Overview:
 
-Moves are specified using numbers separated by a `|`. Each number represents a position on the board, as defined in the `BoardState` documentation.
+Moves are specified using numbers separated by a `|`. Each number is a position on the board, as described in [Board Format](#board-format).
 
 ### Formats:
 
@@ -18,9 +53,9 @@ Moves are specified using numbers separated by a `|`. Each number represents a p
    <start>|<end>|<drop>
    ```
 
-   - : Position of the piece to move.
-   - : Position to move the piece to.
-   - : Position to drop the replaced piece.
+   - `start`: Position of the piece to move.
+   - `end`: Position to move the piece to.
+   - `drop`: Position to drop the replaced piece.
 
    **Example**:
 
@@ -38,8 +73,8 @@ Moves are specified using numbers separated by a `|`. Each number represents a p
    <start>|<end>
    ```
 
-   - : Position of the piece to move.
-   - : Position to move the piece to.
+   - `start`: Position of the piece to move.
+   - `end`: Position to move the piece to.
 
    **Example**:
 
@@ -80,9 +115,18 @@ This section describes the commands sent to the engine via the command line, how
 
 - **Purpose**: Adjusts engine settings.
 - **Parameters**:
-  - `MaxPly <_>`: Integer > 0 (maximum search depth).
-  - `MaxTime <_>`: Integer > 0 (maximum search time in seconds).
-- **Engine Response**: None.
+  - `maxPly <_>`: Integer > 0 (maximum search depth).
+  - `maxTime <_>`: Number > 0 (maximum search time in seconds).
+  - `maxNodes <_>`: Integer > 0 (maximum nodes searched).
+  - `threads <_>`: Integer > 0 (number of search threads, default 1).
+  - `nn <_>`: Boolean (use the neural network evaluation, default true).
+  - `weightsPath <_>`: File path (load network weights from a file).
+  - `skill-weakness <_>`: Integer 0-100 (play below full strength, default 0).
+  - `skill-reach <_>`: Integer 0-100 (percent of moves a weakened pick can choose from, default 25).
+  - `skill-allowLosing <_>`: Boolean (let a weakened pick choose a losing move, default false).
+  - `randomize <_>`: Boolean (play a random non-losing move, default false).
+  - Booleans accept `true`/`false`, `1`/`0`, or `on`/`off`.
+- **Engine Response**: None, or `Unknown Command: '<command>'` if the value is invalid.
 
 #### `setpos <layout>`
 
@@ -91,29 +135,40 @@ This section describes the commands sent to the engine via the command line, how
   - `start`: Standard starting layout.
   - `bench`: Benchmark testing layout.
   - `test`: Testing layout.
-  - `data <_>`: Custom board layout.
-- **Engine Response**: None.
+  - `draw`: Drawn layout, for testing.
+  - `data <_>`: Custom board layout, written as described in [Board Format](#board-format).
+- **Engine Response**: None, or `Unknown Command: '<command>'` if the layout has more than 38 digits or any character other than `0`-`3`.
+
+#### `showpos`
+
+- **Purpose**: Prints the current board.
+- **Engine Response**: The board.
+
+#### `eval`
+
+- **Purpose**: Prints a breakdown of the hand-crafted evaluation for the current board.
+- **Engine Response**: The breakdown.
 
 #### `go`
 
-- **Purpose**: Begins the engine's move search.
+- **Purpose**: Begins the engine's move search. If the board does not have exactly 12 pieces, the engine replies `info string invalid board: a search needs exactly 12 pieces` and does not search.
 - **Example Engine Response**:
   ```
   info ply <depth> bestmove <move> score <score> nodes <count> nps <rate> time <elapsed-time> pv <principal-variation>
-  bestmove <move>
+  bestmove <move> score <score> time <elapsed-time>
   ```
 
 #### `stop`
 
 - **Purpose**: Stops the engine's search.
-- **Engine Response**:
+- **Engine Response** (only if a search is running):
   ```
-  bestmove <move>
+  bestmove <move> score <score> time <elapsed-time>
   ```
 
 #### `quit`
 
-- **Purpose**: Exits the program.
+- **Purpose**: Exits the program. The engine also exits if its input is closed.
 - **Engine Response**: None.
 
 ---
@@ -146,8 +201,7 @@ This section details the messages the engine sends back via the command line, ex
 
 - **Purpose**: Describes configurable options for the engine.
 - **Details**:
-  - `maxPly`
-  - `maxTime`
+  - `maxPly`, `maxTime`, `maxNodes`, `randomize`, `skill-weakness`, `skill-reach`, `skill-allowLosing`, `nn`, `weightsPath`, `threads`
 - **Example**:
   ```
   option maxPly
@@ -160,6 +214,14 @@ This section details the messages the engine sends back via the command line, ex
 - **Example**:
   ```
   readyok
+  ```
+
+#### `info string <_>`
+
+- **Purpose**: A message for a human, such as which evaluation is being used.
+- **Example**:
+  ```
+  info string NN evaluation using default.bin (embedded) enabled
   ```
 
 #### `info <_>`
@@ -176,17 +238,19 @@ This section details the messages the engine sends back via the command line, ex
 
 - **Example**:
   ```
-  info ply 1 bestmove 0|1|9 score 1061 nodes 225 nps 234619 time 0.000959 pv 0|1|9
+  info ply 1 bestmove 0|1|9 score 1061.000 nodes 225 nps 234619 time 0.001 pv 0|1|9
   ```
 
 #### `bestmove <_>`
 
 - **Purpose**: Sends the best move after a completed search.
 - **Details**:
-  - `move`: The best move found.
+  - `move`: The best move found, or `null` if the position is a draw.
+  - `score`: Evaluation of the best move.
+  - `time`: Time taken to search.
 - **Example**:
   ```
-  bestmove 0|1|14
+  bestmove 0|1|14 score 3493.000 time 0.950
   ```
 
 ---
@@ -205,22 +269,28 @@ ugi
 * id author Beck-Bjella
 * option maxPly
 * option maxTime
+* option maxNodes
+* option randomize
+* option skill-weakness
+* option skill-reach
+* option skill-allowLosing
+* option nn
+* option weightsPath
+* option threads
 * ugiok
 
 setpos data 321123/000000/000000/000000/000000/321123
 
-setoption maxPly 7
+setoption maxPly 3
 
 isready
 * readyok
 
 go
-* info ply 1 bestmove 0|1|9 score 1061 nodes 225 nps 234619 time 0.000959 pv 0|1|9
-* info ply 3 bestmove 0|1|14 score 3493 nodes 68861 nps 72432 time 0.950 pv 0|1|14 5|12|9
-* bestmove 0|1|14
-
-stop
-* bestmove 0|1|14
+* info string NN evaluation using default.bin (embedded) enabled
+* info ply 1 bestmove 0|1|9 score 1061.000 nodes 225 nps 234619 time 0.001 pv 0|1|9
+* info ply 3 bestmove 0|1|14 score 3493.000 nodes 68861 nps 72432 time 0.950 pv 0|1|14 5|12|9
+* bestmove 0|1|14 score 3493.000 time 0.950
 
 quit
 ```
