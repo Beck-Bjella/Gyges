@@ -144,7 +144,10 @@ impl Ugi {
         match raw_commands.get(1) {
             Some(&"maxPly") => {
                 if let Some(value_str) = raw_commands.get(2) {
-                    self.search_options.maxply = Some(value_str.parse::<i8>().unwrap());
+                    match value_str.parse::<i8>() {
+                        Ok(n) if n > 0 => self.search_options.maxply = Some(n),
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
 
                 } else {
                     println!("Unknown Command: '{}'", trimmed);
@@ -154,7 +157,10 @@ impl Ugi {
             }
             Some(&"maxTime") => {
                 if let Some(value_str) = raw_commands.get(2) {
-                    self.search_options.maxtime = Some(value_str.parse::<f64>().unwrap());
+                    match value_str.parse::<f64>() {
+                        Ok(t) if t > 0.0 => self.search_options.maxtime = Some(t),
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
 
                 } else {
                     println!("Unknown Command: '{}'", trimmed);
@@ -164,7 +170,10 @@ impl Ugi {
             }
             Some(&"maxNodes") => {
                 if let Some(value_str) = raw_commands.get(2) {
-                    self.search_options.maxnodes = Some(value_str.parse::<usize>().unwrap());
+                    match value_str.parse::<usize>() {
+                        Ok(n) if n > 0 => self.search_options.maxnodes = Some(n),
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
 
                 } else {
                     println!("Unknown Command: '{}'", trimmed);
@@ -294,7 +303,7 @@ impl Ugi {
 
             },
             Some(&"data") => {
-                if let Some(board_str) = raw_commands.get(2) {
+                if let Some(board_str) = raw_commands.get(2).filter(|s| valid_layout(s)) {
                     self.search_options.board = BoardState::from(*board_str);
 
                 } else {
@@ -316,6 +325,14 @@ impl Ugi {
         // Join any previous search before touching the TT — threads from the
         // last `go` may still be unwinding when the next command arrives.
         self.stop();
+
+        // A search needs all 12 pieces on the board
+        if self.search_options.board.piece_bb.pop_count() != 12 {
+            println!("info string invalid board: a search needs exactly 12 pieces");
+            return;
+
+        }
+
         unsafe { tt().reset() }; // Reset tt before new search
 
         // Display eval type
@@ -382,6 +399,13 @@ impl Default for Ugi {
         Self::new()
 
     }
+
+}
+
+/// Checks a board layout: at most 38 digits from 0-3, with missing positions left empty.
+fn valid_layout(layout: &str) -> bool {
+    let digits: Vec<char> = layout.chars().filter(|c| *c != '/').collect();
+    digits.len() <= 38 && digits.iter().all(|c| ('0'..='3').contains(c))
 
 }
 
