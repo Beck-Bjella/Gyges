@@ -2,10 +2,6 @@
 
 A Rust engine and library for the board game Gygès. The engine evaluates positions with a trained neural network, searches with a parallel alpha-beta search, and runs natively or in a web browser through WebAssembly. Technical details are in the [engine README](gyges_engine/README.md). You can also play against the computer on my website [gyges.app](https://gyges.app).
 
-<p align="center">
-  <a href="https://gyges.app"><img src="assets/gyges-app.png" alt="A Gygès game in progress on gyges.app" width="300"></a>
-</p>
-
 Gygès is a two-player strategy game on a 6×6 board with 12 pieces of 1, 2, or 3 rings. No piece belongs to either player: each turn, a player moves a piece from the occupied row closest to them, exactly as many squares as it has rings. A piece that lands on another can continue moving or displace it, and a player wins by moving a piece into the goal behind the opponent's home row. The full rules are in the [library README](gyges/README.md#the-game).
 
 The latest release (V2.0.0) is a major update: in self-play matches, it wins **97%** of [decisive sets](gyges_engine/README.md#results) against the previous version (V1.1.0).
