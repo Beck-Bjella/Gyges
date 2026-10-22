@@ -135,4 +135,4 @@ By submitting a contribution, you confirm you have the right to submit it, and y
 
 # License
 
-Copyright © 2022-2026 Beck Bjella. Released under the [GNU General Public License v3.0](https://github.com/Beck-Bjella/Gyges/blob/main/LICENSE).
+Copyright © 2022-2026 Beck Bjella. Released under the [GNU Affero General Public License v3.0](https://github.com/Beck-Bjella/Gyges/blob/main/gyges/LICENSE).

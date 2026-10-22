@@ -137,4 +137,4 @@ By submitting a contribution, you confirm you have the right to submit it, and y
 
 # License
 
-Copyright © 2022-2026 Beck Bjella. The engine is released under the [GNU Affero General Public License v3.0](gyges_engine/LICENSE), and the library under the [GNU General Public License v3.0](LICENSE).
+Copyright © 2022-2026 Beck Bjella. Released under the [GNU Affero General Public License v3.0](LICENSE), including the engine's neural network weights.
