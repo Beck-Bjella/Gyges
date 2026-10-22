@@ -133,6 +133,8 @@ println!("Restored: {}", board);
 
 Contributions are welcome. Open a pull request, or open an issue to report a bug or suggest an improvement.
 
+By submitting a contribution, you confirm you have the right to submit it, and you grant Beck Bjella a perpetual, irrevocable license to use, modify, and relicense it under any license, including the project's current licenses.
+
 # License
 
-Released under the [GNU General Public License v3.0](LICENSE).
+Copyright © 2022-2026 Beck Bjella. The engine is released under the [GNU Affero General Public License v3.0](gyges_engine/LICENSE), and the library under the [GNU General Public License v3.0](LICENSE).

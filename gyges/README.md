@@ -131,6 +131,8 @@ The project structure and formatting were inspired by the Rust chess engine [Ple
 
 Contributions are welcome. Open a pull request, or open an issue to report a bug or suggest an improvement.
 
+By submitting a contribution, you confirm you have the right to submit it, and you grant Beck Bjella a perpetual, irrevocable license to use, modify, and relicense it under any license, including the project's current licenses.
+
 # License
 
-Released under the [GNU General Public License v3.0](https://github.com/Beck-Bjella/Gyges/blob/main/LICENSE).
+Copyright © 2022-2026 Beck Bjella. Released under the [GNU General Public License v3.0](https://github.com/Beck-Bjella/Gyges/blob/main/LICENSE).
