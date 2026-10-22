@@ -1,5 +1,4 @@
-﻿//! Main strutures, and concepts related to searching.
-//! 
+﻿//! Search: iterative deepening, negamax alpha-beta with principal variation search, move ordering, and YBWC parallel search.
 
 pub mod evaluation;
 pub mod eval_display;

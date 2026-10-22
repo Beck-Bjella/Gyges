@@ -1,7 +1,7 @@
 //! Contains the Zobrist hashing functions and data.
 //! 
 //! Zobrist hashing is a hashing algorithm that is used to hash a [`BoardState`]. 
-//! Once a hash is generated it can be used as the key for a entry in the transpostion table.
+//! Once a hash is generated it can be used as the key for an entry in the transposition table.
 //! 
 
 #[doc(hidden)]

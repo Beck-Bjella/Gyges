@@ -1,129 +1,136 @@
-//! A library for the board game Gygès.
+//! A performance-oriented Rust library implementing the board game Gygès: board representation,
+//! move generation, and supporting types. It is the foundation of the
+//! [Gygès engine](https://github.com/Beck-Bjella/Gyges/tree/main/gyges_engine).
 //!
-//! Gygès is an abstract strategy game for two players. The object of Gygès is to move a piece to your opponent's last row.
-//! The catch is that no one owns the pieces. You can only move a piece in the row nearest you. 
-//! Pieces are made up of 1, 2, or 3 rings; this number is also the number of spaces they must move. 
-//! If a piece lands on another piece, it can move the number of spaces equal to that piece's number of rings. 
-//! It can also displace that piece to any open space. 
-//! 
+//! # The Game
+//!
+//! Gygès is a two-player strategy game on a 6×6 board. Each player starts with six pieces on their
+//! home row: two each with one, two, and three rings. The pieces belong to neither player. On each
+//! turn, a player moves one piece from the occupied row closest to them.
+//!
+//! - A piece moves exactly as many squares as it has rings, one orthogonal step at a time, without
+//!   passing through other pieces.
+//! - A piece that ends its move on another piece either continues moving by that piece's ring count,
+//!   or takes that piece's square and places the displaced piece on any empty square not behind the
+//!   opponent's closest occupied row.
+//! - Every move must change the board.
+//! - A player wins by moving a piece into the goal behind the opponent's home row.
+//!
+//! # Features
+//!
+//! - **Hyper-efficient move generation:** a full legal move list in about 1 µs and a move count in
+//!   about 120 ns (median over 60 varied positions on a laptop CPU).
+//!   - **Table lookups instead of path walking.** For 2- and 3-ring pieces, the BMI2 `pext`
+//!     instruction compresses the pieces that could block a move into an index, which selects a
+//!     precomputed list of exactly the unblocked paths.
+//!   - **Bitboard bookkeeping.** Bounces are followed on an explicit stack, with bitboards tracking
+//!     used path segments and already-bounced pieces; the board itself is never copied.
+//!   - **Generic implementation.** Generation is generic over the data it collects, so each caller
+//!     computes only what it needs.
+//! - **Optimized move representation:** move lists are stored as encoded bitboards and decoded into
+//!   full move objects only on demand.
+//! - **Board representation** with in-place make/unmake and incrementally updated Zobrist hashes.
+//! - **A lockless, clustered transposition table** for multithreaded search.
+//!
 //! # Platforms
-//! The library builds for any target Rust supports, including WebAssembly. On x86-64 CPUs with BMI2 (enabled with `-C target-cpu=x86-64-v3` or `-C target-feature=+bmi2`), move generation uses the hardware `pext` instruction. Every other target uses a portable fallback that gives identical results.
-//! 
-//! # Basic Library Usage
-//! 
-//! This crate is available on [crates.io](https://crates.io/crates/gyges) and can be used by adding `gyges` to your `Cargo.toml` file. 
-//! For more examples check out the [github page](https://github.com/Beck-Bjella/Gyges) for the project.
-//! 
-//! ### Setting up a Starting Board Position
-//! 
-//! The library provides predefined starting board positions. Use the following code to load the default board:
-//! 
+//!
+//! The library builds for any target Rust supports, including WebAssembly. On x86-64 CPUs with BMI2
+//! (enabled with `-C target-cpu=x86-64-v3` or `-C target-feature=+bmi2`), move generation uses the
+//! hardware `pext` instruction; other targets use a portable fallback with identical results.
+//!
+//! # Usage
+//!
+//! ### Setting Up a Board
+//!
+//! Load the standard starting position:
+//!
 //! ```rust
 //! use gyges::*;
-//! 
-//! // Load the starting board position
+//!
 //! let board: BoardState = BoardState::from(STARTING_BOARD);
 //! ```
-//! 
-//! ### Loading a Specific Board Configuration
-//! 
-//! To load a custom board configuration, provide a string where each row is represented by a series of numbers. Rows are inputted from your side of the board to the opponent's, and pieces are numbered based on their ring count:
-//! 
+//!
+//! Or load a custom position. Each row is six digits, where `0` is an empty square and `1` to `3`
+//! is a piece's ring count. Rows run from your home row to the opponent's, separated by `/`:
+//!
 //! ```rust
 //! use gyges::*;
-//! 
-//! // Load a custom board configuration
+//!
 //! let board: BoardState = BoardState::from("321123/000000/000000/000000/000000/321123");
 //! ```
-//! 
+//!
 //! ### Generating Moves
-//! 
-//! The `MoveGen` structure is the core for generating moves in Gygès. It provides a flexible interface for generating and calculating move-related data tailored to specific needs using generic parameters.
-//! 
-//! #### How It Works
-//! 
-//! `MoveGen` uses two key generic parameters:
-//! 
-//! - **`GenType`**: Specifies the type of data to generate:
-//!   - `GenMoves`: Generates all possible legal moves.
-//!   - `GenMoveCount`: Counts the total number of possible moves.
-//!   - `GenThreatCount`: Counts the number of threats on the board.
-//!   - `GenControlMoveCount`: Combines control analysis and move counting.
-//! - **`QuitType`**: Controls when generation stops:
-//!   - `NoQuit`: Completes the full generation process.
-//!   - `QuitOnThreat`: Stops generation immediately if a threat is found. This is particularly useful for saving computation in scenarios where you need both the data and the guarantee that no threats exist. If a threat is found, you can handle it separately.
-//! 
-//! #### Examples
-//! 
-//! ##### 1. Generate All Moves
-//! 
+//!
+//! [`MoveGen`] generates moves and move-related data. It takes two generic parameters:
+//!
+//! - **[`GenType`]**, what to generate:
+//!   - [`GenMoves`]: all legal moves.
+//!   - [`GenMoveCount`]: the number of legal moves.
+//!   - [`GenThreatCount`]: the number of threats, moves that reach the goal.
+//!   - [`GenControlMoveCount`]: the move count, plus the squares and pieces the player can reach.
+//! - **[`QuitType`]**, when to stop:
+//!   - [`NoQuit`]: run the full generation.
+//!   - [`QuitOnThreat`]: stop as soon as a threat is found, which saves work when only the absence
+//!     of threats matters.
+//!
+//! Generate all moves:
+//!
 //! ```rust
 //! use gyges::*;
-//! 
-//! // Setup
+//!
 //! let mut board: BoardState = BoardState::from(STARTING_BOARD);
-//! let player: Player = Player::One;
 //! let mut move_gen: MoveGen = MoveGen::default();
-//! 
-//! // Generate
-//! let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, player) };
+//!
+//! let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, Player::One) };
 //! let mut movelist: RawMoveList = data.move_list;
-//! 
 //! let moves: Vec<Move> = movelist.moves(&mut board);
 //! println!("Generated moves: {:?}", moves);
 //! ```
-//! 
-//! ##### 2. Generate Move Count, Stopping if a Threat is Found
-//! 
-//! ```rust
-//! use gyges::*;
-//! 
-//! // Setup
-//! let mut board: BoardState = BoardState::from(STARTING_BOARD);
-//! let player: Player = Player::One;
-//! let mut move_gen: MoveGen = MoveGen::default();
-//! 
-//! // Generate
-//! let data: GenResult = unsafe { move_gen.gen::<GenMoveCount, QuitOnThreat>(&mut board, player) };
-//! let move_count: usize = data.move_count;
-//! println!("Move count: {}", move_count);
-//! ```
-//! 
-//! ### Making a Move
-//! 
-//! Use the `make_move` method on the `BoardState` struct to make a move. It applies the move to the board in place, and `unmake_move` reverses it:
-//! 
-//! ```rust
-//! use gyges::*;
-//!  
-//! // Setup
-//! let mut board: BoardState = BoardState::from(STARTING_BOARD);
-//! let player: Player = Player::One;
-//! 
-//! let mut move_gen: MoveGen = MoveGen::default();
-//! 
-//! // Generate moves
-//! let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, player) };
-//! let mut movelist: RawMoveList = data.move_list;
-//! 
-//! let moves: Vec<Move> = movelist.moves(&mut board);
-//! 
-//! // Make a move
-//! println!("Original board: {}", board);
-//! println!("Move: {:?}", moves[0]);
-//! 
-//! board.make_move(&moves[0]);
-//! println!("New board: {}", board);
 //!
-//! // Undo it
-//! board.unmake_move(&moves[0]);
-//! println!("Restored board: {}", board);
+//! Count moves, stopping early if a threat is found:
+//!
+//! ```rust
+//! use gyges::*;
+//!
+//! let mut board: BoardState = BoardState::from(STARTING_BOARD);
+//! let mut move_gen: MoveGen = MoveGen::default();
+//!
+//! let data: GenResult = unsafe { move_gen.gen::<GenMoveCount, QuitOnThreat>(&mut board, Player::One) };
+//! println!("Move count: {}", data.move_count);
 //! ```
-//! 
-//! 
+//!
+//! ### Making a Move
+//!
+//! [`BoardState::make_move`] applies a move to the board in place, and
+//! [`BoardState::unmake_move`] reverses it:
+//!
+//! ```rust
+//! use gyges::*;
+//!
+//! let mut board: BoardState = BoardState::from(STARTING_BOARD);
+//! let mut move_gen: MoveGen = MoveGen::default();
+//!
+//! let data: GenResult = unsafe { move_gen.gen::<GenMoves, NoQuit>(&mut board, Player::One) };
+//! let mut movelist: RawMoveList = data.move_list;
+//! let moves: Vec<Move> = movelist.moves(&mut board);
+//!
+//! board.make_move(&moves[0]);
+//! println!("After the move: {}", board);
+//!
+//! board.unmake_move(&moves[0]);
+//! println!("Restored: {}", board);
+//! ```
+//!
+//! # Upgrading from 1.x
+//!
+//! - `make_move` now changes the board in place instead of returning a new [`BoardState`]. Use
+//!   `unmake_move` to reverse a move, or `make_move_clone` to get a new board and keep the original.
+//! - Move generation no longer produces moves that leave the board unchanged.
+//!
 //! # Acknowledgements
-//! This project and its formating was inspired by the incridible rust chess program [Pleco](https://github.com/pleco-rs/Pleco).
-//! 
+//!
+//! The project structure and formatting were inspired by the Rust chess engine
+//! [Pleco](https://github.com/pleco-rs/Pleco).
 
 #![allow(dead_code)]
 

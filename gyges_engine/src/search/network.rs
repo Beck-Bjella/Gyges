@@ -97,7 +97,7 @@ const PAIR_23_OFFSET: u32 = 4590;
 
 /// FEATURE_COUNT → L1_SIZE (ReLU) → 1 (tanh).
 /// Sparse input: singletons + same-type pairs + cross-type pairs.
-/// Weights file (float32 LE): w1 [L1 × F], b1 [L1], w2 [1 × L1], b2 [1].
+/// Weights file (float32 LE): `w1 [L1 × F]`, `b1 [L1]`, `w2 [1 × L1]`, `b2 [1]`.
 pub struct GygesNet {
     /// Layer-1 weights, transposed: w1t[feature][neuron]. Column-major sparse adds.
     w1t: Box<[[f32; L1_SIZE]; FEATURE_COUNT]>,

@@ -1,4 +1,4 @@
-//! Ugi implimentation.
+//! UGI protocol implementation.
 //! 
 
 use std::io;

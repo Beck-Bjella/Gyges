@@ -1,9 +1,9 @@
 //! The transposition table and the other helper structures for it.
 //! 
 //! A transposition table is a type of HashTable that maps Zobrist keys to data about that position.
-//! This is a very acommon technique in chess engines and other board game AI. 
+//! This is a very common technique in chess engines and other board game AI. 
 //! Its primary purpose is reduce the number of nodes that need to be searched by storing the data about a position
-//! so that it does not need to be re-calculted.
+//! so that it does not need to be recalculated.
 //! 
 //! Specifically, this transposition table is lockless and can be accessed by multiple threads at the same time. 
 //! This means that overwriting data is possible, but it is unlikely. It also uses clusers to store multiple entrys that share the same key. 
@@ -155,10 +155,10 @@ impl TranspositionTable {
 
     }
 
-    /// Probes the transposition table for the data corosponding to a specific key.
+    /// Probes the transposition table for the data corresponding to a specific key.
     ///
     /// Returns an owned copy of the entry so callers don't hold an aliased
-    /// `&mut` into shared TT memory under Lazy SMP. A torn read of `bestmove`
+    /// `&mut` into shared TT memory during parallel search. A torn read of `bestmove`
     /// is harmless: the caller validates it against the current legal move list.
     pub unsafe fn probe(&self, key: u64) -> Option<Entry> {
         let index = key as usize % self.num_clusters();

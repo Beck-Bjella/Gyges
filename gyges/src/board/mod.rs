@@ -1,4 +1,4 @@
-//! Representaion of a board's state, functions to manipulate it, and bitboards.
+//! Representation of a board's state, functions to manipulate it, and bitboards.
 //! 
 //! This module contains the main BoardState struct.
 //! 
