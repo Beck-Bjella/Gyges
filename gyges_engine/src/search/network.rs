@@ -11,7 +11,7 @@ use std::fs;
 static mut NETWORK: Option<GygesNet> = None;
 static mut NETWORK_NAME: Option<String> = None;
 
-/// The default weights, compiled into the binary on every target.
+/// The default weights (`e9_pair_h1024_combined`), compiled into the binary on every target.
 const DEFAULT_WEIGHTS: &[u8] = include_bytes!("../../../weights/default.bin");
 
 /// Install the compiled-in default weights. Available on every target.
