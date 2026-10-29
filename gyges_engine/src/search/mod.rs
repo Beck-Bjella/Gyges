@@ -67,10 +67,11 @@ impl Searcher {
     /// Creates a new searcher configured by a [SearchOptions] struct.
     pub fn new(options: SearchOptions, stop_signal: Arc<AtomicBool>) -> Searcher {
         let shared_nodes = Arc::new(AtomicUsize::new(0));
-        let master = Worker::new(stop_signal.clone(), shared_nodes.clone(), options.clone());
+        let min_ply_done = Arc::new(AtomicBool::new(options.minply.is_none()));
+        let master = Worker::new(stop_signal.clone(), shared_nodes.clone(), min_ply_done.clone(), options.clone());
         let threads = if cfg!(target_arch = "wasm32") { 1 } else { options.threads.max(1) }; // wasm32 has no threads, so force 1
         let helpers: Vec<Worker> = (1..threads)
-            .map(|_| Worker::new(stop_signal.clone(), shared_nodes.clone(), options.clone()))
+            .map(|_| Worker::new(stop_signal.clone(), shared_nodes.clone(), min_ply_done.clone(), options.clone()))
             .collect();
 
         Searcher { master, helpers, stop_signal }
@@ -145,6 +146,11 @@ impl Searcher {
 
         self.start_threads();
 
+        if self.master.options.randomize && self.master.options.random_margin > 0.0 {
+            self.master.keep_near_best();
+
+        }
+
         self.master.final_output();
 
     }
@@ -192,6 +198,8 @@ pub struct Worker {
     pub stop: bool,
     
     pub shared_nodes: Arc<AtomicUsize>,
+    /// Set once `minply` has been completed (or when there is none); the node cap waits for it.
+    pub min_ply_done: Arc<AtomicBool>,
 
     pub completed_plys: Vec<SearchData>,
     pub start_time: Instant,
@@ -220,12 +228,13 @@ pub struct Worker {
 
 impl Worker {
     /// Creates a new worker.
-    pub fn new(stop_signal: Arc<AtomicBool>, shared_nodes: Arc<AtomicUsize>, options: SearchOptions) -> Worker {
+    pub fn new(stop_signal: Arc<AtomicBool>, shared_nodes: Arc<AtomicUsize>, min_ply_done: Arc<AtomicBool>, options: SearchOptions) -> Worker {
         Worker {
             options,
             stop_signal,
             stop: false,
             shared_nodes,
+            min_ply_done,
 
             completed_plys: vec![],
             start_time: Instant::now(),
@@ -285,6 +294,11 @@ impl Worker {
 
             ugi::info_output(ply_data.clone());
             self.completed_plys.push(ply_data);
+
+            if self.options.minply.is_some_and(|m| current_ply >= m) {
+                self.min_ply_done.store(true, AtomicOrdering::Relaxed);
+
+            }
 
             self.root_moves.sort();
 
@@ -944,9 +958,9 @@ impl Worker {
 
         }
 
-        // Check shared node total so maxnodes is honest across the pool.
+        // Check shared node total so maxnodes is honest across the pool (once minply is done).
         if let Some(maxnodes) = self.options.maxnodes {
-            if self.shared_nodes.load(AtomicOrdering::Relaxed) >= maxnodes {
+            if self.min_ply_done.load(AtomicOrdering::Relaxed) && self.shared_nodes.load(AtomicOrdering::Relaxed) >= maxnodes {
                 self.stop = true;
 
             }
@@ -989,6 +1003,80 @@ impl Worker {
         }
 
     } 
+
+    /// Keeps only the root moves whose two-ply score (the move, the opponent's best reply, static eval)
+    /// is within `random_margin` of the best, for a randomized pick among near-best moves. (master only)
+    pub fn keep_near_best(&mut self) {
+        if self.completed_plys.last().map(|p| p.game_over).unwrap_or(false) {
+            return;
+
+        }
+
+        let margin = self.options.random_margin;
+        let mut best = f64::NEG_INFINITY;
+        let mut kept: Vec<(RootMove, f64)> = vec![];
+        for rm in self.root_moves.moves.clone() {
+            if let Some(score) = self.two_ply_score(rm.mv, best - margin) {
+                best = best.max(score);
+                kept.push((rm, score));
+
+            }
+
+        }
+
+        self.root_moves.moves = kept.into_iter().filter(|(_, s)| *s >= best - margin).map(|(rm, _)| rm).collect();
+
+    }
+
+    /// Two-ply score of a root move, or None as soon as one reply puts it below `bar`.
+    /// Replies are tried best-first, so most weak moves are refuted after a reply or two.
+    fn two_ply_score(&mut self, mv: Move, bar: f64) -> Option<f64> {
+        let mut board = self.options.board.clone();
+        board.make_move(&mv);
+
+        // The opponent wins at once
+        let mut gen: GenResult = unsafe { self.mg.gen::<GenMoves, QuitOnThreat>(&mut board, Player::Two) };
+        if gen.threat {
+            return if LOSS_SCORE >= bar { Some(LOSS_SCORE) } else { None };
+
+        }
+
+        let replies = gen.move_list.moves(&board);
+        if replies.is_empty() {
+            return Some(DRAW_SCORE);
+
+        }
+
+        // Every reply hands us the win
+        let replies = self.order_moves(replies, &mut board, Player::Two);
+        if replies.is_empty() {
+            return Some(WIN_SCORE);
+
+        }
+
+        let mut score = f64::INFINITY;
+        for r in replies {
+            board.make_move(&r);
+            let eval = if self.options.nn && network_loaded() {
+                get_evalulation_nn(&board, Player::One)
+
+            } else {
+                get_evalulation(&mut board, &mut self.mg) * Player::One.eval_multiplier()
+
+            };
+            board.unmake_move(&r);
+
+            score = score.min(eval);
+            if score < bar {
+                return None;
+
+            }
+
+        }
+
+        Some(score)
+
+    }
 
     /// Displays the final output of the search. (master only)
     pub fn final_output(&self) {
@@ -1354,7 +1442,11 @@ pub struct SearchOptions {
     pub maxply: Option<i8>,
     pub maxtime: Option<f64>,
     pub maxnodes: Option<usize>,
+    /// The node cap applies only once this ply has been completed.
+    pub minply: Option<i8>,
     pub randomize: bool,
+    /// With randomize, pick only among moves whose two-ply score is within this margin of the best. 0 = any move.
+    pub random_margin: f64,
     /// How much of the gap to the best move is forgiven, 0-100. 0 always plays the best.
     pub skill_weakness: u8,
     /// How far down the ranked list the handicap is measured against, as a percent.
@@ -1374,7 +1466,9 @@ impl SearchOptions {
             maxply: Option::None,
             maxtime: Option::None,
             maxnodes: Option::None,
+            minply: Option::None,
             randomize: false,
+            random_margin: 0.0,
             skill_weakness: 0,
             skill_reach: 25,
             skill_allow_losing: false,

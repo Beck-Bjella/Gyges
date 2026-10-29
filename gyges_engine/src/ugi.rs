@@ -82,7 +82,9 @@ impl Ugi {
                     println!("option maxPly");
                     println!("option maxTime");
                     println!("option maxNodes");
+                    println!("option minPly");
                     println!("option randomize");
+                    println!("option randomMargin");
                     println!("option skill-weakness");
                     println!("option skill-reach");
                     println!("option skill-allowLosing");
@@ -172,6 +174,33 @@ impl Ugi {
                 if let Some(value_str) = raw_commands.get(2) {
                     match value_str.parse::<usize>() {
                         Ok(n) if n > 0 => self.search_options.maxnodes = Some(n),
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"minPly") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    match value_str.parse::<i8>() {
+                        Ok(0) => self.search_options.minply = None,
+                        Ok(n) if n > 0 => self.search_options.minply = Some(n),
+                        _ => println!("Unknown Command: '{}'", trimmed),
+                    }
+
+                } else {
+                    println!("Unknown Command: '{}'", trimmed);
+
+                }
+
+            }
+            Some(&"randomMargin") => {
+                if let Some(value_str) = raw_commands.get(2) {
+                    match value_str.parse::<f64>() {
+                        Ok(m) if m >= 0.0 => self.search_options.random_margin = m,
                         _ => println!("Unknown Command: '{}'", trimmed),
                     }
 
