@@ -356,9 +356,37 @@ impl Worker {
 
             }
 
+            // Random pick with a margin: search every sibling with alpha lowered by the margin,
+            // so each move within the margin of the best gets an exact score.
+            if self.options.randomize && self.options.random_margin > 0.0 {
+                for &mv in &moves[1..] {
+                    board.make_move(&mv);
+                    if self.path.contains(&board.hash()) {
+                        board.unmake_move(&mv);
+                        continue;
+
+                    }
+                    let score = -self.search(&mut board, -beta, -(best_score - self.options.random_margin), player.other(), start_ply - 1, start_ply);
+                    board.unmake_move(&mv);
+
+                    if self.stop {
+                        self.path.pop();
+                        return;
+
+                    }
+
+                    self.root_moves.update_move(mv, score, start_ply);
+                    if score > best_score {
+                        best_score = score;
+                        best_move = mv;
+
+                    }
+
+                }
+
             // Search the siblings through a split, unless move 0 already failed
             // high / found a win / is the only move (siblings pointless then).
-            if !(moves.len() == 1 || best_score >= beta || best_score >= WIN_THRESHOLD) {
+            } else if !(moves.len() == 1 || best_score >= beta || best_score >= WIN_THRESHOLD) {
                 let pool = self.pool.as_ref().unwrap().clone();
                 let sp = Arc::new(SplitPoint::new(
                     board.clone(),
@@ -944,9 +972,10 @@ impl Worker {
 
         }
 
-        // Check shared node total so maxnodes is honest across the pool.
+        // Check shared node total so maxnodes is honest across the pool (once minply is complete).
+        let floor_done = self.options.minply.map_or(true, |m| self.completed_plys.last().is_some_and(|p| p.ply >= m));
         if let Some(maxnodes) = self.options.maxnodes {
-            if self.shared_nodes.load(AtomicOrdering::Relaxed) >= maxnodes {
+            if floor_done && self.shared_nodes.load(AtomicOrdering::Relaxed) >= maxnodes {
                 self.stop = true;
 
             }
@@ -1038,11 +1067,16 @@ impl Worker {
 
         }
 
-        // When randomize is on, pick a random move from all root moves.
+        // When randomize is on, pick a random move from all root moves, or with a margin,
+        // from the moves within it of the best.
         if self.options.randomize && !best_search_data.game_over && !self.root_moves.moves.is_empty() {
             let mut rng = thread_rng();
-            let chosen = self.root_moves.moves.choose(&mut rng).unwrap();
-            best_search_data.best_move = chosen.clone();
+            let top = self.root_moves.moves.iter().map(|m| m.score).fold(f64::NEG_INFINITY, f64::max);
+            let pool: Vec<&RootMove> = self.root_moves.moves.iter()
+                .filter(|m| self.options.random_margin == 0.0 || m.score >= top - self.options.random_margin)
+                .collect();
+            let chosen = pool.choose(&mut rng).unwrap();
+            best_search_data.best_move = (*chosen).clone();
 
         }
 
@@ -1355,6 +1389,10 @@ pub struct SearchOptions {
     pub maxtime: Option<f64>,
     pub maxnodes: Option<usize>,
     pub randomize: bool,
+    /// maxnodes can't stop the search until this ply is complete. None = no floor.
+    pub minply: Option<i8>,
+    /// With randomize: pick only among moves within this margin of the best. 0 = any move.
+    pub random_margin: f64,
     /// How much of the gap to the best move is forgiven, 0-100. 0 always plays the best.
     pub skill_weakness: u8,
     /// How far down the ranked list the handicap is measured against, as a percent.
@@ -1375,6 +1413,8 @@ impl SearchOptions {
             maxtime: Option::None,
             maxnodes: Option::None,
             randomize: false,
+            minply: Option::None,
+            random_margin: 0.0,
             skill_weakness: 0,
             skill_reach: 25,
             skill_allow_losing: false,
